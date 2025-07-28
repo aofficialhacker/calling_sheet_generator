@@ -1,0 +1,22 @@
+2025-07-28 17:51:26,019 - INFO - Gemini API clients configured successfully.
+2025-07-28 17:51:26,020 - INFO - --- OCR Automation Started: 2025-07-28 17:51:26 ---
+2025-07-28 17:51:26,021 - INFO - Temporary directories created.
+2025-07-28 17:51:26,262 - INFO - Preprocessing complete for Screenshot 2025-07-25 171811.png.
+2025-07-28 17:51:26,287 - INFO - Processing p1_part1_preprocessed_Screenshot 2025-07-25 171811.png with Gemini... (Attempt 1)
+2025-07-28 17:51:26,350 - INFO - AFC is enabled with max remote calls: 10.
+2025-07-28 17:51:34,723 - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent "HTTP/1.1 200 OK"
+2025-07-28 17:51:34,726 - INFO - AFC remote call 1 is done.
+2025-07-28 17:51:34,726 - INFO - Successfully received and parsed JSON from Gemini for p1_part1_preprocessed_Screenshot 2025-07-25 171811.png.
+2025-07-28 17:51:34,728 - INFO - Processing p1_part2_preprocessed_Screenshot 2025-07-25 171811.png with Gemini... (Attempt 1)
+2025-07-28 17:51:34,741 - INFO - AFC is enabled with max remote calls: 10.
+2025-07-28 17:51:45,136 - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent "HTTP/1.1 200 OK"
+2025-07-28 17:51:45,137 - INFO - AFC remote call 1 is done.
+2025-07-28 17:51:45,138 - INFO - Successfully received and parsed JSON from Gemini for p1_part2_preprocessed_Screenshot 2025-07-25 171811.png.
+2025-07-28 17:51:45,138 - INFO - Processing p1_part3_preprocessed_Screenshot 2025-07-25 171811.png with Gemini... (Attempt 1)
+2025-07-28 17:51:45,147 - INFO - AFC is enabled with max remote calls: 10.
+2025-07-28 17:51:55,321 - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent "HTTP/1.1 200 OK"
+2025-07-28 17:51:55,323 - INFO - AFC remote call 1 is done.
+2025-07-28 17:51:55,323 - INFO - Successfully received and parsed JSON from Gemini for p1_part3_preprocessed_Screenshot 2025-07-25 171811.png.
+2025-07-28 17:51:55,334 - INFO - SUCCESS: Standardized data saved to 'uploads\ocr_output.csv'
+2025-07-28 17:51:55,337 - INFO - Temporary OCR directory cleaned up.
+2025-07-28 17:51:55,337 - INFO - --- Automation Finished. Duration: 0:00:29.317246 ---

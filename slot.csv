@@ -1,0 +1,7 @@
+Slot,Name,Mobile No,Connectivity,Disposition,Pan,DOB,Address,City,State,Pincode
+3-4,Vishal Gor,8320079150,Y,LB DROP,ABCDE1234F,10-02-2003,"24,navin bhuvan, dombivli east",Dombivli,Maharashtra,421201
+5-6,kalpana gor,1234567890,Y,LB DROP,AASPC1234K,11-02-2003,"24,navin bhuvan, dombivli east",pune,Maharashtra,421202
+5-6,rajesh gor,1234567891,Y,"If Y: INT NI CB FU MINFO LB DROP If N: RNG SO INV OOS WN LBZ",AASPC1234K,12-02-2003,"24,navin bhuvan, dombivli east",goregaon,Maharashtra,421203
+1-2,hetal gor,1234567892,Y,"If Y: INT NI CB FU MINFO LB DROP If N: RNG SO INV OOS WN LBZ",AASPC1234K,13-02-2003,"24,navin bhuvan, dombivli east",kalyan,Maharashtra,421204
+3-4,shriyan shinde,1234567893,Y,"If Y: INT NI CB FU MINFO LB DROP If N: RNG SO INV OOS WN LBZ",AASPC1234K,14-02-2003,"24,navin bhuvan, dombivli east",sion,Maharashtra,421205
+1-2,yash gaikwad,1234567894,Y,"If Y: INT NI CB FU MINFO LB DROP If N: RNG SO INV OOS WN LBZ",AASPC1234K,15-02-2003,"24,navin bhuvan, dombivli east",kurla,Maharashtra,421206
