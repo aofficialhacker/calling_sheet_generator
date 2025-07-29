@@ -1,8 +1,9 @@
 {
     "require": {
-        "phpoffice/phpspreadsheet": "^1.23",
+        "phpoffice/phpspreadsheet": "^2.1",
         "mpdf/mpdf": "^8.0",
         "setasign/fpdi": "^2.6",
-        "fpdf/fpdf": "^1.86"
+        "fpdf/fpdf": "^1.86",
+        "thiagoalessio/tesseract_ocr": "^2.13"
     }
 }

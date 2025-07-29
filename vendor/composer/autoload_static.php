@@ -7,12 +7,15 @@ namespace Composer\Autoload;
 class ComposerStaticInit35ba24d371677e4ff9c9451b51e2f15d
 {
     public static $files = array (
-        '2cffec82183ee1cea088009cef9a6fc3' => __DIR__ . '/..' . '/ezyang/htmlpurifier/library/HTMLPurifier.composer.php',
         '6124b4c8570aa390c21fafd04a26c69f' => __DIR__ . '/..' . '/myclabs/deep-copy/src/DeepCopy/deep_copy.php',
         'db356362850385d08a5381de2638b5fd' => __DIR__ . '/..' . '/mpdf/mpdf/src/functions.php',
     );
 
     public static $prefixLengthsPsr4 = array (
+        't' => 
+        array (
+            'thiagoalessio\\TesseractOCR\\' => 27,
+        ),
         's' => 
         array (
             'setasign\\Fpdi\\' => 14,
@@ -53,6 +56,10 @@ class ComposerStaticInit35ba24d371677e4ff9c9451b51e2f15d
     );
 
     public static $prefixDirsPsr4 = array (
+        'thiagoalessio\\TesseractOCR\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/thiagoalessio/tesseract_ocr/src',
+        ),
         'setasign\\Fpdi\\' => 
         array (
             0 => __DIR__ . '/..' . '/setasign/fpdi/src',
@@ -120,16 +127,6 @@ class ComposerStaticInit35ba24d371677e4ff9c9451b51e2f15d
         ),
     );
 
-    public static $prefixesPsr0 = array (
-        'H' => 
-        array (
-            'HTMLPurifier' => 
-            array (
-                0 => __DIR__ . '/..' . '/ezyang/htmlpurifier/library',
-            ),
-        ),
-    );
-
     public static $classMap = array (
         'Composer\\InstalledVersions' => __DIR__ . '/..' . '/composer/InstalledVersions.php',
         'Stringable' => __DIR__ . '/..' . '/myclabs/php-enum/stubs/Stringable.php',
@@ -140,7 +137,6 @@ class ComposerStaticInit35ba24d371677e4ff9c9451b51e2f15d
         return \Closure::bind(function () use ($loader) {
             $loader->prefixLengthsPsr4 = ComposerStaticInit35ba24d371677e4ff9c9451b51e2f15d::$prefixLengthsPsr4;
             $loader->prefixDirsPsr4 = ComposerStaticInit35ba24d371677e4ff9c9451b51e2f15d::$prefixDirsPsr4;
-            $loader->prefixesPsr0 = ComposerStaticInit35ba24d371677e4ff9c9451b51e2f15d::$prefixesPsr0;
             $loader->classMap = ComposerStaticInit35ba24d371677e4ff9c9451b51e2f15d::$classMap;
 
         }, null, ClassLoader::class);
