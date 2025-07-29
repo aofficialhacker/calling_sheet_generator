@@ -1,0 +1,60 @@
+now this is the data which TL has to give to callers for calling the customers and they mark dispositions in this sheet for e.g Interested, not interested , ringing , follow up etc.
+
+now i want to standardise markings a little so that on scanning that type of marked sheets system accurately catches data the marked data.
+
+so first of all we will make a page where admin uploads this types of excels or pdf or photo and gets a standard printable excel which he/she can give to callers for marking .
+
+the output excel should have columns in this sequence:
+Slot,Name,MobileNo,Connectivity,Disposition,Pan,DOB,Address,City,State,Pincode.
+
+slot is basically the time-slot for e.g 10 am - 11 am , 11 am - 12 am,.....,5 pm - 6 pm.
+
+
+
+connectivity : it will be Y/N - basically were they able to connect to customers are not. this will help us track if the customer list provided by vendors are valuable or not.
+
+
+
+disposition :
+
+if connectivity is Y then dispositions can be : 
+
+Interested
+
+Not Interested
+
+call back
+
+follow up
+
+want more info
+
+language barrier
+
+call drop
+
+
+
+if connectivity is N then:
+
+Ringing
+
+switch off
+
+invalid number
+
+out of service
+
+wrong number
+
+line busy
+
+we will assign digits 1-8 for that 8 time slots. so user have to just write slot number.
+
+for Connectivity we will give Y and N and against Y and N we will give an empty circle so user can fill that circle with pen and when we scan this type of sheet we properly get connectivity as Y and N in system.
+
+for disposition too we will have digits followed by that empty circle. every disposition such as Interested,Not Interested,Follow up etc will have double digit code. this code information that which code belongs to which disposition and which digit belong to which slot should be given in an legend at the top of every page.
+
+now if data is too large , and during printing the data goes to different pages then the headers from the first page should be also present on other pages. because different pages can be given to different columns.
+
+so now inshort give me proper full codes with proper steps and proper folder structure and also our existing website is on php so give me codes respectively so we can easily integrate this project on our existing websites.

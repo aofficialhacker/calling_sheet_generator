@@ -2,6 +2,7 @@
     "require": {
         "phpoffice/phpspreadsheet": "^1.23",
         "mpdf/mpdf": "^8.0",
-        "setasign/fpdi": "^2.6"
+        "setasign/fpdi": "^2.6",
+        "fpdf/fpdf": "^1.86"
     }
 }

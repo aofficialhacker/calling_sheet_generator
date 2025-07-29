@@ -37,6 +37,10 @@ class ComposerStaticInit35ba24d371677e4ff9c9451b51e2f15d
             'Mpdf\\' => 5,
             'Matrix\\' => 7,
         ),
+        'F' => 
+        array (
+            'Fpdf\\' => 5,
+        ),
         'D' => 
         array (
             'DeepCopy\\' => 9,
@@ -97,6 +101,10 @@ class ComposerStaticInit35ba24d371677e4ff9c9451b51e2f15d
         'Matrix\\' => 
         array (
             0 => __DIR__ . '/..' . '/markbaker/matrix/classes/src',
+        ),
+        'Fpdf\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/fpdf/fpdf/src/Fpdf',
         ),
         'DeepCopy\\' => 
         array (
