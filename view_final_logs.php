@@ -1,5 +1,4 @@
 <?php
-// ** CORRECTED FILE **
 define('DB_HOST', 'localhost');
 define('DB_USER', 'root');
 define('DB_PASS', '123456');
@@ -7,15 +6,11 @@ define('DB_NAME', 'caller_sheet');
 $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
 if ($conn->connect_error) { die("Connection Failed: " . $conn->connect_error); }
 
-// Query the correct table
 $result = $conn->query("SELECT * FROM final_call_logs ORDER BY processed_at DESC");
 ?>
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8"><title>Final Call Logs</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-</head>
+<head><meta charset="UTF-8"><title>Final Call Logs</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet"></head>
 <body>
 <div class="container-fluid mt-4">
     <div class="d-flex justify-content-between align-items-center mb-3">
@@ -25,14 +20,12 @@ $result = $conn->query("SELECT * FROM final_call_logs ORDER BY processed_at DESC
         <table class="table table-striped table-bordered table-hover">
             <thead class="table-dark" style="position: sticky; top: 0;">
                 <tr>
-                    <!-- **UPDATED**: Columns match the new table -->
                     <th>Processed At</th>
                     <th>Name</th>
                     <th>Mobile</th>
                     <th>Connectivity</th>
                     <th>Disposition</th>
                     <th>Source File</th>
-                    <th>UUID</th>
                 </tr>
             </thead>
             <tbody>
@@ -44,10 +37,9 @@ $result = $conn->query("SELECT * FROM final_call_logs ORDER BY processed_at DESC
                         <td><?= htmlspecialchars($row['connectivity']) ?></td>
                         <td><?= htmlspecialchars($row['disposition']) ?></td>
                         <td><?= htmlspecialchars($row['source_filename']) ?></td>
-                        <td><?= htmlspecialchars($row['source_uuid']) ?></td>
                     </tr>
                 <?php endwhile; else: ?>
-                    <tr><td colspan="7" class="text-center">No records found.</td></tr>
+                    <tr><td colspan="6" class="text-center">No records found.</td></tr>
                 <?php endif; ?>
             </tbody>
         </table>

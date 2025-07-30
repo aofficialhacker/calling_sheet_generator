@@ -1,11 +1,8 @@
 <?php
 // Start the session to store processed data for download links.
 session_start();
-
-// Require the Composer autoloader
 require 'vendor/autoload.php';
 
-// Use the necessary classes from external libraries
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use PhpOffice\PhpSpreadsheet\Cell\DataType;
@@ -14,49 +11,25 @@ use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Shared\Date;
 use Mpdf\Mpdf;
 
-// --- DATABASE CONFIGURATION ---
-// Replace with your actual database credentials.
 define('DB_HOST', 'localhost');
 define('DB_USER', 'root');
 define('DB_PASS', '123456');
 define('DB_NAME', 'caller_sheet');
 
-/**
- * Generates a short, AI-friendly, unique ID.
- * Format: ID-123456-7890
- */
-function generate_short_id() {
-    $timePart = substr(str_replace('.', '', microtime(true)), -6);
-    $randPart = mt_rand(1000, 9999);
-    return "ID-{$timePart}-{$randPart}";
-}
+// REMOVED: generate_short_id() function is no longer needed.
 
-/**
- * Robustly formats a value into a 'd-m-Y' date string.
- */
-function formatDateString($value): string
-{
-    if (empty($value)) {
-        return '';
-    }
+function formatDateString($value): string {
+    if (empty($value)) return '';
     if (is_numeric($value) && $value > 25569) {
-        try {
-            return Date::excelToDateTimeObject($value)->format('d-m-Y');
-        } catch (Exception $e) { /* Fall through */ }
+        try { return Date::excelToDateTimeObject($value)->format('d-m-Y'); } catch (Exception $e) { /* Fall through */ }
     }
     if (is_string($value)) {
         $timestamp = strtotime($value);
-        if ($timestamp !== false) {
-            return date('d-m-Y', $timestamp);
-        }
+        if ($timestamp !== false) return date('d-m-Y', $timestamp);
     }
     return (string)$value;
 }
 
-
-/**
- * Generates a PDF file using the stable, chunked-writing method.
- */
 function downloadPdf() {
     if (!isset($_SESSION['processed_data']) || !isset($_SESSION['output_headers'])) {
         die("No data available to download. Please upload a file first.");
@@ -78,24 +51,19 @@ function downloadPdf() {
     $mpdf->shrink_tables_to_fit = 1;
 
     $html_head = '
-    <html>
-    <head>
-        <style>
-            body { font-family: sans-serif; font-size: 7.5pt; }
-            table.data-table { width: 100%; border-collapse: collapse; table-layout: fixed; page-break-inside: auto; }
-            thead { display: table-header-group; }
-            tr { page-break-inside: avoid; page-break-after: auto; }
-            th, td { border: 1px solid #333; padding: 3px; text-align: left; vertical-align: middle; word-wrap: break-word; }
-            thead th, .legend-cell { text-align: center; font-weight: bold; background-color: #f2f2f2; }
-            .id-col { font-size: 7pt; color: #333; font-family: monospace; }
-            .connectivity-col, .slot-cell { text-align: center; }
-            .disposition-cell { font-size: 7pt; padding: 1px !important; }
-            .dispo-grid { border: none !important; width: 100%; table-layout: fixed; }
-            .dispo-grid td { border: none !important; padding: 1px 2px; text-align: left; }
-        </style>
-    </head>
-    <body>';
-
+    <html><head><style>
+        body { font-family: sans-serif; font-size: 7.5pt; }
+        table.data-table { width: 100%; border-collapse: collapse; table-layout: fixed; page-break-inside: auto; }
+        thead { display: table-header-group; }
+        tr { page-break-inside: avoid; page-break-after: auto; }
+        th, td { border: 1px solid #333; padding: 3px; text-align: left; vertical-align: middle; word-wrap: break-word; }
+        thead th, .legend-cell { text-align: center; font-weight: bold; background-color: #f2f2f2; }
+        .anchor-col { font-weight: bold; color: #333; font-family: monospace; } /* CHANGED: from .id-col */
+        .connectivity-col, .slot-cell { text-align: center; }
+        .disposition-cell { font-size: 7pt; padding: 1px !important; }
+        .dispo-grid { border: none !important; width: 100%; table-layout: fixed; }
+        .dispo-grid td { border: none !important; padding: 1px 2px; text-align: left; }
+    </style></head><body>';
     $mpdf->WriteHTML($html_head);
 
     $tableHeader = '<thead>';
@@ -108,22 +76,17 @@ function downloadPdf() {
     $tableHeader .= '</tr></thead>';
 
     $dataChunks = array_chunk($processedData, 100);
-
     foreach ($dataChunks as $chunk) {
         $chunkHtml = '<table class="data-table">' . $tableHeader . '<tbody>';
         foreach ($chunk as $dataRow) {
             $chunkHtml .= '<tr>';
             foreach ($outputHeaders as $header) {
                 if ($header === 'disposition') {
-                    $chunkHtml .= '<td class="disposition-cell">';
-                    $chunkHtml .= '<table class="dispo-grid">';
-                    $chunkHtml .= '<tr><td>○ 11</td><td>○ 12</td><td>○ 13</td><td>○ 14</td><td>○ 15</td><td>○ 16</td><td>○ 17</td></tr>';
-                    $chunkHtml .= '<tr><td>○ 21</td><td>○ 22</td><td>○ 23</td><td>○ 24</td><td>○ 25</td><td>○ 26</td><td></td></tr>';
-                    $chunkHtml .= '</table></td>';
+                    $chunkHtml .= '<td class="disposition-cell"><table class="dispo-grid"><tr><td>○ 11</td><td>○ 12</td><td>○ 13</td><td>○ 14</td><td>○ 15</td><td>○ 16</td><td>○ 17</td></tr><tr><td>○ 21</td><td>○ 22</td><td>○ 23</td><td>○ 24</td><td>○ 25</td><td>○ 26</td><td></td></tr></table></td>';
                 } else {
                     $cell = $dataRow[$header] ?? '';
                     $class = '';
-                    if ($header === 'unique_id') $class = 'id-col';
+                    if ($header === 'mobile_no') $class = 'anchor-col'; // CHANGED: Apply class to mobile_no
                     if ($header === 'connectivity') $class = 'connectivity-col';
                     if ($header === 'slot') $class = 'slot-cell';
                     $chunkHtml .= '<td class="'.$class.'">' . htmlspecialchars($cell) . '</td>';
@@ -140,10 +103,6 @@ function downloadPdf() {
     exit;
 }
 
-
-/**
- * Maps various input header names to a standard set of keys.
- */
 function mapColumns(array $headerRow): array {
     $map = ['title' => -1, 'name' => -1, 'age' => -1, 'mobile_no' => -1, 'policy_number' => -1, 'pan' => -1, 'dob' => -1, 'expiry' => -1, 'address' => -1, 'address2' => -1, 'address3' => -1, 'city' => -1, 'state' => -1, 'country' => -1, 'pincode' => -1, 'plan' => -1, 'premium' => -1, 'sum_insured' => -1 ];
     foreach ($headerRow as $index => $header) {
@@ -151,10 +110,10 @@ function mapColumns(array $headerRow): array {
         $normalizedHeader = strtolower(trim(str_replace(['_', ' '], '', $header)));
         if (empty($normalizedHeader)) continue;
         switch (true) {
+            case ($map['mobile_no'] === -1 && preg_match('/mobile|phone|cell/i', $normalizedHeader)): $map['mobile_no'] = $index; break;
             case ($map['title'] === -1 && preg_match('/^title$/i', $normalizedHeader)): $map['title'] = $index; break;
             case ($map['name'] === -1 && preg_match('/name|insured/i', $normalizedHeader)): $map['name'] = $index; break;
             case ($map['age'] === -1 && preg_match('/^age$/i', $normalizedHeader)): $map['age'] = $index; break;
-            case ($map['mobile_no'] === -1 && preg_match('/mobile|phone|cell/i', $normalizedHeader)): $map['mobile_no'] = $index; break;
             case ($map['policy_number'] === -1 && preg_match('/policy(number)?/i', $normalizedHeader)): $map['policy_number'] = $index; break;
             case ($map['pan'] === -1 && preg_match('/pan/i', $normalizedHeader)): $map['pan'] = $index; break;
             case ($map['dob'] === -1 && preg_match('/dob|birth/i', $normalizedHeader)): $map['dob'] = $index; break;
@@ -180,10 +139,8 @@ if (isset($_GET['action'])) {
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['customerFile'])) {
     unset($_SESSION['processed_data'], $_SESSION['output_headers']);
-    $uploadDir = 'uploads/';
-    $tmpDir = __DIR__ . '/tmp';
-    if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
-    if (!is_dir($tmpDir)) mkdir($tmpDir, 0755, true);
+    $uploadDir = 'uploads/'; $tmpDir = __DIR__ . '/tmp';
+    if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true); if (!is_dir($tmpDir)) mkdir($tmpDir, 0755, true);
 
     $originalFileName = basename($_FILES['customerFile']['name']);
     $originalFile = $uploadDir . $originalFileName;
@@ -205,32 +162,24 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['customerFile'])) {
                     if (!empty($sanitizedHeader)) { $extraHeadersInfo[$index] = $sanitizedHeader; }
                 }
             }
-            
-            $outputHeaders = ['unique_id'];
-            $fixedOrder = [
-                'slot', 'connectivity', 'disposition', 'name', 'mobile_no', 'title', 'policy_number', 'pan', 
-                'dob', 'age', 'expiry', 'address', 'city', 'state', 'country', 'pincode', 'plan', 
-                'premium', 'sum_insured'
-            ];
+
+            // CHANGED: Header order updated. mobile_no is first. unique_id is gone.
+            $outputHeaders = [];
+            $fixedOrder = [ 'mobile_no', 'slot', 'connectivity', 'disposition', 'name', 'title', 'policy_number', 'pan', 'dob', 'age', 'expiry', 'address', 'city', 'state', 'country', 'pincode', 'plan', 'premium', 'sum_insured' ];
             
             foreach($fixedOrder as $key) {
                 if (in_array($key, ['slot', 'connectivity', 'disposition']) || isset($foundStandardKeys[$key])) {
                     $outputHeaders[] = $key;
                 }
             }
-            
             $outputHeaders = array_merge($outputHeaders, array_values($extraHeadersInfo));
 
             $processedData = [];
             foreach ($dataRows as $row) {
                 if (empty(implode('', $row))) continue;
                 
-                $newRow = [
-                    'unique_id' => generate_short_id(), 
-                    'connectivity' => '○ Y / ○ N',
-                    'disposition' => "Ignored",
-                    'slot' => ''
-                ];
+                // CHANGED: No longer generating unique_id
+                $newRow = [ 'connectivity' => '○ Y / ○ N', 'disposition' => "Ignored", 'slot' => '' ];
 
                 foreach ($columnMap as $standardKey => $mappedIndex) {
                     if ($mappedIndex !== -1 && isset($row[$mappedIndex])) {
@@ -244,6 +193,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['customerFile'])) {
                             $newRow[$standardKey] = (string) $cellValue;
                         }
                     }
+                }
+                
+                // CHANGED: Critical check to ensure mobile_no exists.
+                if (empty($newRow['mobile_no'])) {
+                    continue;
                 }
 
                 foreach (['address2', 'address3'] as $addrKey) {
@@ -260,82 +214,50 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['customerFile'])) {
             
             $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
             if ($conn->connect_error) { die("Database Connection Failed: " . $conn->connect_error); }
-            $sql = "INSERT INTO temp_processed_data (unique_id, source_filename, title, name, mobile_no, policy_number, pan, dob, age, expiry, address, city, state, country, pincode, plan, premium, sum_insured, extra_data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            
+            // CHANGED: Updated SQL and added ON DUPLICATE KEY UPDATE
+            $sql = "INSERT INTO temp_processed_data (mobile_no, source_filename, title, name, policy_number, pan, dob, age, expiry, address, city, state, country, pincode, plan, premium, sum_insured, extra_data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE name=VALUES(name), policy_number=VALUES(policy_number), pan=VALUES(pan)";
             $stmt = $conn->prepare($sql);
             if ($stmt === false) { die("Failed to prepare statement: " . $conn->error); }
             
             foreach($processedData as $dataRow) {
-                $unique_id = $dataRow['unique_id'];
+                $mobile_no = $dataRow['mobile_no'];
                 $title = $dataRow['title'] ?? null; $name = $dataRow['name'] ?? null;
-                $mobile_no = $dataRow['mobile_no'] ?? null; $policy_number = $dataRow['policy_number'] ?? null;
-                $pan = $dataRow['pan'] ?? null; $dob = $dataRow['dob'] ?? null;
-                $age = $dataRow['age'] ?? null;
-                $expiry = $dataRow['expiry'] ?? null;
-                $address = $dataRow['address'] ?? null; $city = $dataRow['city'] ?? null; $state = $dataRow['state'] ?? null;
+                $policy_number = $dataRow['policy_number'] ?? null; $pan = $dataRow['pan'] ?? null;
+                $dob = $dataRow['dob'] ?? null; $age = $dataRow['age'] ?? null; $expiry = $dataRow['expiry'] ?? null;
+                $address = $dataRow['address'] ?? null; $city = $data_row['city'] ?? null; $state = $dataRow['state'] ?? null;
                 $country = $dataRow['country'] ?? null; $pincode = $dataRow['pincode'] ?? null;
                 $plan = $dataRow['plan'] ?? null; $premium = $dataRow['premium'] ?? null; $sum_insured = $dataRow['sum_insured'] ?? null;
-                $extraData = [];
-                $jsonExtraData = !empty($extraData) ? json_encode($extraData) : null;
-                $stmt->bind_param("ssssssssissssssssss", $unique_id, $originalFileName, $title, $name, $mobile_no, $policy_number, $pan, $dob, $age, $expiry, $address, $city, $state, $country, $pincode, $plan, $premium, $sum_insured, $jsonExtraData);
+                $extraData = []; $jsonExtraData = !empty($extraData) ? json_encode($extraData) : null;
+                
+                // CHANGED: Updated bind_param to match new SQL (no unique_id)
+                $stmt->bind_param("ssssssisssssssssss", $mobile_no, $originalFileName, $title, $name, $policy_number, $pan, $dob, $age, $expiry, $address, $city, $state, $country, $pincode, $plan, $premium, $sum_insured, $jsonExtraData);
                 $stmt->execute();
             }
-            $stmt->close();
-            $conn->close();
+            $stmt->close(); $conn->close();
 
-            $_SESSION['processed_data'] = $processedData;
-            $_SESSION['output_headers'] = $outputHeaders;
+            $_SESSION['processed_data'] = $processedData; $_SESSION['output_headers'] = $outputHeaders;
             if (file_exists($originalFile)) unlink($originalFile);
 
         } catch (Exception $e) { die('Error loading file: ' . $e->getMessage()); }
     } else { die("Error: There was a problem uploading your file."); }
 }
 ?>
+<!-- The HTML part of this file remains the same, but the text has been updated for clarity -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Calling Sheet Dashboard</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        #loading-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.7);
-            z-index: 1050;
-            display: none;
-            justify-content: center;
-            align-items: center;
-            flex-direction: column;
-        }
-        .spinner {
-            width: 50px;
-            height: 50px;
-            border: 8px solid #f3f3f3;
-            border-top: 8px solid #3498db;
-            border-radius: 50%;
-            animation: spin 1.5s linear infinite;
-        }
-        .loading-text {
-            color: white;
-            margin-top: 20px;
-            font-size: 1.2rem;
-            font-weight: bold;
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
+        #loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.7); z-index: 1050; display: none; justify-content: center; align-items: center; flex-direction: column; }
+        .spinner { width: 50px; height: 50px; border: 8px solid #f3f3f3; border-top: 8px solid #3498db; border-radius: 50%; animation: spin 1.5s linear infinite; }
+        .loading-text { color: white; margin-top: 20px; font-size: 1.2rem; font-weight: bold; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
-
-    <div id="loading-overlay">
-        <div class="spinner"></div>
-        <p class="loading-text" id="loading-message">Processing, please wait...</p>
-    </div>
-
+    <div id="loading-overlay"><div class="spinner"></div><p class="loading-text" id="loading-message">Processing, please wait...</p></div>
     <div class="container mt-4">
         <h1 class="mb-4 text-center">Calling Sheet Dashboard</h1>
         <div class="row g-4">
@@ -343,7 +265,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['customerFile'])) {
                 <div class="card h-100 shadow-sm">
                     <div class="card-header bg-primary text-white"><h3 class="h5 mb-0">1. Generate Calling Sheets</h3></div>
                     <div class="card-body d-flex flex-column">
-                        <p class="card-text">Upload a source file. This saves data to a temporary log and creates a printable PDF with a short, unique ID for each row.</p>
+                        <p class="card-text">Upload a source file. This saves data to a temporary log and creates a printable PDF with the customer's <strong>mobile number</strong> as the unique identifier.</p>
                         <form action="index.php" method="post" enctype="multipart/form-data" class="mt-auto" id="upload-form">
                             <div class="mb-3">
                                 <label for="customerFile" class="form-label"><strong>Select Source File:</strong></label>
@@ -361,57 +283,29 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['customerFile'])) {
                         <a href="view_final_logs.php" class="btn btn-sm btn-light">View Final Logs</a>
                     </div>
                     <div class="card-body d-flex flex-column justify-content-center text-center">
-                        <p class="card-text">Capture a photo of the marked sheet. The AI will read the short IDs and marked circles, then move the data to the permanent log.</p>
+                        <p class="card-text">Capture a photo of the marked sheet. The AI will read the <strong>mobile numbers</strong> and marked circles, then move the data to the permanent log.</p>
                         <div class="mt-3"><a href="process_with_gemini_python.php" class="btn btn-info text-white w-75">Go to AI Interpreter</a></div>
                     </div>
                 </div>
             </div>
         </div>
         <?php if (isset($_SESSION['processed_data'])): ?>
-            <div class="card mt-4 text-center shadow-sm">
-                <div class="card-body p-4">
+            <div class="card mt-4 text-center shadow-sm"><div class="card-body p-4">
                     <h4 class="text-success">File Processed & Staged!</h4>
                     <p>Your PDF calling sheet is ready for download.</p>
                     <div class="d-grid gap-2 col-md-6 mx-auto mt-3">
                         <a href="index.php?action=download_pdf" class="btn btn-danger" id="download-btn">Download PDF Calling Sheet</a>
                     </div>
-                </div>
-            </div>
+            </div></div>
         <?php endif; ?>
     </div>
-
     <script>
-        const uploadForm = document.getElementById('upload-form');
-        const loadingOverlay = document.getElementById('loading-overlay');
-        const loadingMessage = document.getElementById('loading-message');
-
-        if (uploadForm) {
-            uploadForm.addEventListener('submit', function(event) {
-                const fileInput = document.getElementById('customerFile');
-                if (fileInput && fileInput.files.length > 0) {
-                    loadingMessage.textContent = 'Processing, please wait...';
-                    loadingOverlay.style.display = 'flex';
-                }
-            });
-        }
-
+        const uploadForm = document.getElementById('upload-form'); const loadingOverlay = document.getElementById('loading-overlay'); const loadingMessage = document.getElementById('loading-message');
+        if (uploadForm) { uploadForm.addEventListener('submit', function(event) { const fileInput = document.getElementById('customerFile'); if (fileInput && fileInput.files.length > 0) { loadingMessage.textContent = 'Processing, please wait...'; loadingOverlay.style.display = 'flex'; } }); }
         const downloadBtn = document.getElementById('download-btn');
-        if (downloadBtn) {
-            downloadBtn.addEventListener('click', function(e) {
-                e.preventDefault();
-                loadingMessage.textContent = 'Generating PDF...';
-                loadingOverlay.style.display = 'flex';
-                const token = "dl_" + Date.now();
-                const downloadUrl = this.href + '&download_token=' + token;
-                const intervalId = setInterval(function() {
-                    if (document.cookie.indexOf(token + "=1") !== -1) {
-                        clearInterval(intervalId);
-                        loadingOverlay.style.display = 'none';
-                        document.cookie = token + "=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
-                    }
-                }, 500);
-                window.location.href = downloadUrl;
-            });
+        if (downloadBtn) { downloadBtn.addEventListener('click', function(e) { e.preventDefault(); loadingMessage.textContent = 'Generating PDF...'; loadingOverlay.style.display = 'flex'; const token = "dl_" + Date.now(); const downloadUrl = this.href + '&download_token=' + token;
+            const intervalId = setInterval(function() { if (document.cookie.indexOf(token + "=1") !== -1) { clearInterval(intervalId); loadingOverlay.style.display = 'none'; document.cookie = token + "=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/"; } }, 500);
+            window.location.href = downloadUrl; });
         }
     </script>
 </body>
