@@ -1,4 +1,5 @@
 <?php
+// DB constants remain the same
 define('DB_HOST', 'localhost');
 define('DB_USER', 'root');
 define('DB_PASS', '123456');
@@ -10,23 +11,18 @@ $result = $conn->query("SELECT * FROM final_call_logs ORDER BY processed_at DESC
 ?>
 <!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8"><title>Final Call Logs</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet"></head>
+<head><meta charset="UTF-8"><title>Final Call Logs</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"></head>
 <body>
 <div class="container-fluid mt-4">
     <div class="d-flex justify-content-between align-items-center mb-3">
-        <h1>Final Interpreted Logs</h1><a href="index.php" class="btn btn-primary">Back to Dashboard</a>
+        <h1>Final Interpreted Logs</h1>
+        <!-- UPDATED: Link now points to the new index.php dashboard -->
+        <a href="index.php" class="btn btn-secondary"><i class="bi bi-arrow-left-circle me-2"></i>Back to Dashboard</a>
     </div>
-    <div class="card"><div class="card-body"><div class="table-responsive">
+    <div class="card shadow-sm"><div class="card-body"><div class="table-responsive">
         <table class="table table-striped table-bordered table-hover">
             <thead class="table-dark" style="position: sticky; top: 0;">
-                <tr>
-                    <th>Processed At</th>
-                    <th>Name</th>
-                    <th>Mobile</th>
-                    <th>Connectivity</th>
-                    <th>Disposition</th>
-                    <th>Source File</th>
-                </tr>
+                <tr><th>Processed At</th><th>Name</th><th>Mobile</th><th>Connectivity</th><th>Disposition</th><th>Source File</th></tr>
             </thead>
             <tbody>
                 <?php if ($result && $result->num_rows > 0): while($row = $result->fetch_assoc()): ?>
