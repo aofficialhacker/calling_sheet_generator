@@ -61,11 +61,8 @@ function downloadPdf() {
     if (!isset($_SESSION['processed_data']) || !isset($_SESSION['output_headers'])) {
         die("No data available to download. Please upload a file first.");
     }
-
-    // **UPDATED: Handle the download token from JavaScript**
     if (isset($_GET['download_token'])) {
         $token = $_GET['download_token'];
-        // This cookie will signal to the browser that the file is ready.
         setcookie($token, '1', ['expires' => time() + 60, 'path' => '/']);
     }
 
@@ -74,7 +71,7 @@ function downloadPdf() {
     $colCount = count($outputHeaders);
     
     $slotLegend = "<strong>SLOTS:</strong> 1 (10-11a) | 2 (11a-12p) | 3 (12-1p) | 4 (1-2p) | 5 (2-3p) | 6 (3-4p) | 7 (4-5p) | 8 (5-6p)";
-    $dispLegend = "<strong>DISPO CODES (Y):</strong> 11:Int | 12:Not Int | 13:CB | 14:FU | 15:Info | 16:Lang | 17:Drop || <strong>(N):</strong> 21:Ring | 22:Off | 23:Invalid | 24:OOS | 25:Wrong# | 26:Busy";
+    $dispLegend = "<strong>DISPO CODES (Y):</strong> 11:Interested | 12:Not Interested | 13:Call Back | 14:Follow Up | 15:More Info | 16:Language Barrier | 17:Drop || <strong>(N):</strong> 21:Ringing | 22:Switch Off | 23:Invalid Number | 24:Out of Service | 25:Wrong Number | 26:Busy";
 
     $mpdf = new Mpdf(['mode' => 'utf-8', 'format' => 'A4-L', 'tempDir' => __DIR__ . '/tmp']);
     $mpdf->SetDisplayMode('fullpage');
@@ -91,8 +88,10 @@ function downloadPdf() {
             th, td { border: 1px solid #333; padding: 3px; text-align: left; vertical-align: middle; word-wrap: break-word; }
             thead th, .legend-cell { text-align: center; font-weight: bold; background-color: #f2f2f2; }
             .id-col { font-size: 7pt; color: #333; font-family: monospace; }
-            .connectivity-col { text-align: center; }
-            .disposition-cell { font-size: 7pt; text-align: center; }
+            .connectivity-col, .slot-cell { text-align: center; }
+            .disposition-cell { font-size: 7pt; padding: 1px !important; }
+            .dispo-grid { border: none !important; width: 100%; table-layout: fixed; }
+            .dispo-grid td { border: none !important; padding: 1px 2px; text-align: left; }
         </style>
     </head>
     <body>';
@@ -115,15 +114,20 @@ function downloadPdf() {
         foreach ($chunk as $dataRow) {
             $chunkHtml .= '<tr>';
             foreach ($outputHeaders as $header) {
-                 $cell = $dataRow[$header] ?? '';
-                 $class = '';
-                 
-                 if ($header === 'unique_id') $class = 'id-col';
-                 if ($header === 'connectivity') $class = 'connectivity-col';
-                 if ($header === 'disposition') $class = 'disposition-cell';
-                 
-                 $cellContent = ($header === 'disposition') ? str_replace('|', '<br>', htmlspecialchars($cell)) : htmlspecialchars($cell);
-                 $chunkHtml .= '<td class="'.$class.'">' . $cellContent . '</td>';
+                if ($header === 'disposition') {
+                    $chunkHtml .= '<td class="disposition-cell">';
+                    $chunkHtml .= '<table class="dispo-grid">';
+                    $chunkHtml .= '<tr><td>○ 11</td><td>○ 12</td><td>○ 13</td><td>○ 14</td><td>○ 15</td><td>○ 16</td><td>○ 17</td></tr>';
+                    $chunkHtml .= '<tr><td>○ 21</td><td>○ 22</td><td>○ 23</td><td>○ 24</td><td>○ 25</td><td>○ 26</td><td></td></tr>';
+                    $chunkHtml .= '</table></td>';
+                } else {
+                    $cell = $dataRow[$header] ?? '';
+                    $class = '';
+                    if ($header === 'unique_id') $class = 'id-col';
+                    if ($header === 'connectivity') $class = 'connectivity-col';
+                    if ($header === 'slot') $class = 'slot-cell';
+                    $chunkHtml .= '<td class="'.$class.'">' . htmlspecialchars($cell) . '</td>';
+                }
             }
             $chunkHtml .= '</tr>';
         }
@@ -141,7 +145,7 @@ function downloadPdf() {
  * Maps various input header names to a standard set of keys.
  */
 function mapColumns(array $headerRow): array {
-    $map = ['title' => -1, 'name' => -1, 'mobile_no' => -1, 'policy_number' => -1, 'pan' => -1, 'dob' => -1, 'expiry' => -1, 'address' => -1, 'address2' => -1, 'address3' => -1, 'city' => -1, 'state' => -1, 'country' => -1, 'pincode' => -1, 'plan' => -1, 'premium' => -1, 'sum_insured' => -1 ];
+    $map = ['title' => -1, 'name' => -1, 'age' => -1, 'mobile_no' => -1, 'policy_number' => -1, 'pan' => -1, 'dob' => -1, 'expiry' => -1, 'address' => -1, 'address2' => -1, 'address3' => -1, 'city' => -1, 'state' => -1, 'country' => -1, 'pincode' => -1, 'plan' => -1, 'premium' => -1, 'sum_insured' => -1 ];
     foreach ($headerRow as $index => $header) {
         if(is_null($header)) continue;
         $normalizedHeader = strtolower(trim(str_replace(['_', ' '], '', $header)));
@@ -149,6 +153,7 @@ function mapColumns(array $headerRow): array {
         switch (true) {
             case ($map['title'] === -1 && preg_match('/^title$/i', $normalizedHeader)): $map['title'] = $index; break;
             case ($map['name'] === -1 && preg_match('/name|insured/i', $normalizedHeader)): $map['name'] = $index; break;
+            case ($map['age'] === -1 && preg_match('/^age$/i', $normalizedHeader)): $map['age'] = $index; break;
             case ($map['mobile_no'] === -1 && preg_match('/mobile|phone|cell/i', $normalizedHeader)): $map['mobile_no'] = $index; break;
             case ($map['policy_number'] === -1 && preg_match('/policy(number)?/i', $normalizedHeader)): $map['policy_number'] = $index; break;
             case ($map['pan'] === -1 && preg_match('/pan/i', $normalizedHeader)): $map['pan'] = $index; break;
@@ -202,10 +207,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['customerFile'])) {
             }
             
             $outputHeaders = ['unique_id'];
-            $fixedOrder = ['title', 'name', 'mobile_no', 'connectivity', 'disposition', 'policy_number', 'pan', 'dob', 'expiry', 'address', 'city', 'state', 'country', 'pincode', 'plan', 'premium', 'sum_insured'];
+            $fixedOrder = [
+                'slot', 'connectivity', 'disposition', 'name', 'mobile_no', 'title', 'policy_number', 'pan', 
+                'dob', 'age', 'expiry', 'address', 'city', 'state', 'country', 'pincode', 'plan', 
+                'premium', 'sum_insured'
+            ];
             
             foreach($fixedOrder as $key) {
-                if (in_array($key, ['connectivity', 'disposition']) || isset($foundStandardKeys[$key])) {
+                if (in_array($key, ['slot', 'connectivity', 'disposition']) || isset($foundStandardKeys[$key])) {
                     $outputHeaders[] = $key;
                 }
             }
@@ -219,13 +228,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['customerFile'])) {
                 $newRow = [
                     'unique_id' => generate_short_id(), 
                     'connectivity' => '○ Y / ○ N',
-                    'disposition' => "○ 11 ○ 12 ○ 13 ○ 14 ○ 15 ○ 16 ○ 17|○ 21 ○ 22 ○ 23 ○ 24 ○ 25 ○ 26"
+                    'disposition' => "Ignored",
+                    'slot' => ''
                 ];
 
                 foreach ($columnMap as $standardKey => $mappedIndex) {
                     if ($mappedIndex !== -1 && isset($row[$mappedIndex])) {
                         $cellValue = $row[$mappedIndex];
-                        $numericKeys = ['premium', 'sum_insured', 'mobile_no', 'pincode'];
+                        $numericKeys = ['premium', 'sum_insured', 'mobile_no', 'pincode', 'age'];
                         if ($standardKey === 'dob' || $standardKey === 'expiry') {
                             $newRow[$standardKey] = formatDateString($cellValue);
                         } elseif (in_array($standardKey, $numericKeys, true)) {
@@ -250,7 +260,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['customerFile'])) {
             
             $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
             if ($conn->connect_error) { die("Database Connection Failed: " . $conn->connect_error); }
-            $sql = "INSERT INTO temp_processed_data (unique_id, source_filename, title, name, mobile_no, policy_number, pan, dob, expiry, address, city, state, country, pincode, plan, premium, sum_insured, extra_data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            $sql = "INSERT INTO temp_processed_data (unique_id, source_filename, title, name, mobile_no, policy_number, pan, dob, age, expiry, address, city, state, country, pincode, plan, premium, sum_insured, extra_data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
             $stmt = $conn->prepare($sql);
             if ($stmt === false) { die("Failed to prepare statement: " . $conn->error); }
             
@@ -258,13 +268,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['customerFile'])) {
                 $unique_id = $dataRow['unique_id'];
                 $title = $dataRow['title'] ?? null; $name = $dataRow['name'] ?? null;
                 $mobile_no = $dataRow['mobile_no'] ?? null; $policy_number = $dataRow['policy_number'] ?? null;
-                $pan = $dataRow['pan'] ?? null; $dob = $dataRow['dob'] ?? null; $expiry = $dataRow['expiry'] ?? null;
+                $pan = $dataRow['pan'] ?? null; $dob = $dataRow['dob'] ?? null;
+                $age = $dataRow['age'] ?? null;
+                $expiry = $dataRow['expiry'] ?? null;
                 $address = $dataRow['address'] ?? null; $city = $dataRow['city'] ?? null; $state = $dataRow['state'] ?? null;
                 $country = $dataRow['country'] ?? null; $pincode = $dataRow['pincode'] ?? null;
                 $plan = $dataRow['plan'] ?? null; $premium = $dataRow['premium'] ?? null; $sum_insured = $dataRow['sum_insured'] ?? null;
                 $extraData = [];
                 $jsonExtraData = !empty($extraData) ? json_encode($extraData) : null;
-                $stmt->bind_param("ssssssssssssssssss", $unique_id, $originalFileName, $title, $name, $mobile_no, $policy_number, $pan, $dob, $expiry, $address, $city, $state, $country, $pincode, $plan, $premium, $sum_insured, $jsonExtraData);
+                $stmt->bind_param("ssssssssissssssssss", $unique_id, $originalFileName, $title, $name, $mobile_no, $policy_number, $pan, $dob, $age, $expiry, $address, $city, $state, $country, $pincode, $plan, $premium, $sum_insured, $jsonExtraData);
                 $stmt->execute();
             }
             $stmt->close();
@@ -383,35 +395,21 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['customerFile'])) {
             });
         }
 
-        // **UPDATED: Robust cookie-based listener for the PDF download button**
         const downloadBtn = document.getElementById('download-btn');
         if (downloadBtn) {
             downloadBtn.addEventListener('click', function(e) {
-                // Prevent the link from navigating immediately
                 e.preventDefault();
-
-                // 1. Show the overlay
                 loadingMessage.textContent = 'Generating PDF...';
                 loadingOverlay.style.display = 'flex';
-
-                // 2. Create a unique token for this download
                 const token = "dl_" + Date.now();
                 const downloadUrl = this.href + '&download_token=' + token;
-
-                // 3. Start checking for the cookie
                 const intervalId = setInterval(function() {
-                    // Check if the cookie set by the server exists
                     if (document.cookie.indexOf(token + "=1") !== -1) {
-                        // 4. When the cookie is found, hide the overlay and clean up
                         clearInterval(intervalId);
                         loadingOverlay.style.display = 'none';
-
-                        // Clean up the cookie by setting its expiry date to the past
                         document.cookie = token + "=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
                     }
-                }, 500); // Check every half a second
-
-                // 5. Start the download by navigating to the URL with the token
+                }, 500);
                 window.location.href = downloadUrl;
             });
         }

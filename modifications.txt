@@ -1,0 +1,157 @@
+Step 2: Modify index.php
+
+This file needs to be updated to recognize the Age column, create the Slot column, generate them in the PDF in the correct order, and save Age to the temporary database.
+
+File: index.php
+
+Teach mapColumns to find "Age":
+
+Find the $map array (around line 140). Add 'age' => -1.
+
+Generated php
+// CHANGE THIS:
+$map = ['title' => -1, 'name' => -1, 'mobile_no' => -1, 'policy_number' => -1, /*...*/];
+// TO THIS:
+$map = ['title' => -1, 'name' => -1, 'age' => -1, 'mobile_no' => -1, 'policy_number' => -1, /*...*/];
+
+
+In the switch statement below that (around line 150), add a new case for age.
+
+Generated php
+// ADD THIS LINE:
+case ($map['age'] === -1 && preg_match('/^age$/i', $normalizedHeader)): $map['age'] = $index; break;
+
+
+Add Slot in the Data Processing Loop:
+
+Find the loop that starts foreach ($dataRows as $row) (around line 240).
+
+Inside it, add a line to create the empty slot field.
+
+Generated php
+// Find these lines:
+$newRow = [
+    'unique_id' => generate_short_id(), 
+    'connectivity' => '○ Y / ○ N',
+    'disposition' => "Ignored" 
+];
+
+// ADD THIS LINE RIGHT AFTER:
+$newRow['slot'] = ''; // Add an empty slot column for the PDF
+
+
+Change the PDF Column Order:
+
+Find the $fixedOrder array (around line 220).
+
+Replace the entire array with this new order, which groups the scannable columns (slot, connectivity, disposition) on the left and adds age.
+
+Generated php
+// REPLACE THE OLD $fixedOrder ARRAY WITH THIS NEW ONE:
+$fixedOrder = [
+    'slot', 'connectivity', 'disposition', 'name', 'mobile_no', 'title', 'policy_number', 'pan', 
+    'dob', 'age', 'expiry', 'address', 'city', 'state', 'country', 'pincode', 'plan', 
+    'premium', 'sum_insured'
+];
+
+
+Update the Database INSERT for the Temporary Table:
+
+Find the INSERT SQL query (around line 280).
+
+Modify it to include the age column.
+
+Generated php
+// CHANGE THIS:
+$sql = "INSERT INTO temp_processed_data (..., pan, dob, expiry, ...) VALUES (?, ?, ?, ...)";
+// TO THIS:
+$sql = "INSERT INTO temp_processed_data (..., pan, dob, age, expiry, ...) VALUES (?, ?, ?, ...)";
+
+
+Find the bind_param call for this query (around line 295).
+
+Add the $age variable and an extra s to the type string.
+
+Generated php
+// Inside the `foreach($processedData as $dataRow)` loop:
+// ...
+$dob = $dataRow['dob'] ?? null;
+$age = $dataRow['age'] ?? null; // Get the age if it was in the Excel
+$expiry = $dataRow['expiry'] ?? null;
+// ...
+
+// CHANGE THIS:
+$stmt->bind_param("sssssssssssssssssss", /* ... */, $pan, $dob, $expiry, /* ... */);
+// TO THIS (19 's' characters and the $age variable):
+$stmt->bind_param("sssssssssssssssssss", /* ... */, $pan, $dob, $age, $expiry, /* ... */);
+
+Step 3: Modify gemini_omr_parser.py
+
+Update the AI's instructions to look for the new Slot column.
+
+File: gemini_omr_parser.py
+
+Find the prompt variable and replace the entire multi-line string with this new version:
+
+Generated python
+# REPLACE THE ENTIRE PROMPT STRING WITH THIS:
+prompt = """
+You are a hyper-accurate Optical Mark and Character Recognition (OMR/OCR) system.
+Your task is to analyze the provided image of a calling sheet.
+
+**Analysis Protocol:**
+For every row you find, follow these steps:
+1.  **Find the Anchor:** Use OCR to read the "Unique id" string (e.g., `ID-XXXXXX-XXXX`). This is your anchor.
+2.  **Find Slot:** In the "Slot" column of the anchored row, find the single digit that is written or circled.
+3.  **Find Connectivity:** In the "Connectivity" column of the anchored row, find the marked circle ('Y' or 'N').
+4.  **Find Disposition:** In the "Disposition" column of the anchored row, find the single marked circle and read the two-digit number next to it.
+
+**Output Rules:**
+1.  Your entire output MUST be in raw CSV format with a header.
+2.  The header must be exactly: `unique_id,slot,connectivity_code,disposition_code`.
+3.  If you find a Unique ID but no marks, output the ID with blank codes (e.g., `ID-...,,,`).
+4.  Do not include any text, explanations, or markdown formatting.
+"""
+
+Step 4: Modify save_final_log.php
+
+Finally, update the script that saves the data to the permanent log to include slot and age.
+
+File: save_final_log.php
+
+Update the INSERT Query:
+
+Find the INSERT statement (around line 28).
+
+Add the slot and age columns to the list.
+
+Generated php
+// CHANGE THIS:
+$insert_stmt = $conn->prepare("INSERT INTO final_call_logs (source_uuid, source_filename, connectivity, disposition, title, name, ...) VALUES (?, ?, ?, ?, ?, ?, ...)");
+// TO THIS:
+$insert_stmt = $conn->prepare("INSERT INTO final_call_logs (source_uuid, source_filename, connectivity, disposition, slot, age, title, name, ...) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ...)");
+
+
+Update the bind_param Call:
+
+Find the bind_param call inside the foreach loop (around line 45).
+
+Add the new variables and update the type string to match (22 characters).
+
+Generated php
+// Inside the foreach loop:
+$connectivity = CONNECTIVITY_MAP[$row['connectivity_code']] ?? null;
+$disposition = DISPOSITION_MAP[$row['disposition_code']] ?? null;
+$slot = $row['slot'] ?? null; // Get the slot from the AI results
+
+// CHANGE THIS:
+$insert_stmt->bind_param("ssssssssssssssssssss", $source_data['unique_id'], /*...*/);
+// TO THIS (note the `is` for integer types and the new variables $slot and $source_data['age']):
+$insert_stmt->bind_param("ssssisssssisssssssssss", 
+    $source_data['unique_id'], $source_data['source_filename'], $connectivity, $disposition, $slot, $source_data['age'],
+    $source_data['title'], $source_data['name'], $source_data['mobile_no'], 
+    $source_data['policy_number'], $source_data['pan'], $source_data['dob'], 
+    $source_data['expiry'], $source_data['address'], $source_data['city'], 
+    $source_data['state'], $source_data['country'], $source_data['pincode'], 
+    $source_data['plan'], $source_data['premium'], $source_data['sum_insured'], 
+    $source_data['extra_data']);

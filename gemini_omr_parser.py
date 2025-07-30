@@ -32,26 +32,22 @@ def main():
         sys.exit(1)
 
     prompt = """
-    You are a hyper-accurate Optical Mark and Character Recognition (OMR/OCR) system.
-    Your task is to analyze the provided partial image of a calling sheet.
+You are a hyper-accurate Optical Mark and Character Recognition (OMR/OCR) system.
+Your task is to analyze the provided image of a calling sheet.
 
-    **Primary Directive:** You MUST use the printed alphanumeric string in the "Unique ID" column as the anchor for each row. A Unique ID is a long alphanumeric string with hyphens, like this: `1234abcd-5678-efgh-9012-ijklmnopqrst`.
+**Analysis Protocol:**
+For every row you find, follow these steps:
+1.  **Find the Anchor:** Use OCR to read the "Unique id" string (e.g., `ID-XXXXXX-XXXX`). This is your anchor.
+2.  **Find Slot:** In the "Slot" column of the anchored row, find the single digit that is written or circled.
+3.  **Find Connectivity:** In the "Connectivity" column of the anchored row, find the marked circle ('Y' or 'N').
+4.  **Find Disposition:** In the "Disposition" column of the anchored row, find the single marked circle and read the two-digit number next to it.
 
-    **Analysis Protocol (Chain of Thought):**
-    You must follow this protocol for every row you find:
-    1.  **Find the Anchor:** Scan the document from top to bottom. Use OCR to read a "Unique ID" string. This string is your `unique_id`.
-    2.  **Search within the Anchored Row:** Once anchored on a row by its Unique ID, perform all subsequent searches ONLY within that same horizontal band.
-    3.  **Find Connectivity:** In the "Connectivity" column of that anchored row, identify which circle ('Y' or 'N') is marked. This is the `connectivity_code`.
-    4.  **Find Disposition:** In the "Disposition" column of the *same* anchored row, find the single marked circle. The two-digit number next to that mark is the `disposition_code`.
-    5.  **Repeat:** Move to the next Unique ID below and repeat the process.
-
-    **Output Rules:**
-    1.  Your entire output MUST be in raw CSV format with a header.
-    2.  The header must be exactly: `unique_id,connectivity_code,disposition_code`.
-    3.  The `unique_id` MUST be the full string you read from the "Unique ID" column.
-    4.  If you find a Unique ID but no marks, output the ID with blank codes (e.g., `1234abcd-...,,`).
-    5.  Do not include any text, explanations, or markdown formatting.
-    """
+**Output Rules:**
+1.  Your entire output MUST be in raw CSV format with a header.
+2.  The header must be exactly: `unique_id,slot,connectivity_code,disposition_code`.
+3.  If you find a Unique ID but no marks, output the ID with blank codes (e.g., `ID-...,,,`).
+4.  Do not include any text, explanations, or markdown formatting.
+"""
 
     try:
         response = model.generate_content([prompt, image])
