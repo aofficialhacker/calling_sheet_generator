@@ -58,7 +58,7 @@ function downloadPdf() {
         tr { page-break-inside: avoid; page-break-after: auto; }
         th, td { border: 1px solid #333; padding: 3px; text-align: left; vertical-align: middle; word-wrap: break-word; }
         thead th, .legend-cell { text-align: center; font-weight: bold; background-color: #f2f2f2; }
-        .anchor-col { font-weight: bold; color: #333; font-family: monospace; } /* CHANGED: from .id-col */
+        .anchor-col { font-weight: bold; color: #333; font-family: monospace; }
         .connectivity-col, .slot-cell { text-align: center; }
         .disposition-cell { font-size: 7pt; padding: 1px !important; }
         .dispo-grid { border: none !important; width: 100%; table-layout: fixed; }
@@ -86,7 +86,7 @@ function downloadPdf() {
                 } else {
                     $cell = $dataRow[$header] ?? '';
                     $class = '';
-                    if ($header === 'mobile_no') $class = 'anchor-col'; // CHANGED: Apply class to mobile_no
+                    if ($header === 'mobile_no') $class = 'anchor-col';
                     if ($header === 'connectivity') $class = 'connectivity-col';
                     if ($header === 'slot') $class = 'slot-cell';
                     $chunkHtml .= '<td class="'.$class.'">' . htmlspecialchars($cell) . '</td>';
@@ -163,7 +163,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['customerFile'])) {
                 }
             }
 
-            // CHANGED: Header order updated. mobile_no is first. unique_id is gone.
             $outputHeaders = [];
             $fixedOrder = [ 'mobile_no', 'slot', 'connectivity', 'disposition', 'name', 'title', 'policy_number', 'pan', 'dob', 'age', 'expiry', 'address', 'city', 'state', 'country', 'pincode', 'plan', 'premium', 'sum_insured' ];
             
@@ -178,7 +177,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['customerFile'])) {
             foreach ($dataRows as $row) {
                 if (empty(implode('', $row))) continue;
                 
-                // CHANGED: No longer generating unique_id
                 $newRow = [ 'connectivity' => '○ Y / ○ N', 'disposition' => "Ignored", 'slot' => '' ];
 
                 foreach ($columnMap as $standardKey => $mappedIndex) {
@@ -195,7 +193,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['customerFile'])) {
                     }
                 }
                 
-                // CHANGED: Critical check to ensure mobile_no exists.
                 if (empty($newRow['mobile_no'])) {
                     continue;
                 }
@@ -215,7 +212,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['customerFile'])) {
             $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
             if ($conn->connect_error) { die("Database Connection Failed: " . $conn->connect_error); }
             
-            // CHANGED: Updated SQL and added ON DUPLICATE KEY UPDATE
             $sql = "INSERT INTO temp_processed_data (mobile_no, source_filename, title, name, policy_number, pan, dob, age, expiry, address, city, state, country, pincode, plan, premium, sum_insured, extra_data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE name=VALUES(name), policy_number=VALUES(policy_number), pan=VALUES(pan)";
             $stmt = $conn->prepare($sql);
             if ($stmt === false) { die("Failed to prepare statement: " . $conn->error); }
@@ -225,12 +221,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['customerFile'])) {
                 $title = $dataRow['title'] ?? null; $name = $dataRow['name'] ?? null;
                 $policy_number = $dataRow['policy_number'] ?? null; $pan = $dataRow['pan'] ?? null;
                 $dob = $dataRow['dob'] ?? null; $age = $dataRow['age'] ?? null; $expiry = $dataRow['expiry'] ?? null;
-                $address = $dataRow['address'] ?? null; $city = $data_row['city'] ?? null; $state = $dataRow['state'] ?? null;
+                $address = $dataRow['address'] ?? null;
+                // --- THIS IS THE CORRECTION ---
+                $city = $dataRow['city'] ?? null; // CORRECTED: Was $data_row, now $dataRow
+                // ------------------------------
+                $state = $dataRow['state'] ?? null;
                 $country = $dataRow['country'] ?? null; $pincode = $dataRow['pincode'] ?? null;
                 $plan = $dataRow['plan'] ?? null; $premium = $dataRow['premium'] ?? null; $sum_insured = $dataRow['sum_insured'] ?? null;
                 $extraData = []; $jsonExtraData = !empty($extraData) ? json_encode($extraData) : null;
                 
-                // CHANGED: Updated bind_param to match new SQL (no unique_id)
                 $stmt->bind_param("ssssssisssssssssss", $mobile_no, $originalFileName, $title, $name, $policy_number, $pan, $dob, $age, $expiry, $address, $city, $state, $country, $pincode, $plan, $premium, $sum_insured, $jsonExtraData);
                 $stmt->execute();
             }
@@ -243,7 +242,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['customerFile'])) {
     } else { die("Error: There was a problem uploading your file."); }
 }
 ?>
-<!-- The HTML part of this file remains the same, but the text has been updated for clarity -->
+<!-- The HTML part is unchanged -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
