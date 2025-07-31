@@ -1,11 +1,14 @@
 <?php
-// DB constants remain the same
 define('DB_HOST', 'localhost'); define('DB_USER', 'root'); define('DB_PASS', '123456'); define('DB_NAME', 'caller_sheet');
 $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
 if ($conn->connect_error) { die("Connection Failed: " . $conn->connect_error); }
 
-// The query is unchanged, but we will display the new column
-$result = $conn->query("SELECT * FROM final_call_logs ORDER BY processed_at DESC");
+// UPDATED: Query now joins with file_batches to get the batch ID for display
+$sql = "SELECT f.*, b.id as batch_display_id 
+        FROM final_call_logs f
+        LEFT JOIN file_batches b ON f.batch_id = b.id
+        ORDER BY f.processed_at DESC";
+$result = $conn->query($sql);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -21,7 +24,8 @@ $result = $conn->query("SELECT * FROM final_call_logs ORDER BY processed_at DESC
             <thead class="table-dark" style="position: sticky; top: 0;">
                 <tr>
                     <th>Processed At</th>
-                    <th>Processed By (FinqyID)</th> <!-- New Column -->
+                    <th>Batch Name</th> <!-- New Column -->
+                    <th>Processed By (FinqyID)</th>
                     <th>Name</th>
                     <th>Mobile</th>
                     <th>Connectivity</th>
@@ -32,8 +36,16 @@ $result = $conn->query("SELECT * FROM final_call_logs ORDER BY processed_at DESC
             <tbody>
                 <?php if ($result && $result->num_rows > 0): while($row = $result->fetch_assoc()): ?>
                     <tr>
-                        <td><?= htmlspecialchars($row['processed_at']) ?></td>
-                        <td><strong><?= htmlspecialchars($row['finqy_id']) ?></strong></td> <!-- New Column Data -->
+                        <td><?= htmlspecialchars(date('d-M-Y H:i', strtotime($row['processed_at']))) ?></td>
+                        <!-- New Column Data -->
+                        <td>
+                            <?php if (!empty($row['batch_display_id'])): ?>
+                                <span class="badge bg-primary">DB<?= htmlspecialchars($row['batch_display_id']) ?></span>
+                            <?php else: ?>
+                                N/A
+                            <?php endif; ?>
+                        </td>
+                        <td><strong><?= htmlspecialchars($row['finqy_id']) ?></strong></td>
                         <td><?= htmlspecialchars($row['name']) ?></td>
                         <td><?= htmlspecialchars($row['mobile_no']) ?></td>
                         <td><?= htmlspecialchars($row['connectivity']) ?></td>
@@ -41,7 +53,8 @@ $result = $conn->query("SELECT * FROM final_call_logs ORDER BY processed_at DESC
                         <td><?= htmlspecialchars($row['source_filename']) ?></td>
                     </tr>
                 <?php endwhile; else: ?>
-                    <tr><td colspan="7" class="text-center">No records found.</td></tr> <!-- Colspan updated to 7 -->
+                    <!-- Colspan updated to 8 -->
+                    <tr><td colspan="8" class="text-center">No records found.</td></tr>
                 <?php endif; ?>
             </tbody>
         </table>

@@ -30,28 +30,34 @@ def main():
         print(json.dumps({"error": f"Failed to initialize AI model or open image: {str(e)}"}))
         sys.exit(1)
 
-    # CHANGED: The prompt is updated to use mobile_no as the anchor.
+    # UPDATED PROMPT: More explicit rules for empty values.
     prompt = """
 You are a hyper-accurate Optical Mark and Character Recognition (OMR/OCR) system.
 Your task is to analyze the provided image of a calling sheet.
 
 **Analysis Protocol:**
-For every row you find, follow these steps:
-1.  **Find the Anchor:** Use OCR to read the "Mobile No" string, which is a numeric value. This is your anchor.
-2.  **Find Slot:** In the "Slot" column of the anchored row, find the single digit that is written or circled.
-3.  **Find Connectivity:** In the "Connectivity" column of the anchored row, find the marked circle ('Y' or 'N').
-4.  **Find Disposition:** In the "Disposition" column of the anchored row, find the single marked circle and read the two-digit number next to it.
+For every row you find on the sheet, follow these steps:
+1.  **Find the Anchor:** Use OCR to read the "Mobile No" string, which is a 10-digit numeric value. This is your anchor.
+2.  **Find Slot:** In the "Slot" column for that anchored row, find the single digit that is written or circled. If nothing is marked, leave it blank.
+3.  **Find Connectivity:** In the "Connectivity" column for that anchored row, find the marked circle ('Y' or 'N'). If nothing is marked, leave it blank.
+4.  **Find Disposition:** In the "Disposition" column for that anchored row, find the single marked circle and read the two-digit number next to it. **If no circle is marked in the disposition area for a row, you MUST leave the disposition code blank for that row.**
 
 **Output Rules:**
-1.  Your entire output MUST be in raw CSV format with a header.
+1.  Your entire output MUST be in raw CSV format with a header row.
 2.  The header must be exactly: `mobile_no,slot,connectivity_code,disposition_code`.
-3.  If you find a Mobile No but no other marks, output the number with blank codes (e.g., `9876543210,,,`).
-4.  Do not include any text, explanations, or markdown formatting.
+3.  You must output a line for every Mobile No you can read, even if no other marks are present for that row.
+4.  Example for a row with a mobile number but no other marks: `9876543210,,,`
+5.  Do not include any text, explanations, or markdown formatting whatsoever.
 """
 
     try:
         response = model.generate_content([prompt, image])
+        # Clean the response to ensure it's pure CSV
         cleaned_text = response.text.replace('```csv', '').replace('```', '').strip()
+        # Ensure there's a header if the response is not empty
+        if cleaned_text and not cleaned_text.lower().startswith('mobile_no'):
+             print(json.dumps({"error": f"AI response did not start with the expected CSV header. Response: {cleaned_text}"}))
+             sys.exit(1)
         print(cleaned_text)
     except Exception as e:
         print(json.dumps({"error": f"An error occurred with the Gemini API call: {str(e)}"}))
