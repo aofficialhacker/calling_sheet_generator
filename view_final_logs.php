@@ -1,12 +1,10 @@
 <?php
 // DB constants remain the same
-define('DB_HOST', 'localhost');
-define('DB_USER', 'root');
-define('DB_PASS', '123456');
-define('DB_NAME', 'caller_sheet');
+define('DB_HOST', 'localhost'); define('DB_USER', 'root'); define('DB_PASS', '123456'); define('DB_NAME', 'caller_sheet');
 $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
 if ($conn->connect_error) { die("Connection Failed: " . $conn->connect_error); }
 
+// The query is unchanged, but we will display the new column
 $result = $conn->query("SELECT * FROM final_call_logs ORDER BY processed_at DESC");
 ?>
 <!DOCTYPE html>
@@ -15,19 +13,27 @@ $result = $conn->query("SELECT * FROM final_call_logs ORDER BY processed_at DESC
 <body>
 <div class="container-fluid mt-4">
     <div class="d-flex justify-content-between align-items-center mb-3">
-        <h1>Final Interpreted Logs</h1>
-        <!-- UPDATED: Link now points to the new index.php dashboard -->
+        <h1>Final Interpreted Logs (Admin View)</h1>
         <a href="index.php" class="btn btn-secondary"><i class="bi bi-arrow-left-circle me-2"></i>Back to Dashboard</a>
     </div>
     <div class="card shadow-sm"><div class="card-body"><div class="table-responsive">
         <table class="table table-striped table-bordered table-hover">
             <thead class="table-dark" style="position: sticky; top: 0;">
-                <tr><th>Processed At</th><th>Name</th><th>Mobile</th><th>Connectivity</th><th>Disposition</th><th>Source File</th></tr>
+                <tr>
+                    <th>Processed At</th>
+                    <th>Processed By (FinqyID)</th> <!-- New Column -->
+                    <th>Name</th>
+                    <th>Mobile</th>
+                    <th>Connectivity</th>
+                    <th>Disposition</th>
+                    <th>Source File</th>
+                </tr>
             </thead>
             <tbody>
                 <?php if ($result && $result->num_rows > 0): while($row = $result->fetch_assoc()): ?>
                     <tr>
                         <td><?= htmlspecialchars($row['processed_at']) ?></td>
+                        <td><strong><?= htmlspecialchars($row['finqy_id']) ?></strong></td> <!-- New Column Data -->
                         <td><?= htmlspecialchars($row['name']) ?></td>
                         <td><?= htmlspecialchars($row['mobile_no']) ?></td>
                         <td><?= htmlspecialchars($row['connectivity']) ?></td>
@@ -35,7 +41,7 @@ $result = $conn->query("SELECT * FROM final_call_logs ORDER BY processed_at DESC
                         <td><?= htmlspecialchars($row['source_filename']) ?></td>
                     </tr>
                 <?php endwhile; else: ?>
-                    <tr><td colspan="6" class="text-center">No records found.</td></tr>
+                    <tr><td colspan="7" class="text-center">No records found.</td></tr> <!-- Colspan updated to 7 -->
                 <?php endif; ?>
             </tbody>
         </table>

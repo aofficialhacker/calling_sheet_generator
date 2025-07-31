@@ -24,7 +24,6 @@ def main():
     try:
         genai.configure(api_key=API_KEY)
         generation_config = genai.types.GenerationConfig(temperature=0.0)
-        # Use a valid model name, e.g., 'gemini-1.5-flash-latest'
         model = genai.GenerativeModel('gemini-2.5-flash', generation_config=generation_config)
         image = Image.open(image_path)
     except Exception as e:
