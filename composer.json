@@ -1,9 +1,11 @@
 {
     "require": {
         "phpoffice/phpspreadsheet": "^2.1",
-        "mpdf/mpdf": "^8.0",
+        "mpdf/mpdf": "^8.2",
         "setasign/fpdi": "^2.6",
         "fpdf/fpdf": "^1.86",
-        "thiagoalessio/tesseract_ocr": "^2.13"
+        "thiagoalessio/tesseract_ocr": "^2.13",
+        "psr/simple-cache": "^3.0",
+        "symfony/cache": "^6.0"
     }
 }

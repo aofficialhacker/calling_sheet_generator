@@ -5,7 +5,6 @@ require 'vendor/autoload.php';
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use PhpOffice\PhpSpreadsheet\Shared\Date;
-use Mpdf\Mpdf;
 
 define('DB_HOST', 'localhost');
 define('DB_USER', 'root');
@@ -16,7 +15,7 @@ define('DB_NAME', 'caller_sheet');
 function formatDateString($value): string {
     if (empty($value)) return '';
     if (is_numeric($value) && $value > 25569) {
-        try { return Date::excelToDateTimeObject($value)->format('d-m-Y'); } catch (Exception $e) { /* Fall through */ }
+        try { return Date::excelToDateTimeObject($value)->format('d-m-Y'); } catch (Exception $e) {}
     }
     if (is_string($value)) {
         $timestamp = strtotime($value);
@@ -55,103 +54,15 @@ function mapColumns(array $headerRow): array {
     return $map;
 }
 
-// --- Reusable PDF Generation Function ---
-function generatePdfFromData($data, $headers, $filename) {
-    if (empty($data)) { die("No data provided to generate PDF."); }
-    if (isset($_GET['download_token'])) { $token = $_GET['download_token']; setcookie($token, '1', ['expires' => time() + 60, 'path' => '/']); }
-    $colCount = count($headers);
-    
-    $slotLegend = "<strong>SLOTS:</strong> 1 (10-11a) | 2 (11a-12p) | 3 (12-1p) | 4 (1-2p) | 5 (2-3p) | 6 (3-4p) | 7 (4-5p) | 8 (5-6p)";
-    $dispLegend = "<strong>DISPO CODES (Y):</strong> 11:Interested | 12:Not Interested | 13:Call Back | 14:Follow Up | 15:More Info | 16:Language Barrier | 17:Drop || <strong>(N):</strong> 21:Ringing | 22:Switch Off | 23:Invalid Number | 24:Out of Service | 25:Wrong Number | 26:Busy";
-
-    $mpdf = new Mpdf(['mode' => 'utf-8', 'format' => 'A4-L', 'tempDir' => __DIR__ . '/tmp']);
-    $mpdf->SetDisplayMode('fullpage');
-    $mpdf->shrink_tables_to_fit = 1;
-
-    $html_head = '<html><head><style>body { font-family: sans-serif; font-size: 7.5pt; } table.data-table { width: 100%; border-collapse: collapse; table-layout: fixed; page-break-inside: auto; } thead { display: table-header-group; } tr { page-break-inside: avoid; page-break-after: auto; } th, td { border: 1px solid #333; padding: 3px; text-align: left; vertical-align: middle; word-wrap: break-word; } thead th, .legend-cell { text-align: center; font-weight: bold; background-color: #f2f2f2; } .anchor-col { font-weight: bold; color: #333; font-family: monospace; } .connectivity-col, .slot-cell { text-align: center; } .disposition-cell { font-size: 7pt; padding: 1px !important; } .dispo-grid { border: none !important; width: 100%; table-layout: fixed; } .dispo-grid td { border: none !important; padding: 1px 2px; text-align: left; }</style></head><body>';
-    $mpdf->WriteHTML($html_head);
-    $tableHeader = '<thead><tr><th class="legend-cell" colspan="'.$colCount.'">' . $slotLegend . '</th></tr><tr><th class="legend-cell" colspan="'.$colCount.'">' . $dispLegend . '</th></tr><tr>';
-    foreach($headers as $header) { $tableHeader .= '<th>' . htmlspecialchars(str_replace('_', ' ', ucwords($header))) . '</th>'; }
-    $tableHeader .= '</tr></thead>';
-    $dataChunks = array_chunk($data, 100);
-    foreach ($dataChunks as $chunk) {
-        $chunkHtml = '<table class="data-table">' . $tableHeader . '<tbody>';
-        foreach ($chunk as $dataRow) {
-            $chunkHtml .= '<tr>';
-            foreach ($headers as $header) {
-                if ($header === 'disposition') { $chunkHtml .= '<td class="disposition-cell"><table class="dispo-grid"><tr><td>○ 11</td><td>○ 12</td><td>○ 13</td><td>○ 14</td><td>○ 15</td><td>○ 16</td><td>○ 17</td></tr><tr><td>○ 21</td><td>○ 22</td><td>○ 23</td><td>○ 24</td><td>○ 25</td><td>○ 26</td><td></td></tr></table></td>'; } else {
-                    $cell = $dataRow[$header] ?? ''; $class = '';
-                    if ($header === 'mobile_no') $class = 'anchor-col';
-                    if ($header === 'connectivity') $class = 'connectivity-col';
-                    if ($header === 'slot') $class = 'slot-cell';
-                    $chunkHtml .= '<td class="'.$class.'">' . htmlspecialchars($cell) . '</td>';
-                }
-            }
-            $chunkHtml .= '</tr>';
-        }
-        $chunkHtml .= '</tbody></table>';
-        $mpdf->WriteHTML($chunkHtml);
-    }
-    $mpdf->WriteHTML('</body></html>');
-    $mpdf->Output($filename, 'D');
-    exit;
-}
-
-// --- Function to Download "Follow Up" Records as a New Sheet ---
-function downloadFollowUpPdf() {
-    $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
-    if ($conn->connect_error) { die("DB Connection Failed."); }
-
-    $stmt = $conn->prepare("SELECT * FROM final_call_logs WHERE disposition = 'Follow Up'");
-    $stmt->execute();
-    $result = $stmt->get_result();
-    
-    $followUpData = [];
-    $pdfHeaders = ['mobile_no', 'slot', 'connectivity', 'disposition', 'name', 'policy_number', 'plan', 'finqy_id'];
-
-    while ($row = $result->fetch_assoc()) {
-        $newRow = [];
-        // Prepare row for a *new* calling sheet
-        $newRow['connectivity'] = '○ Y / ○ N';
-        $newRow['disposition'] = "Ignored";
-        $newRow['slot'] = '';
-        foreach ($pdfHeaders as $header) {
-            if (isset($row[$header]) && !isset($newRow[$header])) {
-                $newRow[$header] = $row[$header];
-            }
-        }
-        $followUpData[] = $newRow;
-    }
-    $stmt->close();
-    $conn->close();
-
-    if (empty($followUpData)) {
-        $_SESSION['flash_message'] = ['type' => 'warning', 'text' => 'No records with "Follow Up" disposition found to generate a new sheet.'];
-        header('Location: admin_panel.php');
-        exit;
-    }
-
-    generatePdfFromData($followUpData, $pdfHeaders, 'Follow_Up_Calling_Sheet_' . date('Y-m-d') . '.pdf');
-}
-
-// --- MAIN LOGIC & ROUTING ---
-if (isset($_GET['action'])) {
-    if ($_GET['action'] == 'download_pdf' && isset($_SESSION['processed_data'])) {
-        generatePdfFromData($_SESSION['processed_data'], $_SESSION['output_headers'], 'Standard_Calling_Sheet_'.date('Y-m-d').'.pdf');
-    }
-    if ($_GET['action'] == 'download_followups') {
-        downloadFollowUpPdf();
-    }
-}
-
 // --- FILE UPLOAD PROCESSING ---
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['customerFile'])) {
-    unset($_SESSION['processed_data'], $_SESSION['output_headers']);
-    $uploadDir = 'uploads/'; $tmpDir = __DIR__ . '/tmp';
-    if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true); if (!is_dir($tmpDir)) mkdir($tmpDir, 0755, true);
+    set_time_limit(300);
+
+    $uploadDir = 'uploads/';
+    if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
 
     $originalFileName = basename($_FILES['customerFile']['name']);
-    $originalFile = $uploadDir . $originalFileName;
+    $originalFile = $uploadDir . uniqid() . '-' . $originalFileName;
 
     if (move_uploaded_file($_FILES['customerFile']['tmp_name'], $originalFile)) {
         $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
@@ -166,22 +77,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['customerFile'])) {
             $batch_stmt->close();
 
             $reader = \PhpOffice\PhpSpreadsheet\IOFactory::createReaderForFile($originalFile);
+            $reader->setReadDataOnly(true);
             $spreadsheet = $reader->load($originalFile);
             $dataRows = $spreadsheet->getActiveSheet()->toArray(null, true, true, false);
             $headerRow = array_shift($dataRows);
             $columnMap = mapColumns($headerRow);
             
-            $outputHeaders = [];
-            $fixedOrder = [ 'mobile_no', 'slot', 'connectivity', 'disposition', 'name', 'title', 'policy_number', 'pan', 'dob', 'age', 'expiry', 'address', 'city', 'state', 'country', 'pincode', 'plan', 'premium', 'sum_insured' ];
-            foreach($fixedOrder as $key) {
-                if (in_array($key, ['slot', 'connectivity', 'disposition']) || (isset($columnMap[$key]) && $columnMap[$key] !== -1)) {
-                     $outputHeaders[] = $key;
-                }
-            }
-
-            $processedDataForPdf = []; // For immediate PDF download
-            
-            // ARCHITECTURAL CHANGE: Insert directly into final_call_logs with NULL for caller fields.
             $sql = "INSERT INTO final_call_logs (mobile_no, source_filename, batch_id, title, name, policy_number, pan, dob, age, expiry, address, city, state, country, pincode, plan, premium, sum_insured, extra_data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE name=VALUES(name), policy_number=VALUES(policy_number), pan=VALUES(pan)";
             $stmt = $conn->prepare($sql);
             if ($stmt === false) { throw new Exception("Prepare failed (INSERT): " . $conn->error); }
@@ -198,18 +99,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['customerFile'])) {
                 }
                 if (empty($newRow['mobile_no'])) { continue; }
                 
-                // 1. Prepare data for PDF (with placeholders)
-                $pdfRow = $newRow;
-                $pdfRow['connectivity'] = '○ Y / ○ N';
-                $pdfRow['disposition'] = "Ignored";
-                $pdfRow['slot'] = '';
-                $processedDataForPdf[] = $pdfRow;
-
-                // 2. Prepare data for DB (without placeholders)
                 $mobile_no = preg_replace('/\D/', '', $newRow['mobile_no']);
                 $title = $newRow['title'] ?? null; $name = $newRow['name'] ?? null;
                 $policy_number = $newRow['policy_number'] ?? null; $pan = $newRow['pan'] ?? null;
-                $dob = $newRow['dob'] ?? null; $age = $newRow['age'] ?? null; $expiry = $newRow['expiry'] ?? null;
+                $dob = $newRow['dob'] ?? null; $age = (isset($newRow['age']) && is_numeric($newRow['age'])) ? (int)$newRow['age'] : null;
+                $expiry = $newRow['expiry'] ?? null;
                 $address = $newRow['address'] ?? null; $city = $newRow['city'] ?? null;
                 $state = $newRow['state'] ?? null; $country = $newRow['country'] ?? null;
                 $pincode = $newRow['pincode'] ?? null; $plan = $newRow['plan'] ?? null;
@@ -222,24 +116,28 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['customerFile'])) {
             $stmt->close();
             $conn->commit();
             
-            $_SESSION['processed_data'] = $processedDataForPdf;
-            $_SESSION['output_headers'] = $outputHeaders;
+            $_SESSION['flash_message'] = ['type' => 'success', 'text' => "Batch DB{$batch_id} created successfully from {$originalFileName}. You can now download its PDF."];
             if (file_exists($originalFile)) unlink($originalFile);
 
         } catch (Exception $e) {
             if (isset($conn) && $conn->ping()) { $conn->rollback(); }
-            die('Error processing file: ' . $e->getMessage());
+            $_SESSION['flash_message'] = ['type' => 'danger', 'text' => 'Error processing file: ' . $e->getMessage()];
         } finally {
             if (isset($conn) && $conn->ping()) { $conn->close(); }
+            header("Location: admin_panel.php");
+            exit();
         }
-    } else { die("Error: There was a problem uploading your file."); }
+    } else {
+        $_SESSION['flash_message'] = ['type' => 'danger', 'text' => 'There was a problem uploading your file.'];
+        header("Location: admin_panel.php");
+        exit();
+    }
 }
 
 // --- Fetch data for dashboard and batches table ---
 $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
 if ($conn->connect_error) { die("Connection Failed"); }
 
-// UPDATED: Fetch Caller Performance Data with new fields
 $perf_sql = "SELECT 
                 finqy_id,
                 COUNT(*) as total_calls,
@@ -255,7 +153,11 @@ $perf_sql = "SELECT
              ORDER BY total_calls DESC";
 $performance_data = $conn->query($perf_sql);
 
-$batches_sql = "SELECT id, original_filename, upload_time FROM file_batches ORDER BY id DESC";
+$batches_sql = "SELECT b.id, b.original_filename, b.upload_time, COUNT(f.id) as record_count 
+                FROM file_batches b
+                LEFT JOIN final_call_logs f ON b.id = f.batch_id
+                GROUP BY b.id, b.original_filename, b.upload_time
+                ORDER BY b.id DESC";
 $batches_data = $conn->query($batches_sql);
 
 $conn->close();
@@ -272,7 +174,6 @@ $conn->close();
         .spinner { width: 50px; height: 50px; border: 8px solid #f3f3f3; border-top: 8px solid #3498db; border-radius: 50%; animation: spin 1.5s linear infinite; }
         .loading-text { color: white; margin-top: 20px; font-size: 1.2rem; font-weight: bold; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        .stat-card { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
     </style>
 </head>
 <body>
@@ -291,13 +192,12 @@ $conn->close();
             <?php unset($_SESSION['flash_message']); ?>
         <?php endif; ?>
 
-        <!-- UPDATED: Admin Dashboard Section -->
         <div class="card shadow-sm mb-4">
             <div class="card-header bg-dark text-white"><h3 class="h5 mb-0"><i class="bi bi-graph-up me-2"></i>Admin Dashboard</h3></div>
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
                     <h4 class="card-title mb-0">Caller Performance</h4>
-                     <a href="admin_panel.php?action=download_followups" class="btn btn-info btn-sm text-white"><i class="bi bi-download me-2"></i>Download "Follow Up" Sheet</a>
+                    <a href="trigger_python_pdf.php?disposition=follow_up" class="btn btn-info btn-sm text-white" id="download-followup-btn"><i class="bi bi-download me-2"></i>Download "Follow Up" Sheet</a>
                 </div>
                 <div class="table-responsive">
                     <table class="table table-hover table-bordered">
@@ -324,7 +224,7 @@ $conn->close();
                                     <td><?= (int)$row['interested'] ?></td>
                                     <td><?= (int)$row['follow_up'] ?></td>
                                     <td class="text-warning"><?= (int)$row['empty_disposition'] ?></td>
-                                    <td><?= date('d-M-Y H:i', strtotime($row['last_activity'])) ?></td>
+                                    <td><?= $row['last_activity'] ? date('d-M-Y H:i', strtotime($row['last_activity'])) : 'N/A' ?></td>
                                 </tr>
                                 <?php endwhile; ?>
                             <?php else: ?>
@@ -336,19 +236,19 @@ $conn->close();
             </div>
         </div>
 
-        <!-- Batches and Upload Section -->
         <div class="row g-4">
             <div class="col-lg-7">
                  <div class="card shadow-sm h-100">
                     <div class="card-header bg-secondary text-white"><h3 class="h5 mb-0"><i class="bi bi-stack me-2"></i>Uploaded Batches (DB Sets)</h3></div>
                     <div class="card-body">
-                        <div class="table-responsive" style="max-height: 400px;">
+                        <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
                             <table class="table table-striped">
                                 <thead>
                                     <tr>
-                                        <th>Batch Name</th>
-                                        <th>Original Filename</th>
-                                        <th>Upload Time</th>
+                                        <th>Batch</th>
+                                        <th>Filename</th>
+                                        <th>Records</th>
+                                        <th>Action</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -356,12 +256,17 @@ $conn->close();
                                         <?php while($row = $batches_data->fetch_assoc()): ?>
                                         <tr>
                                             <td><span class="badge bg-primary fs-6">DB<?= htmlspecialchars($row['id']) ?></span></td>
-                                            <td><?= htmlspecialchars($row['original_filename']) ?></td>
-                                            <td><?= date('d-M-Y H:i', strtotime($row['upload_time'])) ?></td>
+                                            <td title="<?= htmlspecialchars($row['original_filename']) . ' (Uploaded: ' . date('d-M-Y H:i', strtotime($row['upload_time'])) . ')' ?>"><?= htmlspecialchars(substr($row['original_filename'], 0, 25)) . (strlen($row['original_filename']) > 25 ? '...' : '') ?></td>
+                                            <td><?= htmlspecialchars($row['record_count']) ?></td>
+                                            <td>
+                                                <a href="trigger_python_pdf.php?batch_id=<?= $row['id'] ?>" class="btn btn-danger btn-sm download-pdf-btn" title="Download PDF for this batch">
+                                                    <i class="bi bi-file-earmark-pdf-fill"></i> PDF
+                                                </a>
+                                            </td>
                                         </tr>
                                         <?php endwhile; ?>
                                     <?php else: ?>
-                                        <tr><td colspan="3" class="text-center text-muted">No batches have been uploaded yet.</td></tr>
+                                        <tr><td colspan="4" class="text-center text-muted">No batches have been uploaded yet.</td></tr>
                                     <?php endif; ?>
                                 </tbody>
                             </table>
@@ -371,41 +276,54 @@ $conn->close();
             </div>
             <div class="col-lg-5">
                 <div class="card shadow-sm h-100">
-                    <div class="card-header bg-primary text-white"><h3 class="h5 mb-0"><i class="bi bi-cloud-upload-fill me-2"></i>Generate New Sheet</h3></div>
+                    <div class="card-header bg-primary text-white"><h3 class="h5 mb-0"><i class="bi bi-cloud-upload-fill me-2"></i>Create New Batch</h3></div>
                     <div class="card-body d-flex flex-column">
-                        <p class="card-text">Upload a source file to create a new batch and generate a printable PDF calling sheet.</p>
+                        <p class="card-text">Upload a source file. The data will be saved, and you can download the PDF from the list on the left.</p>
                         <form action="admin_panel.php" method="post" enctype="multipart/form-data" class="mt-auto" id="upload-form">
                             <div class="mb-3">
                                 <label for="customerFile" class="form-label"><strong>Select Source File:</strong></label>
                                 <input class="form-control" type="file" id="customerFile" name="customerFile" accept=".xlsx, .csv" required>
                             </div>
-                            <button type="submit" class="btn btn-primary w-100"><i class="bi bi-gear-fill me-2"></i>Generate & Stage Data</button>
+                            <button type="submit" class="btn btn-primary w-100"><i class="bi bi-gear-fill me-2"></i>Upload and Create Batch</button>
                         </form>
                     </div>
                 </div>
             </div>
         </div>
-        
-        <?php if (isset($_SESSION['processed_data'])): ?>
-            <div class="card mt-4 text-center shadow-sm border-success">
-                <div class="card-body p-4">
-                    <h4 class="text-success"><i class="bi bi-check-circle-fill me-2"></i>File Processed & Staged!</h4>
-                    <p>Your PDF calling sheet is ready for download.</p>
-                    <div class="d-grid gap-2 col-md-6 mx-auto mt-3">
-                        <a href="admin_panel.php?action=download_pdf" class="btn btn-danger" id="download-btn"><i class="bi bi-file-earmark-pdf-fill me-2"></i>Download PDF Calling Sheet</a>
-                    </div>
-                </div>
-            </div>
-        <?php endif; ?>
     </div>
     <script>
-        const uploadForm = document.getElementById('upload-form'); const loadingOverlay = document.getElementById('loading-overlay'); const loadingMessage = document.getElementById('loading-message');
-        if (uploadForm) { uploadForm.addEventListener('submit', function(event) { const fileInput = document.getElementById('customerFile'); if (fileInput && fileInput.files.length > 0) { loadingMessage.textContent = 'Processing, please wait...'; loadingOverlay.style.display = 'flex'; } }); }
-        const downloadBtn = document.getElementById('download-btn');
-        if (downloadBtn) { downloadBtn.addEventListener('click', function(e) { e.preventDefault(); loadingMessage.textContent = 'Generating PDF...'; loadingOverlay.style.display = 'flex'; const token = "dl_" + Date.now(); const downloadUrl = this.href + '&download_token=' + token;
-            const intervalId = setInterval(function() { if (document.cookie.indexOf(token + "=1") !== -1) { clearInterval(intervalId); loadingOverlay.style.display = 'none'; document.cookie = token + "=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/"; } }, 500);
-            window.location.href = downloadUrl; });
-        }
+        document.addEventListener('DOMContentLoaded', function() {
+            const uploadForm = document.getElementById('upload-form');
+            const loadingOverlay = document.getElementById('loading-overlay');
+            const loadingMessage = document.getElementById('loading-message');
+
+            if (uploadForm) {
+                uploadForm.addEventListener('submit', function() {
+                    const fileInput = document.getElementById('customerFile');
+                    if (fileInput && fileInput.files.length > 0) {
+                        loadingMessage.textContent = 'Uploading and processing file... This may take a while.';
+                        loadingOverlay.style.display = 'flex';
+                    }
+                });
+            }
+
+            const handlePdfDownload = function(e) {
+                loadingMessage.textContent = 'Generating large PDF... Please wait.';
+                loadingOverlay.style.display = 'flex';
+                setTimeout(function() {
+                    loadingOverlay.style.display = 'none';
+                }, 20000);
+            };
+
+            document.querySelectorAll('.download-pdf-btn').forEach(button => {
+                button.addEventListener('click', handlePdfDownload);
+            });
+
+            const followupBtn = document.getElementById('download-followup-btn');
+            if (followupBtn) {
+                followupBtn.addEventListener('click', handlePdfDownload);
+            }
+        });
     </script>
 </body>
 </html>
