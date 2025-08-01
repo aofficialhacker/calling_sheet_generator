@@ -14,13 +14,22 @@ define('DB_NAME', 'caller_sheet');
 // --- Helper Functions ---
 function formatDateString($value): string {
     if (empty($value)) return '';
+    // Check for Excel's numeric date format
     if (is_numeric($value) && $value > 25569) {
-        try { return Date::excelToDateTimeObject($value)->format('d-m-Y'); } catch (Exception $e) {}
+        try { 
+            return Date::excelToDateTimeObject($value)->format('d-m-Y'); 
+        } catch (Exception $e) {
+            // Fall through if it's not a valid Excel date
+        }
     }
+    // Check for string date formats
     if (is_string($value)) {
         $timestamp = strtotime($value);
-        if ($timestamp !== false) return date('d-m-Y', $timestamp);
+        if ($timestamp !== false) {
+            return date('d-m-Y', $timestamp);
+        }
     }
+    // Return as-is if no format matches
     return (string)$value;
 }
 
@@ -83,7 +92,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['customerFile'])) {
             $headerRow = array_shift($dataRows);
             $columnMap = mapColumns($headerRow);
             
-            $sql = "INSERT INTO final_call_logs (mobile_no, source_filename, batch_id, title, name, policy_number, pan, dob, age, expiry, address, city, state, country, pincode, plan, premium, sum_insured, extra_data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE name=VALUES(name), policy_number=VALUES(policy_number), pan=VALUES(pan)";
+            // This is the corrected SQL query that fixes the "Records: 0" bug
+            $sql = "INSERT INTO final_call_logs (mobile_no, source_filename, batch_id, title, name, policy_number, pan, dob, age, expiry, address, city, state, country, pincode, plan, premium, sum_insured, extra_data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) 
+                    ON DUPLICATE KEY UPDATE 
+                        name=VALUES(name), 
+                        policy_number=VALUES(policy_number), 
+                        pan=VALUES(pan), 
+                        batch_id=VALUES(batch_id), 
+                        source_filename=VALUES(source_filename)";
+
             $stmt = $conn->prepare($sql);
             if ($stmt === false) { throw new Exception("Prepare failed (INSERT): " . $conn->error); }
 
@@ -100,14 +117,21 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['customerFile'])) {
                 if (empty($newRow['mobile_no'])) { continue; }
                 
                 $mobile_no = preg_replace('/\D/', '', $newRow['mobile_no']);
-                $title = $newRow['title'] ?? null; $name = $newRow['name'] ?? null;
-                $policy_number = $newRow['policy_number'] ?? null; $pan = $newRow['pan'] ?? null;
-                $dob = $newRow['dob'] ?? null; $age = (isset($newRow['age']) && is_numeric($newRow['age'])) ? (int)$newRow['age'] : null;
+                $title = $newRow['title'] ?? null;
+                $name = $newRow['name'] ?? null;
+                $policy_number = $newRow['policy_number'] ?? null;
+                $pan = $newRow['pan'] ?? null;
+                $dob = $newRow['dob'] ?? null;
+                $age = (isset($newRow['age']) && is_numeric($newRow['age'])) ? (int)$newRow['age'] : null;
                 $expiry = $newRow['expiry'] ?? null;
-                $address = $newRow['address'] ?? null; $city = $newRow['city'] ?? null;
-                $state = $newRow['state'] ?? null; $country = $newRow['country'] ?? null;
-                $pincode = $newRow['pincode'] ?? null; $plan = $newRow['plan'] ?? null;
-                $premium = $newRow['premium'] ?? null; $sum_insured = $newRow['sum_insured'] ?? null;
+                $address = $newRow['address'] ?? null;
+                $city = $newRow['city'] ?? null;
+                $state = $newRow['state'] ?? null;
+                $country = $newRow['country'] ?? null;
+                $pincode = $newRow['pincode'] ?? null;
+                $plan = $newRow['plan'] ?? null;
+                $premium = $newRow['premium'] ?? null;
+                $sum_insured = $newRow['sum_insured'] ?? null;
                 $extraData = null;
                 
                 $stmt->bind_param("ssisssssissssssssss", $mobile_no, $originalFileName, $batch_id, $title, $name, $policy_number, $pan, $dob, $age, $expiry, $address, $city, $state, $country, $pincode, $plan, $premium, $sum_insured, $extraData);
@@ -197,12 +221,12 @@ $conn->close();
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
                     <h4 class="card-title mb-0">Caller Performance</h4>
-                    <a href="trigger_python_pdf.php?disposition=follow_up" class="btn btn-info btn-sm text-white" id="download-followup-btn"><i class="bi bi-download me-2"></i>Download "Follow Up" Sheet</a>
+                    <a href="generate_pdf.php?disposition=follow_up" class="btn btn-info btn-sm text-white" id="download-followup-btn"><i class="bi bi-download me-2"></i>Download "Follow Up" Sheet</a>
                 </div>
                 <div class="table-responsive">
                     <table class="table table-hover table-bordered">
                         <thead class="table-light">
-                            <tr>
+                             <tr>
                                 <th>Caller (FinqyID)</th>
                                 <th>Total Logged</th>
                                 <th>Connected</th>
@@ -259,7 +283,7 @@ $conn->close();
                                             <td title="<?= htmlspecialchars($row['original_filename']) . ' (Uploaded: ' . date('d-M-Y H:i', strtotime($row['upload_time'])) . ')' ?>"><?= htmlspecialchars(substr($row['original_filename'], 0, 25)) . (strlen($row['original_filename']) > 25 ? '...' : '') ?></td>
                                             <td><?= htmlspecialchars($row['record_count']) ?></td>
                                             <td>
-                                                <a href="trigger_python_pdf.php?batch_id=<?= $row['id'] ?>" class="btn btn-danger btn-sm download-pdf-btn" title="Download PDF for this batch">
+                                                <a href="generate_pdf.php?batch_id=<?= $row['id'] ?>" class="btn btn-danger btn-sm download-pdf-btn" title="Download PDF for this batch">
                                                     <i class="bi bi-file-earmark-pdf-fill"></i> PDF
                                                 </a>
                                             </td>
@@ -299,8 +323,7 @@ $conn->close();
 
             if (uploadForm) {
                 uploadForm.addEventListener('submit', function() {
-                    const fileInput = document.getElementById('customerFile');
-                    if (fileInput && fileInput.files.length > 0) {
+                    if (document.getElementById('customerFile').files.length > 0) {
                         loadingMessage.textContent = 'Uploading and processing file... This may take a while.';
                         loadingOverlay.style.display = 'flex';
                     }
@@ -308,19 +331,20 @@ $conn->close();
             }
 
             const handlePdfDownload = function(e) {
-                loadingMessage.textContent = 'Generating large PDF... Please wait.';
+                loadingMessage.textContent = 'Generating PDF... Please wait.';
                 loadingOverlay.style.display = 'flex';
+                // Failsafe to hide overlay after a reasonable time
                 setTimeout(function() {
                     loadingOverlay.style.display = 'none';
-                }, 20000);
+                }, 15000); 
             };
 
             document.querySelectorAll('.download-pdf-btn').forEach(button => {
                 button.addEventListener('click', handlePdfDownload);
             });
-
+            
             const followupBtn = document.getElementById('download-followup-btn');
-            if (followupBtn) {
+            if(followupBtn) {
                 followupBtn.addEventListener('click', handlePdfDownload);
             }
         });
