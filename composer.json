@@ -6,6 +6,7 @@
         "fpdf/fpdf": "^1.86",
         "thiagoalessio/tesseract_ocr": "^2.13",
         "psr/simple-cache": "^3.0",
-        "symfony/cache": "^6.0"
+        "symfony/cache": "^6.0",
+        "tecnickcom/tcpdf": "^6.10"
     }
 }

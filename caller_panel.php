@@ -118,7 +118,7 @@ const CONNECTIVITY_MAP = [ 'Y' => 'Yes', 'N' => 'No' ];
         </div>
         <div class="col-md-6">
             <div class="card panel-card text-center h-100 shadow-sm">
-                <div class="card-body p-4 d-flex flex-column justify-content-center"><h3 class="card-title"><i class="bi bi-bar-chart-line-fill fs-1 text-success"></i><br>View Performance</h3><p class="text-muted mt-2">Check your call statistics and recent activity.</p><a href="view_final_logs.php" class="btn btn-success mt-auto">View All Logs</a></div>
+                <div class="card-body p-4 d-flex flex-column justify-content-center"><h3 class="card-title"><i class="bi bi-bar-chart-line-fill fs-1 text-success"></i><br>View Performance</h3><p class="text-muted mt-2">Check your call statistics and recent activity.</p><a href="view_performance.php" class="btn btn-success mt-auto">View All Logs</a></div>
             </div>
         </div>
     </div>

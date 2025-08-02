@@ -6,6 +6,7 @@ use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use PhpOffice\PhpSpreadsheet\Shared\Date;
 
+// --- Database Configuration ---
 define('DB_HOST', 'localhost');
 define('DB_USER', 'root');
 define('DB_PASS', '123456');
@@ -16,10 +17,10 @@ function formatDateString($value): string {
     if (empty($value)) return '';
     // Check for Excel's numeric date format
     if (is_numeric($value) && $value > 25569) {
-        try { 
-            return Date::excelToDateTimeObject($value)->format('d-m-Y'); 
+        try {
+            return Date::excelToDateTimeObject($value)->format('d-m-Y');
         } catch (Exception $e) {
-            // Fall through if it's not a valid Excel date
+            // Fall through if not a valid Excel date
         }
     }
     // Check for string date formats
@@ -34,9 +35,9 @@ function formatDateString($value): string {
 }
 
 function mapColumns(array $headerRow): array {
-    $map = ['title' => -1, 'name' => -1, 'age' => -1, 'mobile_no' => -1, 'policy_number' => -1, 'pan' => -1, 'dob' => -1, 'expiry' => -1, 'address' => -1, 'address2' => -1, 'address3' => -1, 'city' => -1, 'state' => -1, 'country' => -1, 'pincode' => -1, 'plan' => -1, 'premium' => -1, 'sum_insured' => -1 ];
+    $map = ['title' => -1, 'name' => -1, 'age' => -1, 'mobile_no' => -1, 'policy_number' => -1, 'pan' => -1, 'dob' => -1, 'expiry' => -1, 'address' => -1, 'address2' => -1, 'address3' => -1, 'city' => -1, 'state' => -1, 'country' => -1, 'pincode' => -1, 'plan' => -1, 'premium' => -1, 'sum_insured' => -1];
     foreach ($headerRow as $index => $header) {
-        if(is_null($header)) continue;
+        if (is_null($header)) continue;
         $normalizedHeader = strtolower(trim(str_replace(['_', ' '], '', $header)));
         if (empty($normalizedHeader)) continue;
         switch (true) {
@@ -91,8 +92,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['customerFile'])) {
             $dataRows = $spreadsheet->getActiveSheet()->toArray(null, true, true, false);
             $headerRow = array_shift($dataRows);
             $columnMap = mapColumns($headerRow);
-            
-            // This is the corrected SQL query that fixes the "Records: 0" bug
+
             $sql = "INSERT INTO final_call_logs (mobile_no, source_filename, batch_id, title, name, policy_number, pan, dob, age, expiry, address, city, state, country, pincode, plan, premium, sum_insured, extra_data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) 
                     ON DUPLICATE KEY UPDATE 
                         name=VALUES(name), 
@@ -110,7 +110,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['customerFile'])) {
                 foreach ($columnMap as $standardKey => $mappedIndex) {
                     if ($mappedIndex !== -1 && isset($dataRow[$mappedIndex])) {
                         $cellValue = $dataRow[$mappedIndex];
-                        if ($standardKey === 'dob' || $standardKey === 'expiry') { $newRow[$standardKey] = formatDateString($cellValue); }
+                        if ($standardKey === 'dob' || $standardKey === 'expiry') { $newRow[$standardKey] = formatDateString($cellValue); } 
                         else { $newRow[$standardKey] = (string) $cellValue; }
                     }
                 }
@@ -158,10 +158,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['customerFile'])) {
     }
 }
 
-// --- Fetch data for dashboard and batches table ---
+// --- Fetch data for dashboard, batches table, and dispositions ---
 $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
 if ($conn->connect_error) { die("Connection Failed"); }
 
+// Caller performance data
 $perf_sql = "SELECT 
                 finqy_id,
                 COUNT(*) as total_calls,
@@ -177,19 +178,26 @@ $perf_sql = "SELECT
              ORDER BY total_calls DESC";
 $performance_data = $conn->query($perf_sql);
 
+// Uploaded batches data
 $batches_sql = "SELECT b.id, b.original_filename, b.upload_time, COUNT(f.id) as record_count 
-                FROM file_batches b
-                LEFT JOIN final_call_logs f ON b.id = f.batch_id
-                GROUP BY b.id, b.original_filename, b.upload_time
-                ORDER BY b.id DESC";
+               FROM file_batches b
+               LEFT JOIN final_call_logs f ON b.id = f.batch_id
+               GROUP BY b.id, b.original_filename, b.upload_time
+               ORDER BY b.id DESC";
 $batches_data = $conn->query($batches_sql);
+
+// Available dispositions for download dropdown
+$dispo_sql = "SELECT DISTINCT disposition FROM final_call_logs WHERE disposition IS NOT NULL AND disposition != '' AND disposition != 'Interested' ORDER BY disposition ASC";
+$dispositions_result = $conn->query($dispo_sql);
 
 $conn->close();
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Admin Panel</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <style>
@@ -219,9 +227,21 @@ $conn->close();
         <div class="card shadow-sm mb-4">
             <div class="card-header bg-dark text-white"><h3 class="h5 mb-0"><i class="bi bi-graph-up me-2"></i>Admin Dashboard</h3></div>
             <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-3">
                     <h4 class="card-title mb-0">Caller Performance</h4>
-                    <a href="generate_pdf.php?disposition=follow_up" class="btn btn-info btn-sm text-white" id="download-followup-btn"><i class="bi bi-download me-2"></i>Download "Follow Up" Sheet</a>
+                    <form class="d-flex gap-2" id="disposition-download-form" action="generate_pdf.php" method="GET">
+                        <select class="form-select form-select-sm" name="disposition" id="disposition-select" required>
+                            <option value="" disabled selected>-- Select Status to Download --</option>
+                            <?php if ($dispositions_result && $dispositions_result->num_rows > 0): ?>
+                                <?php while($row = $dispositions_result->fetch_assoc()): ?>
+                                    <option value="<?= htmlspecialchars($row['disposition']) ?>"><?= htmlspecialchars($row['disposition']) ?></option>
+                                <?php endwhile; ?>
+                            <?php endif; ?>
+                        </select>
+                        <button type="button" class="btn btn-info btn-sm text-white flex-shrink-0" id="download-disposition-btn">
+                            <i class="bi bi-download me-1"></i> Download by Status
+                        </button>
+                    </form>
                 </div>
                 <div class="table-responsive">
                     <table class="table table-hover table-bordered">
@@ -315,6 +335,7 @@ $conn->close();
             </div>
         </div>
     </div>
+    
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             const uploadForm = document.getElementById('upload-form');
@@ -330,22 +351,64 @@ $conn->close();
                 });
             }
 
-            const handlePdfDownload = function(e) {
+            function getCookie(name) {
+                const value = `; ${document.cookie}`;
+                const parts = value.split(`; ${name}=`);
+                if (parts.length === 2) return parts.pop().split(';').shift();
+            }
+            
+            // Generic function to initiate download and show loading overlay
+            const startPdfDownload = function(url) {
                 loadingMessage.textContent = 'Generating PDF... Please wait.';
                 loadingOverlay.style.display = 'flex';
-                // Failsafe to hide overlay after a reasonable time
-                setTimeout(function() {
+
+                const downloadToken = new Date().getTime();
+                const cookieName = `download_token_${downloadToken}`;
+                
+                // Append the unique token to the URL
+                const finalUrl = url + (url.includes('?') ? '&' : '?') + `download_token=${downloadToken}`;
+                
+                // Start the download
+                window.location.href = finalUrl;
+
+                // Poll for the cookie to hide the overlay
+                const timer = setInterval(function() {
+                    if (getCookie(cookieName)) {
+                        loadingOverlay.style.display = 'none';
+                        clearInterval(timer);
+                        // Clean up cookie
+                        document.cookie = `${cookieName}=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;`;
+                    }
+                }, 1000); // Check every second
+
+                // Failsafe to hide overlay after 20 seconds
+                setTimeout(() => {
+                    clearInterval(timer);
                     loadingOverlay.style.display = 'none';
-                }, 15000); 
+                }, 20000);
             };
 
+            // Attach handler to the batch PDF download buttons
             document.querySelectorAll('.download-pdf-btn').forEach(button => {
-                button.addEventListener('click', handlePdfDownload);
+                button.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    startPdfDownload(this.href);
+                });
             });
             
-            const followupBtn = document.getElementById('download-followup-btn');
-            if(followupBtn) {
-                followupBtn.addEventListener('click', handlePdfDownload);
+            // Attach handler to the new "Download by Status" button
+            const dispoBtn = document.getElementById('download-disposition-btn');
+            if(dispoBtn) {
+                dispoBtn.addEventListener('click', function() {
+                    const form = document.getElementById('disposition-download-form');
+                    const select = document.getElementById('disposition-select');
+                    if (select.value) { // Only proceed if a status is selected
+                        const url = form.action + '?disposition=' + encodeURIComponent(select.value);
+                        startPdfDownload(url);
+                    } else {
+                        alert('Please select a status from the dropdown first.');
+                    }
+                });
             }
         });
     </script>
