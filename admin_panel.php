@@ -1,16 +1,23 @@
 <?php
 session_start();
-require 'vendor/autoload.php';
+require_once 'db_config.php';
 
-use PhpOffice\PhpSpreadsheet\Spreadsheet;
-use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
-use PhpOffice\PhpSpreadsheet\Shared\Date;
+// Check if user is admin or superadmin
+if (!isAdmin() && !isSuperadmin()) {
+    header("Location: admin_login.php");
+    exit();
+}
+
+// Determine admin ID
+$adminId = $_SESSION['admin_id'] ?? null;
+$isSuper = isSuperadmin();
+
+if (!$adminId) {
+    die("Admin ID not found in session");
+}
 
 // --- Database Configuration ---
-define('DB_HOST', 'localhost');
-define('DB_USER', 'root');
-define('DB_PASS', '123456');
-define('DB_NAME', 'caller_sheet');
+$conn = getDBConnection();
 
 // --- Helper Functions ---
 function formatDateString($value): string {
@@ -73,19 +80,26 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['customerFile'])) {
 
     $originalFileName = basename($_FILES['customerFile']['name']);
     $originalFile = $uploadDir . uniqid() . '-' . $originalFileName;
+    
+    $productCode = $_POST['product'] ?? '';
+    $vendorId = $_POST['vendor'] ?? '';
+    
+    if (empty($productCode) || empty($vendorId)) {
+        $_SESSION['flash_message'] = ['type' => 'danger', 'text' => 'Please select both product and vendor before uploading.'];
+        header("Location: admin_panel.php");
+        exit();
+    }
 
     if (move_uploaded_file($_FILES['customerFile']['tmp_name'], $originalFile)) {
-        $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
-        if ($conn->connect_error) { die("DB Connection Failed: " . $conn->connect_error); }
-
         try {
             $conn->begin_transaction();
-            $batch_stmt = $conn->prepare("INSERT INTO file_batches (original_filename) VALUES (?)");
-            $batch_stmt->bind_param("s", $originalFileName);
+            $batch_stmt = $conn->prepare("INSERT INTO file_batches (original_filename, admin_id, vendor_id, product_code) VALUES (?, ?, ?, ?)");
+            $batch_stmt->bind_param("ssss", $originalFileName, $adminId, $vendorId, $productCode);
             $batch_stmt->execute();
             $batch_id = $conn->insert_id;
             $batch_stmt->close();
 
+            require 'vendor/autoload.php';
             $reader = \PhpOffice\PhpSpreadsheet\IOFactory::createReaderForFile($originalFile);
             $reader->setReadDataOnly(true);
             $spreadsheet = $reader->load($originalFile);
@@ -147,7 +161,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['customerFile'])) {
             if (isset($conn) && $conn->ping()) { $conn->rollback(); }
             $_SESSION['flash_message'] = ['type' => 'danger', 'text' => 'Error processing file: ' . $e->getMessage()];
         } finally {
-            if (isset($conn) && $conn->ping()) { $conn->close(); }
             header("Location: admin_panel.php");
             exit();
         }
@@ -158,37 +171,110 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['customerFile'])) {
     }
 }
 
-// --- Fetch data for dashboard, batches table, and dispositions ---
-$conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
-if ($conn->connect_error) { die("Connection Failed"); }
+// --- Fetch data for dashboard ---
 
-// Caller performance data
+// Build WHERE clause for batches based on admin access
+$batchWhereClause = $isSuper ? "" : "WHERE b.admin_id = ?";
+
+// --- Caller performance data ---
 $perf_sql = "SELECT 
-                finqy_id,
+                fcl.finqy_id,
                 COUNT(*) as total_calls,
-                SUM(CASE WHEN connectivity = 'Yes' THEN 1 ELSE 0 END) as connected,
-                SUM(CASE WHEN connectivity = 'No' THEN 1 ELSE 0 END) as not_connected,
-                SUM(CASE WHEN disposition = 'Interested' THEN 1 ELSE 0 END) as interested,
-                SUM(CASE WHEN disposition = 'Follow Up' THEN 1 ELSE 0 END) as follow_up,
-                SUM(CASE WHEN disposition IS NULL AND finqy_id IS NOT NULL THEN 1 ELSE 0 END) as empty_disposition,
-                MAX(processed_at) as last_activity
-             FROM final_call_logs 
-             WHERE finqy_id IS NOT NULL
-             GROUP BY finqy_id 
-             ORDER BY total_calls DESC";
-$performance_data = $conn->query($perf_sql);
+                SUM(CASE WHEN fcl.connectivity = 'Yes' THEN 1 ELSE 0 END) as connected,
+                SUM(CASE WHEN fcl.connectivity = 'No' THEN 1 ELSE 0 END) as not_connected,
+                SUM(CASE WHEN fcl.disposition = 'Interested' THEN 1 ELSE 0 END) as interested,
+                SUM(CASE WHEN fcl.disposition = 'Follow Up' THEN 1 ELSE 0 END) as follow_up,
+                SUM(CASE WHEN fcl.disposition IS NULL AND fcl.finqy_id IS NOT NULL THEN 1 ELSE 0 END) as empty_disposition,
+                MAX(fcl.processed_at) as last_activity
+             FROM final_call_logs fcl";
 
-// Uploaded batches data
-$batches_sql = "SELECT b.id, b.original_filename, b.upload_time, COUNT(f.id) as record_count 
+$perfWhereConditions = [];
+$perfWhereConditions[] = "fcl.finqy_id IS NOT NULL";
+
+if (!$isSuper) {
+    $perf_sql .= " JOIN admin_caller_mapping acm ON fcl.finqy_id = acm.finqy_id COLLATE utf8mb4_general_ci";
+    $perfWhereConditions[] = "acm.admin_id = ?";
+}
+
+if (!empty($perfWhereConditions)) {
+    $perf_sql .= " WHERE " . implode(" AND ", $perfWhereConditions);
+}
+
+$perf_sql .= " GROUP BY fcl.finqy_id 
+             ORDER BY total_calls DESC";
+
+if ($isSuper) {
+    $performance_data = $conn->query($perf_sql);
+} else {
+    $perf_stmt = $conn->prepare($perf_sql);
+    if ($perf_stmt === false) { die("Error preparing performance query: " . $conn->error); }
+    $perf_stmt->bind_param("s", $adminId);
+    $perf_stmt->execute();
+    $performance_data = $perf_stmt->get_result();
+}
+
+// --- Uploaded batches data ---
+$batches_sql = "SELECT b.id, b.original_filename, b.upload_time, b.product_code, b.vendor_id,
+                p.product_name, v.vendor_name, COUNT(f.id) as record_count 
                FROM file_batches b
                LEFT JOIN final_call_logs f ON b.id = f.batch_id
-               GROUP BY b.id, b.original_filename, b.upload_time
+               LEFT JOIN products p ON b.product_code = p.product_code
+               LEFT JOIN vendors v ON b.vendor_id = v.vendor_id
+               {$batchWhereClause}
+               GROUP BY b.id
                ORDER BY b.id DESC";
-$batches_data = $conn->query($batches_sql);
 
-// Available dispositions for download dropdown
-$dispo_sql = "SELECT DISTINCT disposition FROM final_call_logs WHERE disposition IS NOT NULL AND disposition != '' AND disposition != 'Interested' ORDER BY disposition ASC";
-$dispositions_result = $conn->query($dispo_sql);
+if ($isSuper) {
+    $batches_data = $conn->query($batches_sql);
+} else {
+    $batch_stmt = $conn->prepare($batches_sql);
+    if ($batch_stmt === false) { die("Error preparing batch query: " . $conn->error); }
+    $batch_stmt->bind_param("s", $adminId);
+    $batch_stmt->execute();
+    $batches_data = $batch_stmt->get_result();
+}
+
+// --- Available dispositions for download dropdown ---
+$dispo_sql = "SELECT DISTINCT fcl.disposition 
+              FROM final_call_logs fcl";
+
+$dispoWhereConditions = [];
+$dispoWhereConditions[] = "fcl.disposition IS NOT NULL";
+$dispoWhereConditions[] = "fcl.disposition != ''";
+$dispoWhereConditions[] = "fcl.disposition != 'Interested'";
+
+if (!$isSuper) {
+    $dispo_sql .= " JOIN admin_caller_mapping acm ON fcl.finqy_id = acm.finqy_id COLLATE utf8mb4_general_ci";
+    $dispoWhereConditions[] = "acm.admin_id = ?";
+}
+
+if (!empty($dispoWhereConditions)) {
+    $dispo_sql .= " WHERE " . implode(" AND ", $dispoWhereConditions);
+}
+
+$dispo_sql .= " ORDER BY fcl.disposition ASC";
+
+if ($isSuper) {
+    $dispositions_result = $conn->query($dispo_sql);
+} else {
+    $dispo_stmt = $conn->prepare($dispo_sql);
+    if ($dispo_stmt === false) { die("Error preparing disposition query: " . $conn->error); }
+    $dispo_stmt->bind_param("s", $adminId);
+    $dispo_stmt->execute();
+    $dispositions_result = $dispo_stmt->get_result();
+}
+
+// Get products and vendors for dropdowns
+$products = $conn->query("SELECT product_code, product_name FROM products WHERE is_active = 1 ORDER BY product_name");
+
+if ($isSuper) {
+    $vendors = $conn->query("SELECT vendor_id, vendor_name FROM vendors WHERE is_active = 1 ORDER BY vendor_name");
+} else {
+    $vendor_stmt = $conn->prepare("SELECT vendor_id, vendor_name FROM vendors WHERE admin_id = ? AND is_active = 1 ORDER BY vendor_name");
+    $vendor_stmt->bind_param("s", $adminId);
+    $vendor_stmt->execute();
+    $vendors = $vendor_stmt->get_result();
+}
 
 $conn->close();
 ?>
@@ -212,8 +298,23 @@ $conn->close();
     <div id="loading-overlay"><div class="spinner"></div><p class="loading-text" id="loading-message">Processing, please wait...</p></div>
     <div class="container mt-4 mb-5">
         <div class="d-flex justify-content-between align-items-center mb-4">
-            <h1 class="h2"><i class="bi bi-shield-lock-fill me-2"></i>Admin Panel</h1>
-            <a href="index.php" class="btn btn-secondary"><i class="bi bi-arrow-left-circle me-2"></i>Back to Main Menu</a>
+            <div>
+                <h1 class="h2"><i class="bi bi-shield-lock-fill me-2"></i>Admin Panel</h1>
+                <span class="text-muted">
+                    <?php if ($isSuper): ?>
+                        <span class="badge bg-primary">SUPERADMIN</span>
+                    <?php else: ?>
+                        Welcome, <?= htmlspecialchars($_SESSION['admin_name']) ?> 
+                        <span class="badge bg-secondary"><?= htmlspecialchars($adminId) ?></span>
+                    <?php endif; ?>
+                </span>
+            </div>
+            <div>
+                <?php if ($isSuper): ?>
+                    <a href="superadmin_panel.php" class="btn btn-primary"><i class="bi bi-shield-fill me-2"></i>Superadmin Panel</a>
+                <?php endif; ?>
+                <a href="logout.php?type=admin" class="btn btn-danger"><i class="bi bi-box-arrow-right me-2"></i>Logout</a>
+            </div>
         </div>
         
         <?php if (isset($_SESSION['flash_message'])): ?>
@@ -230,7 +331,8 @@ $conn->close();
                 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-3">
                     <h4 class="card-title mb-0">Caller Performance</h4>
                     <form class="d-flex gap-2" id="disposition-download-form" action="generate_pdf.php" method="GET">
-                        <select class="form-select form-select-sm" name="disposition" id="disposition-select" required>
+                        <select class="form-select form-select-sm" name="disposition" id="disposition-select" 
+                                <?= ($_SESSION['multi_status_selection'] ?? false) ? 'multiple' : '' ?> required>
                             <option value="" disabled selected>-- Select Status to Download --</option>
                             <?php if ($dispositions_result && $dispositions_result->num_rows > 0): ?>
                                 <?php while($row = $dispositions_result->fetch_assoc()): ?>
@@ -290,6 +392,8 @@ $conn->close();
                                 <thead>
                                     <tr>
                                         <th>Batch</th>
+                                        <th>Product</th>
+                                        <th>Vendor</th>
                                         <th>Filename</th>
                                         <th>Records</th>
                                         <th>Action</th>
@@ -300,7 +404,9 @@ $conn->close();
                                         <?php while($row = $batches_data->fetch_assoc()): ?>
                                         <tr>
                                             <td><span class="badge bg-primary fs-6">DB<?= htmlspecialchars($row['id']) ?></span></td>
-                                            <td title="<?= htmlspecialchars($row['original_filename']) . ' (Uploaded: ' . date('d-M-Y H:i', strtotime($row['upload_time'])) . ')' ?>"><?= htmlspecialchars(substr($row['original_filename'], 0, 25)) . (strlen($row['original_filename']) > 25 ? '...' : '') ?></td>
+                                            <td><?= htmlspecialchars($row['product_name'] ?? 'N/A') ?></td>
+                                            <td><?= htmlspecialchars($row['vendor_name'] ?? 'N/A') ?></td>
+                                            <td title="<?= htmlspecialchars($row['original_filename']) . ' (Uploaded: ' . date('d-M-Y H:i', strtotime($row['upload_time'])) . ')' ?>"><?= htmlspecialchars(substr($row['original_filename'], 0, 20)) . (strlen($row['original_filename']) > 20 ? '...' : '') ?></td>
                                             <td><?= htmlspecialchars($row['record_count']) ?></td>
                                             <td>
                                                 <a href="generate_pdf.php?batch_id=<?= $row['id'] ?>" class="btn btn-danger btn-sm download-pdf-btn" title="Download PDF for this batch">
@@ -310,7 +416,7 @@ $conn->close();
                                         </tr>
                                         <?php endwhile; ?>
                                     <?php else: ?>
-                                        <tr><td colspan="4" class="text-center text-muted">No batches have been uploaded yet.</td></tr>
+                                        <tr><td colspan="6" class="text-center text-muted">No batches have been uploaded yet.</td></tr>
                                     <?php endif; ?>
                                 </tbody>
                             </table>
@@ -325,6 +431,41 @@ $conn->close();
                         <p class="card-text">Upload a source file. The data will be saved, and you can download the PDF from the list on the left.</p>
                         <form action="admin_panel.php" method="post" enctype="multipart/form-data" class="mt-auto" id="upload-form">
                             <div class="mb-3">
+                                <label for="product" class="form-label"><strong>Select Product:</strong></label>
+                                <select class="form-select" id="product" name="product" required>
+                                    <option value="">-- Select Product --</option>
+                                    <?php if ($products && $products->num_rows > 0): ?>
+                                        <?php $products->data_seek(0); // Reset pointer ?>
+                                        <?php while($product = $products->fetch_assoc()): ?>
+                                            <option value="<?= htmlspecialchars($product['product_code']) ?>">
+                                                <?= htmlspecialchars($product['product_name']) ?>
+                                            </option>
+                                        <?php endwhile; ?>
+                                    <?php endif; ?>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label for="vendor" class="form-label"><strong>Select Vendor:</strong></label>
+                                <div class="input-group">
+                                    <select class="form-select" id="vendor" name="vendor" required>
+                                        <option value="">-- Select Vendor --</option>
+                                        <?php if ($vendors && $vendors->num_rows > 0): ?>
+                                            <?php $vendors->data_seek(0); // Reset pointer ?>
+                                            <?php while($vendor = $vendors->fetch_assoc()): ?>
+                                                <option value="<?= htmlspecialchars($vendor['vendor_id']) ?>">
+                                                    <?= htmlspecialchars($vendor['vendor_name']) ?>
+                                                </option>
+                                            <?php endwhile; ?>
+                                        <?php endif; ?>
+                                    </select>
+                                    <?php if (!$isSuper): ?>
+                                        <button class="btn btn-outline-secondary" type="button" data-bs-toggle="modal" data-bs-target="#requestVendorModal">
+                                            <i class="bi bi-plus-circle"></i>
+                                        </button>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                            <div class="mb-3">
                                 <label for="customerFile" class="form-label"><strong>Select Source File:</strong></label>
                                 <input class="form-control" type="file" id="customerFile" name="customerFile" accept=".xlsx, .csv" required>
                             </div>
@@ -335,6 +476,33 @@ $conn->close();
             </div>
         </div>
     </div>
+    
+    <!-- Request New Vendor Modal -->
+    <?php if (!$isSuper): ?>
+    <div class="modal fade" id="requestVendorModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Request New Vendor</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form action="request_vendor.php" method="POST">
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label for="vendor_name" class="form-label">Vendor Name</label>
+                            <input type="text" class="form-control" id="vendor_name" name="vendor_name" required>
+                        </div>
+                        <p class="text-muted">Your request will be sent to the superadmin for approval.</p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Submit Request</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
     
     <script>
         document.addEventListener('DOMContentLoaded', function() {
@@ -402,15 +570,30 @@ $conn->close();
                 dispoBtn.addEventListener('click', function() {
                     const form = document.getElementById('disposition-download-form');
                     const select = document.getElementById('disposition-select');
-                    if (select.value) { // Only proceed if a status is selected
-                        const url = form.action + '?disposition=' + encodeURIComponent(select.value);
-                        startPdfDownload(url);
+                    
+                    if (select.multiple) {
+                        // Multi-select mode
+                        const selectedOptions = Array.from(select.selectedOptions);
+                        if (selectedOptions.length > 0) {
+                            const dispositions = selectedOptions.map(opt => opt.value);
+                            const url = form.action + '?disposition=' + encodeURIComponent(dispositions.join(','));
+                            startPdfDownload(url);
+                        } else {
+                            alert('Please select at least one status from the dropdown.');
+                        }
                     } else {
-                        alert('Please select a status from the dropdown first.');
+                        // Single select mode
+                        if (select.value) {
+                            const url = form.action + '?disposition=' + encodeURIComponent(select.value);
+                            startPdfDownload(url);
+                        } else {
+                            alert('Please select a status from the dropdown first.');
+                        }
                     }
                 });
             }
         });
     </script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
