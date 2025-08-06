@@ -3,7 +3,7 @@
 define('DB_HOST', 'localhost');
 define('DB_USER', 'root');
 define('DB_PASS', '123456');
-define('DB_NAME', 'caller_sheet');
+define('DB_NAME', 'caller_sheet3');
 
 // Function to get database connection
 function getDBConnection() {
@@ -134,24 +134,3 @@ function generateLogRowId($batchId, $rowNumber) {
     return $batchId . str_pad($rowNumber, 5, '0', STR_PAD_LEFT);
 }
 
-// Function to generate next vendor ID for an admin
-function generateVendorId($adminId = null, $conn = null) {
-    // If no connection is provided, get one
-    if ($conn === null) {
-        $conn = getDBConnection();
-    }
-    
-    $stmt = $conn->prepare("SELECT vendor_id FROM vendors ORDER BY CAST(SUBSTRING(vendor_id, 2) AS UNSIGNED) DESC LIMIT 1");
-    $stmt->execute();
-    $result = $stmt->get_result();
-    
-    if ($result->num_rows > 0) {
-        $lastId = $result->fetch_assoc()['vendor_id'];
-        $number = intval(substr($lastId, 1)) + 1;
-    } else {
-        $number = 1;
-    }
-    
-    $stmt->close();
-    return 'V' . str_pad($number, 2, '0', STR_PAD_LEFT);
-}
