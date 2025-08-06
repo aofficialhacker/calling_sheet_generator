@@ -1,12 +1,11 @@
 <?php
-// This script generates a PDF calling sheet based on a batch ID or a disposition status.
-
 require 'vendor/autoload.php';
+require_once 'db_config.php';
 
 use Mpdf\Mpdf;
+use Mpdf\HTMLParserMode;
 
 // --- Server-Side Download Token ---
-// Sets a cookie that the front-end JavaScript can detect to know the download has started.
 if (isset($_GET['download_token'])) {
     $token = preg_replace('/[^0-9]/', '', $_GET['download_token']);
     if (!empty($token)) {
@@ -14,149 +13,229 @@ if (isset($_GET['download_token'])) {
     }
 }
 
-// --- Configuration and DB Connection ---
-define('DB_HOST', 'localhost');
-define('DB_USER', 'root');
-define('DB_PASS', '123456');
-define('DB_NAME', 'caller_sheet');
-
-// Allow script to run for a long time and use more memory for large PDFs
 set_time_limit(0);
-ini_set('memory_limit', '1024M');
+ini_set('memory_limit', '2048M');
 
-$conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
-if ($conn->connect_error) {
-    die("Database Connection Failed: " . $conn->connect_error);
-}
+$conn = getDBConnection();
 
-// --- Determine Data Source and PDF Metadata ---
-$dataSourceWhereClause = '';
-$pdfFileName = 'Calling_Sheet_' . date('Y-m-d') . '.pdf';
-$pdfTitle = 'General Calling Sheet';
+// --- Determine Data Source ---
+$pdfFileName = 'Calling_Sheet.pdf';
+$pdfTitle = 'Calling Sheet';
+$batch_id = null;
+$dispositions = null;
 
-if (isset($_GET['batch_id']) && is_numeric($_GET['batch_id'])) {
-    $batch_id = (int)$_GET['batch_id'];
-    $dataSourceWhereClause = "WHERE batch_id = {$batch_id}"; // Batch ID is numeric, direct interpolation is safe here.
+if (isset($_GET['batch_id'])) {
+    $batch_id = $_GET['batch_id'];
     $pdfFileName = 'Batch_' . $batch_id . '_Sheet.pdf';
-    $pdfTitle = "Calling Sheet for Batch DB{$batch_id}";
-
-} elseif (isset($_GET['disposition']) && !empty($_GET['disposition'])) {
-    $disposition = $_GET['disposition'];
-    // Use a prepared statement placeholder for security
-    $dataSourceWhereClause = "WHERE disposition = ?";
-    // Sanitize disposition for use in filename
-    $safeDispositionName = preg_replace("/[^a-zA-Z0-9\s]/", "", $disposition);
-    $pdfFileName = ucwords(str_replace(' ', '_', $safeDispositionName)) . '_Sheet.pdf';
-    $pdfTitle = "Calling Sheet for Status: " . htmlspecialchars($disposition);
-
+    $pdfTitle = "Calling Sheet for Batch " . htmlspecialchars($batch_id);
+} elseif (isset($_GET['disposition'])) {
+    $dispositions = explode(',', $_GET['disposition']);
+    $safeDispositionName = preg_replace("/[^a-zA-Z0-9]/", "", $dispositions[0]);
+    $pdfFileName = ucwords($safeDispositionName) . '_Sheet.pdf';
+    $pdfTitle = "Calling Sheet for Status: " . htmlspecialchars(implode(', ', $dispositions));
 } else {
     die("Error: No valid batch ID or disposition provided.");
 }
 
-// --- Step 1: Dynamically Detect Which Columns Have Data ---
-$mandatoryHeaders = ['mobile_no', 'slot', 'connectivity', 'disposition'];
-$optionalColumns = ['name', 'title', 'policy_number', 'pan', 'dob', 'age', 'expiry', 'address', 'city', 'state', 'country', 'pincode', 'plan', 'premium', 'sum_insured'];
+// --- Dynamically Detect Which Columns Have Data ---
+$baseSql = "FROM final_call_logs ";
+$whereClauses = [];
+$params = [];
+$types = '';
+
+if ($batch_id) {
+    $whereClauses[] = "batch_id = ?";
+    $params[] = $batch_id;
+    $types .= 's';
+}
+if ($dispositions) {
+    $placeholders = implode(',', array_fill(0, count($dispositions), '?'));
+    $whereClauses[] = "disposition IN ($placeholders)";
+    $params = array_merge($params, $dispositions);
+    $types .= str_repeat('s', count($dispositions));
+}
+
+if (empty($whereClauses)) {
+    die("Error: No criteria selected for PDF generation.");
+}
+$whereSql = "WHERE " . implode(' AND ', $whereClauses);
+$fullBaseSql = $baseSql . $whereSql;
+
+// Define columns in the order they should appear (excluding status)
+// Fixed order: id, slot, connectivity, disposition, then dynamic columns
+$optionalColumns = ['name', 'mobile_no', 'title', 'policy_number', 'pan', 'dob', 'age', 'expiry', 'address', 'city', 'state', 'country', 'pincode', 'plan', 'premium', 'sum_insured'];
 $selects = [];
 foreach ($optionalColumns as $column) {
     $selects[] = "MAX(CASE WHEN `{$column}` IS NOT NULL AND `{$column}` != '' THEN 1 ELSE 0 END) as has_{$column}";
 }
-$presenceCheckSql = "SELECT " . implode(', ', $selects) . " FROM final_call_logs {$dataSourceWhereClause}";
 
-// Use prepared statement if filtering by disposition
-if (isset($disposition)) {
-    $presence_stmt = $conn->prepare($presenceCheckSql);
-    $presence_stmt->bind_param("s", $disposition);
-    $presence_stmt->execute();
-    $presenceResult = $presence_stmt->get_result();
-} else {
-    $presenceResult = $conn->query($presenceCheckSql);
+$presenceCheckSql = "SELECT " . implode(', ', $selects) . " " . $fullBaseSql;
+$stmt = $conn->prepare($presenceCheckSql);
+if ($stmt === false) {
+    die("Error preparing statement (presence check): " . $conn->error);
 }
-$columnPresence = $presenceResult->fetch_assoc();
+if ($types) {
+    $stmt->bind_param($types, ...$params);
+}
+$stmt->execute();
+$columnPresence = $stmt->get_result()->fetch_assoc();
+$stmt->close();
 
-// --- Step 2: Build the Final List of Headers for the PDF ---
-$pdfHeaders = $mandatoryHeaders;
-if ($columnPresence) {
-    foreach ($optionalColumns as $column) {
-        if ($columnPresence["has_{$column}"] == 1) {
-            $pdfHeaders[] = $column;
-        }
+// Build final headers: id, slot, connectivity, disposition first, then dynamic columns
+$finalHeaders = ['id', 'slot', 'connectivity', 'disposition'];
+
+// Add optional columns that have data, in the correct order
+foreach ($optionalColumns as $column) {
+    if (!empty($columnPresence["has_{$column}"])) {
+        $finalHeaders[] = $column;
     }
 }
 
-// Check if any data exists at all before proceeding
-$countCheckSql = "SELECT COUNT(*) as total FROM final_call_logs {$dataSourceWhereClause}";
-if (isset($disposition)) {
-    $count_stmt = $conn->prepare($countCheckSql);
-    $count_stmt->bind_param("s", $disposition);
-    $count_stmt->execute();
-    $countResult = $count_stmt->get_result()->fetch_assoc();
-} else {
-    $countResult = $conn->query($countCheckSql)->fetch_assoc();
-}
-if ($countResult['total'] == 0) {
-    die("No data found for the selected criteria. PDF cannot be generated.");
-}
-
-// --- Step 3: Configure mPDF and Generate Static HTML ---
-$colCount = count($pdfHeaders);
+// Configure mPDF
+$colCount = count($finalHeaders);
 $mpdf = new Mpdf(['mode' => 'utf-8', 'format' => 'A4-L', 'tempDir' => __DIR__ . '/tmp']);
 $mpdf->SetDisplayMode('fullpage');
-$mpdf->shrink_tables_to_fit = 1;
 $mpdf->SetTitle($pdfTitle);
 
-// Define Legends and CSS Styles
-$slotLegend = "<strong>SLOTS:</strong> 1 (10-11a) | 2 (11a-12p) | 3 (12-1p) | 4 (1-2p) | 5 (2-3p) | 6 (3-4p) | 7 (4-5p) | 8 (5-6p)";
-$dispLegend = "<strong>DISPO CODES (Y):</strong> 11:Interested | 12:Not Interested | 13:Call Back | 14:Follow Up | 15:More Info | 16:Language Barrier | 17:Drop || <strong>(N):</strong> 21:Ringing | 22:Switch Off | 23:Invalid Number | 24:Out of Service | 25:Wrong Number | 26:Busy";
-$html_head = '<html><head><style>body { font-family: sans-serif; font-size: 7.5pt; } table.data-table { width: 100%; border-collapse: collapse; table-layout: fixed; page-break-inside: auto; } thead { display: table-header-group; } tr { page-break-inside: avoid; page-break-after: auto; } th, td { border: 1px solid #333; padding: 3px; text-align: left; vertical-align: middle; word-wrap: break-word; } thead th, .legend-cell { text-align: center; font-weight: bold; background-color: #f2f2f2; } .anchor-col { font-weight: bold; color: #333; font-family: monospace; } .connectivity-col, .slot-cell { text-align: center; } .disposition-cell { font-size: 7pt; padding: 1px !important; } .dispo-grid { border: none !important; width: 100%; table-layout: fixed; } .dispo-grid td { border: none !important; padding: 1px 2px; text-align: left; }</style></head><body>';
-$tableHeader = '<thead><tr><th class="legend-cell" colspan="' . $colCount . '">' . $slotLegend . '</th></tr><tr><th class="legend-cell" colspan="' . $colCount . '">' . $dispLegend . '</th></tr><tr>';
-foreach ($pdfHeaders as $header) {
-    $tableHeader .= '<th>' . htmlspecialchars(str_replace('_', ' ', ucwords($header))) . '</th>';
+// Fetch dynamic legends
+$dispResult = $conn->query("SELECT code, description, category FROM disposition_codes WHERE is_active = 1 ORDER BY category, code");
+$dispLegendY = "<strong>DISPO (Y):</strong>";
+$dispLegendN = "<strong>DISPO (N):</strong>";
+while($d = $dispResult->fetch_assoc()){
+    if($d['category'] == 'connected') $dispLegendY .= " {$d['code']}:{$d['description']} |";
+    else $dispLegendN .= " {$d['code']}:{$d['description']} |";
 }
-$tableHeader .= '</tr></thead>';
-$mpdf->WriteHTML($html_head);
+$dispLegend = rtrim($dispLegendY, ' |') . ' || ' . rtrim($dispLegendN, ' |');
+$slotLegend = "<strong>SLOTS:</strong> 1 (10-11a) | 2 (11a-12p) | 3 (12-1p) | 4 (1-2p) | 5 (2-3p) | 6 (3-4p) | 7 (4-5p) | 8 (5-6p)";
 
-// --- Step 4: Process Data in Chunks and Write to PDF ---
-$chunkSize = 500;
+// CSS and HTML Head
+$html_head = '<html><head><style>
+    body { font-family: sans-serif; font-size: 7.5pt; }
+    table.data-table { width: 100%; border-collapse: collapse; table-layout: fixed; page-break-inside: auto; }
+    thead { display: table-header-group; }
+    tr { page-break-inside: avoid; page-break-after: auto; }
+    th, td { border: 1px solid #333; padding: 3px; text-align: left; vertical-align: middle; word-wrap: break-word; }
+    thead th, .legend-cell { text-align: center; font-weight: bold; background-color: #f2f2f2; }
+    td:nth-child(6) { position: relative; font-weight: bold; font-family: monospace;} /* Mobile column is 6th */
+    .id-col { font-size: 6.5pt; font-family: monospace; }
+    .scissor-line { position: absolute; top: 0; bottom: 0; left: 50%; border-left: 1px dashed #000; width: 1px; height: 100%; }
+    .scissor-icon { position: absolute; top: -8px; left: 45%; font-size: 10pt; }
+    .connectivity-col, .slot-cell { text-align: center; }
+    .disposition-cell { font-size: 7pt; padding: 1px !important; }
+    .dispo-grid { border: none !important; width: 100%; table-layout: fixed; }
+    .dispo-grid td { border: none !important; padding: 1px 2px; text-align: left; }
+</style></head><body>';
+
+// Create Table Header Row
+$tableHeaderHtml = '<thead>
+    <tr><th class="legend-cell" colspan="' . $colCount . '">' . $pdfTitle . '</th></tr>
+    <tr><th class="legend-cell" colspan="' . $colCount . '">' . $slotLegend . '</th></tr>
+    <tr><th class="legend-cell" colspan="' . $colCount . '">' . $dispLegend . '</th></tr>
+    <tr>';
+$colIndex = 1;
+foreach ($finalHeaders as $header) {
+    $icon = '';
+    $headerClass = '';
+    if ($header === 'mobile_no') {
+        $icon = '<span class="scissor-icon">✂</span>';
+    }
+    if ($header === 'id') {
+        $headerClass = 'id-col';
+    }
+    $tableHeaderHtml .= '<th class="' . $headerClass . '">' . $icon . htmlspecialchars(str_replace('_', ' ', ucwords($header))) . '</th>';
+    $colIndex++;
+}
+$tableHeaderHtml .= '</tr></thead>';
+
+// Write initial HTML structure to mPDF
+$mpdf->WriteHTML($html_head);
+$mpdf->SetHTMLFooter('<div style="text-align: right; font-size: 8pt;">Page {PAGENO} of {nbpg}</div>');
+
+// Process Data in Chunks
+$chunkSize = 250;
 $offset = 0;
-$columnsToSelect = '`' . implode('`, `', $pdfHeaders) . '`';
+$columnsToSelect = '`' . implode('`, `', $finalHeaders) . '`';
+
+// Function to format date
+function formatDateForPDF($dateValue) {
+    if (empty($dateValue) || $dateValue === '0000-00-00') return '';
+    
+    // Try to parse the date
+    $timestamp = strtotime($dateValue);
+    if ($timestamp !== false) {
+        return date('d-m-Y', $timestamp);
+    }
+    
+    // If it's already in dd-mm-yyyy format, return as is
+    if (preg_match('/^\d{2}-\d{2}-\d{4}$/', $dateValue)) {
+        return $dateValue;
+    }
+    
+    // Try to handle yyyy-mm-dd format
+    if (preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $dateValue, $matches)) {
+        return $matches[3] . '-' . $matches[2] . '-' . $matches[1];
+    }
+    
+    return $dateValue;
+}
 
 while (true) {
-    $sql = "SELECT {$columnsToSelect} FROM final_call_logs {$dataSourceWhereClause} ORDER BY id LIMIT ?, ?";
+    $sql = "SELECT {$columnsToSelect} " . $fullBaseSql . " ORDER BY id LIMIT ?, ?";
     $stmt = $conn->prepare($sql);
-
-    // Bind parameters based on whether we are filtering by disposition
-    if (isset($disposition)) {
-        $stmt->bind_param("sii", $disposition, $offset, $chunkSize);
-    } else {
-        $stmt->bind_param("ii", $offset, $chunkSize);
+    
+    if ($stmt === false) {
+        die("Error preparing statement (data fetch): " . $conn->error);
     }
 
+    $chunkParams = array_merge($params, [$offset, $chunkSize]);
+    $chunkTypes = $types . 'ii';
+    if($chunkTypes) $stmt->bind_param($chunkTypes, ...$chunkParams);
+    
     $stmt->execute();
     $result = $stmt->get_result();
 
     if ($result->num_rows === 0) {
-        break; // Exit loop when no more rows are found
+        $stmt->close();
+        break;
     }
 
-    $chunkHtml = '<table class="data-table">' . $tableHeader . '<tbody>';
+    $chunkHtml = '<table class="data-table">' . $tableHeaderHtml . '<tbody>';
     while ($row = $result->fetch_assoc()) {
         $chunkHtml .= '<tr>';
-        foreach ($pdfHeaders as $header) {
-            // Handle special, static columns
-            if ($header === 'disposition') {
-                // Use non-breaking spaces (&nbsp;) to prevent line wraps between the circle and numbers
-                $chunkHtml .= '<td class="disposition-cell"><table class="dispo-grid"><tr><td>○&nbsp;11</td><td>○&nbsp;12</td><td>○&nbsp;13</td><td>○&nbsp;14</td><td>○&nbsp;15</td><td>○&nbsp;16</td><td>○&nbsp;17</td></tr><tr><td>○&nbsp;21</td><td>○&nbsp;22</td><td>○&nbsp;23</td><td>○&nbsp;24</td><td>○&nbsp;25</td><td>○&nbsp;26</td><td></td></tr></table></td>';
-            } elseif ($header === 'connectivity') {
-                 // Use non-breaking spaces (&nbsp;) to prevent line wraps
-                $chunkHtml .= '<td class="connectivity-col">○&nbsp;Y&nbsp;/&nbsp;○&nbsp;N</td>';
-            } elseif ($header === 'slot') {
-                $chunkHtml .= '<td class="slot-cell"></td>';
-            } else {
-                // Handle regular data columns
-                $cell = $row[$header] ?? '';
-                $class = ($header === 'mobile_no') ? 'anchor-col' : '';
-                $chunkHtml .= '<td class="' . $class . '">' . htmlspecialchars($cell) . '</td>';
+        foreach ($finalHeaders as $header) {
+            $class = '';
+            $cellContent = '';
+            switch($header) {
+                case 'disposition':
+                    $cellContent = '<table class="dispo-grid"><tr><td>○ 11</td><td>○ 12</td><td>○ 13</td><td>○ 14</td><td>○ 15</td><td>○ 16</td><td>○ 17</td></tr><tr><td>○ 21</td><td>○ 22</td><td>○ 23</td><td>○ 24</td><td>○ 25</td><td>○ 26</td><td></td></tr></table>';
+                    $class = 'disposition-cell';
+                    break;
+                case 'connectivity':
+                    $cellContent = '○ Y / ○ N';
+                    $class = 'connectivity-col';
+                    break;
+                case 'slot':
+                    $cellContent = '';
+                    $class = 'slot-cell';
+                    break;
+                case 'mobile_no':
+                    $cellContent = htmlspecialchars($row[$header] ?? '');
+                    // Add scissor line div inside mobile column
+                    $cellContent .= '<div class="scissor-line"></div>';
+                    break;
+                case 'id':
+                    $cellContent = htmlspecialchars($row[$header] ?? '');
+                    $class = 'id-col';
+                    break;
+                case 'dob':
+                case 'expiry':
+                    $cellContent = htmlspecialchars(formatDateForPDF($row[$header] ?? ''));
+                    break;
+                default:
+                    $cellContent = htmlspecialchars($row[$header] ?? '');
+                    break;
             }
+            $chunkHtml .= '<td class="' . $class . '">' . $cellContent . '</td>';
         }
         $chunkHtml .= '</tr>';
     }
@@ -167,9 +246,9 @@ while (true) {
     $offset += $chunkSize;
 }
 
-// --- Step 5: Finalize and Output the PDF ---
+// Finalize and Output
 $mpdf->WriteHTML('</body></html>');
-$mpdf->Output($pdfFileName, 'D'); // 'D' forces a direct file download
+$mpdf->Output($pdfFileName, 'D');
 
 $conn->close();
 exit;

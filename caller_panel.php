@@ -4,26 +4,66 @@ session_start();
 define('DB_HOST', 'localhost');
 define('DB_USER', 'root');
 define('DB_PASS', '123456');
-define('DB_NAME', 'caller_sheet');
+define('DB_NAME', 'caller_sheet3');
 
-// --- HELPER FUNCTION FOR CAPTCHA ---
-function generateCaptcha() {
-    $num1 = rand(1, 9);
-    $num2 = rand(1, 5);
-    $_SESSION['captcha_answer'] = $num1 + $num2;
-    $_SESSION['captcha_question'] = "What is $num1 + $num2?";
+// --- NEW IMAGE CAPTCHA LOGIC ---
+if (isset($_GET['action']) && $_GET['action'] == 'captcha') {
+    header('Content-Type: image/png');
+    $text = substr(str_shuffle('ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'), 0, 6);
+    $_SESSION['captcha_answer'] = $text;
+
+    $image = imagecreatetruecolor(150, 50);
+    imageantialias($image, true);
+
+    $colors = [];
+    $red = rand(125, 175);
+    $green = rand(125, 175);
+    $blue = rand(125, 175);
+    for ($i = 0; $i < 5; $i++) {
+        $colors[] = imagecolorallocate($image, $red - 20 * $i, $green - 20 * $i, $blue - 20 * $i);
+    }
+
+    imagefill($image, 0, 0, $colors[0]);
+
+    for ($i = 0; $i < 10; $i++) {
+        imagesetthickness($image, rand(2, 10));
+        $rect_color = $colors[rand(1, 4)];
+        imagerectangle($image, rand(-10, 140), rand(-10, 40), rand(-10, 140), rand(-10, 40), $rect_color);
+    }
+
+    $black = imagecolorallocate($image, 0, 0, 0);
+    $white = imagecolorallocate($image, 255, 255, 255);
+    $textcolors = [$black, $white];
+    $fonts = [__DIR__ . '/fonts/Acme-Regular.ttf', __DIR__ . '/fonts/Ubuntu-Regular.ttf'];
+
+    if (!is_dir(__DIR__ . '/fonts') || count(glob(__DIR__ . '/fonts/*.ttf')) == 0) {
+        $font_size = 5;
+        $x = (150 - (imagefontwidth($font_size) * strlen($text))) / 2;
+        $y = (50 - imagefontheight($font_size)) / 2;
+        imagestring($image, $font_size, $x, $y, $text, $white);
+    } else {
+        $font_path = $fonts[array_rand($fonts)];
+        for ($i = 0; $i < strlen($text); $i++) {
+            $letter_space = 140 / strlen($text);
+            $initial = 15;
+            imagettftext($image, 24, rand(-15, 15), $initial + $i * $letter_space, rand(25, 45), $textcolors[rand(0, 1)], $font_path, $text[$i]);
+        }
+    }
+    
+    imagepng($image);
+    imagedestroy($image);
+    exit();
 }
 
-// --- LOGIN & CAPTCHA LOGIC ---
+// --- LOGIN LOGIC ---
 $login_error = '';
-
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['finqy_id'])) {
-    // Check CAPTCHA first
-    if (isset($_POST['captcha'], $_SESSION['captcha_answer']) && intval($_POST['captcha']) == $_SESSION['captcha_answer']) {
+    if (isset($_POST['captcha'], $_SESSION['captcha_answer']) && strcasecmp($_POST['captcha'], $_SESSION['captcha_answer']) == 0) {
         $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
         if ($conn->connect_error) { die("DB Connection Failed."); }
         
-        $stmt = $conn->prepare("SELECT finqy_id, caller_name FROM callers WHERE finqy_id = ? AND is_active = 1");
+        // Updated query to check if the refercode exists in callers table
+        $stmt = $conn->prepare("SELECT finqy_id, caller_name, caller_type FROM callers WHERE finqy_id = ? AND is_active = 1");
         $stmt->bind_param("s", $_POST['finqy_id']);
         $stmt->execute();
         $result = $stmt->get_result();
@@ -32,27 +72,17 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['finqy_id'])) {
             $user = $result->fetch_assoc();
             $_SESSION['finqy_id'] = $user['finqy_id'];
             $_SESSION['caller_name'] = $user['caller_name'];
-            unset($_SESSION['captcha_answer'], $_SESSION['captcha_question']); // Clean up session
+            $_SESSION['caller_type'] = $user['caller_type'];
+            unset($_SESSION['captcha_answer']);
         } else {
-            $login_error = "Invalid or inactive FinqyID.";
+            $login_error = "Invalid or inactive Refercode/FinqyID.";
         }
         $stmt->close();
         $conn->close();
     } else {
         $login_error = "Incorrect CAPTCHA answer. Please try again.";
     }
-    
-    // BUG FIX: Regenerate a new CAPTCHA for the next attempt, regardless of success or failure.
-    // This ensures the user always sees a fresh, valid question.
-    if (!isset($_SESSION['finqy_id'])) {
-        generateCaptcha();
-    }
-
-} else if ($_SERVER['REQUEST_METHOD'] === 'GET' && !isset($_SESSION['finqy_id'])) {
-    // Generate CAPTCHA for the initial page load
-    generateCaptcha();
 }
-
 
 if (isset($_GET['action']) && $_GET['action'] == 'logout') {
     session_unset();
@@ -61,7 +91,15 @@ if (isset($_GET['action']) && $_GET['action'] == 'logout') {
     exit();
 }
 
-const DISPOSITION_MAP = [ '11' => 'Interested', '12' => 'Not Interested', '13' => 'Call Back', '14' => 'Follow Up', '15' => 'Info Shared', '16' => 'Language Barrier', '17' => 'Call Dropped', '21' => 'Ringing', '22' => 'Switched Off', '23' => 'Invalid Number', '24' => 'Out of Service', '25' => 'Wrong Number', '26' => 'Busy', ];
+// Fetch disposition maps from the database for dynamic legends
+$conn_maps = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
+$dispositions = $conn_maps->query("SELECT code, description FROM disposition_codes WHERE is_active = 1 ORDER BY code");
+$disposition_map = [];
+while($row = $dispositions->fetch_assoc()) {
+    $disposition_map[$row['code']] = $row['description'];
+}
+$conn_maps->close();
+
 const CONNECTIVITY_MAP = [ 'Y' => 'Yes', 'N' => 'No' ];
 ?>
 <!DOCTYPE html>
@@ -74,10 +112,11 @@ const CONNECTIVITY_MAP = [ 'Y' => 'Yes', 'N' => 'No' ];
         body { background-color: #f0f2f5; }
         .camera-container{border:2px dashed #0dcaf0;border-radius:.5rem;padding:1.5rem;text-align:center;cursor:pointer;background-color:#f8f9fa;transition:background-color .2s}
         .camera-container:hover{background-color:#e2f8fd}
-        #imagePreviewContainer img { max-width: 150px; height: auto; border-radius: .5rem; margin: 5px; border: 1px solid #dee2e6; }
+        #imagePreviewContainer img { max-width: 100%; max-height: 400px; border-radius: .5rem; border: 2px solid #0dcaf0; }
         .form-label-icon{font-size:3rem;color:#0dcaf0}
         .panel-card { transition: all 0.3s ease; border: none; }
         .panel-card:hover { transform: translateY(-5px); box-shadow: 0 8px 25px rgba(0,0,0,0.1); }
+        .captcha-img { border-radius: .5rem; border: 1px solid #dee2e6; cursor: pointer; }
     </style>
 </head>
 <body>
@@ -87,15 +126,18 @@ const CONNECTIVITY_MAP = [ 'Y' => 'Yes', 'N' => 'No' ];
         <div class="col-lg-5">
             <div class="card shadow-sm">
                 <div class="card-body p-5">
-                    <div class="text-center mb-4"><h1 class="h3 fw-bold">Caller Panel Login</h1><p class="text-muted">Enter your FinqyID and solve the problem</p></div>
+                    <div class="text-center mb-4"><h1 class="h3 fw-bold">Caller Panel Login</h1><p class="text-muted">Enter your Refercode/FinqyID and solve the problem</p></div>
                     <form action="caller_panel.php" method="POST">
                         <div class="form-floating mb-3">
-                            <input type="text" class="form-control" id="finqy_id" name="finqy_id" placeholder="e.g., FINQY001" required>
-                            <label for="finqy_id">FinqyID</label>
+                            <input type="text" class="form-control" id="finqy_id" name="finqy_id" placeholder="e.g., ABCD1234" required>
+                            <label for="finqy_id">Refercode/FinqyID</label>
                         </div>
-                        <div class="form-floating mb-3">
-                            <input type="number" class="form-control" id="captcha" name="captcha" placeholder="Answer" required>
-                            <label for="captcha"><?= htmlspecialchars($_SESSION['captcha_question'] ?? 'Loading...') ?></label>
+                        <div class="mb-3">
+                            <label class="form-label">Enter the text from the image</label>
+                            <div class="d-flex gap-3">
+                                <img src="caller_panel.php?action=captcha&t=<?= time() ?>" alt="Captcha Image" class="captcha-img" onclick="this.src='caller_panel.php?action=captcha&t='+new Date().getTime()">
+                                <input type="text" class="form-control" id="captcha" name="captcha" placeholder="CAPTCHA" required autocomplete="off">
+                            </div>
                         </div>
                         <?php if ($login_error): ?><div class="alert alert-danger py-2"><?= $login_error ?></div><?php endif; ?>
                         <div class="d-grid"><button class="btn btn-primary btn-lg" type="submit">Login</button></div>
@@ -106,7 +148,12 @@ const CONNECTIVITY_MAP = [ 'Y' => 'Yes', 'N' => 'No' ];
     </div>
     <?php else: // --- SHOW LOGGED-IN DASHBOARD --- ?>
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <div><h1 class="h2 mb-0"><i class="bi bi-telephone-inbound-fill me-2"></i>Caller Panel</h1><span class="text-muted">Welcome, <?= htmlspecialchars($_SESSION['caller_name']) ?>!</span></div>
+        <div>
+            <h1 class="h2 mb-0"><i class="bi bi-telephone-inbound-fill me-2"></i>Caller Panel</h1>
+            <span class="text-muted">Welcome, <?= htmlspecialchars($_SESSION['caller_name']) ?>! 
+                <span class="badge bg-info"><?= ucfirst($_SESSION['caller_type']) ?></span>
+            </span>
+        </div>
         <a href="?action=logout" class="btn btn-danger"><i class="bi bi-box-arrow-right me-2"></i>Logout</a>
     </div>
 
@@ -128,12 +175,15 @@ const CONNECTIVITY_MAP = [ 'Y' => 'Yes', 'N' => 'No' ];
         <div class="card-body">
             <form id="captureForm">
                 <label for="markedSheet" class="camera-container" id="cameraLabel">
-                    <div class="form-label-icon"><i class="bi bi-camera2"></i></div><h5 class="mt-2 text-info">Tap to open Camera or select files</h5>
+                    <div class="form-label-icon"><i class="bi bi-camera2"></i></div><h5 class="mt-2 text-info">Tap to open Camera</h5>
                 </label>
-                <input class="form-control d-none" type="file" name="markedSheet" id="markedSheet" accept="image/*" multiple required>
-                <div id="imagePreviewContainer" class="text-center mt-3 d-flex flex-wrap justify-content-center"></div>
+                <input class="form-control d-none" type="file" name="markedSheet" id="markedSheet" accept="image/*" capture="environment" required>
+                <div id="imagePreviewContainer" class="text-center mt-3"></div>
                 <div id="processing-feedback" class="alert alert-info mt-3" style="display: none;"></div>
-                <div class="d-grid mt-4"><button id="submitButton" type="submit" class="btn btn-info btn-lg text-white" disabled><i class="bi bi-magic me-2"></i>Process with AI</button></div>
+                <div class="d-grid gap-2 mt-4">
+                    <button id="submitButton" type="submit" class="btn btn-info btn-lg text-white" disabled><i class="bi bi-magic me-2"></i>Process with AI</button>
+                    <button id="retakeButton" type="button" class="btn btn-secondary btn-lg" style="display: none;"><i class="bi bi-camera me-2"></i>Retake Photo</button>
+                </div>
             </form>
         </div>
     </div>
@@ -143,7 +193,7 @@ const CONNECTIVITY_MAP = [ 'Y' => 'Yes', 'N' => 'No' ];
         <div class="card-body">
             <div class="table-responsive">
                 <table class="table table-bordered table-striped">
-                    <thead class="table-light"><tr><th>Customer Name</th><th>Mobile No</th><th>Connectivity</th><th>Disposition</th><th>Slot</th></tr></thead>
+                    <thead class="table-light"><tr><th>Record ID</th><th>Customer Name</th><th>Mobile No</th><th>Connectivity</th><th>Disposition</th><th>Slot</th></tr></thead>
                     <tbody id="results-tbody"></tbody>
                 </table>
             </div>
@@ -170,79 +220,93 @@ const CONNECTIVITY_MAP = [ 'Y' => 'Yes', 'N' => 'No' ];
         const submitButton = document.getElementById('submitButton');
         const captureForm = document.getElementById('captureForm');
         const feedbackDiv = document.getElementById('processing-feedback');
-        let allResults = [];
+        const retakeButton = document.getElementById('retakeButton');
+        let currentImage = null;
+        
         startUploadBtn.addEventListener('click', () => {
             mainOptions.style.display = 'none';
             uploadSection.style.display = 'block';
         });
+        
         markedSheetInput.addEventListener('change', (e) => {
             imagePreviewContainer.innerHTML = '';
-            const files = e.target.files;
-            if (files.length > 0) {
-                for (const file of files) {
-                    const reader = new FileReader();
-                    reader.onload = (event) => {
-                        const img = document.createElement('img');
-                        img.src = event.target.result;
-                        imagePreviewContainer.appendChild(img);
-                    }
-                    reader.readAsDataURL(file);
+            const file = e.target.files[0];
+            if (file) {
+                currentImage = file;
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const img = document.createElement('img');
+                    img.src = event.target.result;
+                    imagePreviewContainer.appendChild(img);
                 }
+                reader.readAsDataURL(file);
                 cameraLabel.style.display = 'none';
                 submitButton.disabled = false;
+                retakeButton.style.display = 'block';
             } else {
                 cameraLabel.style.display = 'block';
                 submitButton.disabled = true;
+                retakeButton.style.display = 'none';
             }
         });
+        
+        retakeButton.addEventListener('click', () => {
+            markedSheetInput.value = '';
+            imagePreviewContainer.innerHTML = '';
+            cameraLabel.style.display = 'block';
+            submitButton.disabled = true;
+            retakeButton.style.display = 'none';
+            currentImage = null;
+        });
+        
         captureForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-            allResults = [];
-            const files = markedSheetInput.files;
-            if (files.length === 0) return;
+            if (!currentImage) return;
+            
             submitButton.disabled = true;
-            submitButton.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Processing...`;
+            retakeButton.disabled = true;
+            submitButton.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Processing with AI...`;
             feedbackDiv.style.display = 'block';
-            for (let i = 0; i < files.length; i++) {
-                feedbackDiv.textContent = `Processing image ${i + 1} of ${files.length}...`;
-                const formData = new FormData();
-                formData.append('markedSheet', files[i]);
-                try {
-                    const response = await fetch('ajax_process_image.php', {
-                        method: 'POST',
-                        body: formData
-                    });
-                    const result = await response.json();
-                    if (result.success && result.data) {
-                        allResults.push(...result.data);
-                    } else {
-                        feedbackDiv.textContent = `Error on image ${i + 1}: ${result.message || 'Unknown error'}. Skipping.`;
-                        await new Promise(resolve => setTimeout(resolve, 2000));
-                    }
-                } catch (error) {
-                    feedbackDiv.textContent = `A network error occurred on image ${i + 1}. Skipping.`;
-                    await new Promise(resolve => setTimeout(resolve, 2000));
+            feedbackDiv.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>AI is analyzing your marked sheet...';
+            
+            const formData = new FormData();
+            formData.append('markedSheet', currentImage);
+            
+            try {
+                const response = await fetch('ajax_process_image.php', {
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await response.json();
+                
+                if (result.success && result.data && result.data.length > 0) {
+                    feedbackDiv.innerHTML = '<i class="bi bi-check-circle-fill me-2"></i>AI processing complete! Review the results below.';
+                    displayResults(result.data);
+                } else {
+                    feedbackDiv.className = 'alert alert-danger mt-3';
+                    feedbackDiv.innerHTML = `<i class="bi bi-x-circle-fill me-2"></i>${result.message || 'AI could not read the marked sheet. Please ensure the image is clear and try again.'}`;
+                    submitButton.disabled = false;
+                    retakeButton.disabled = false;
+                    submitButton.innerHTML = `<i class="bi bi-magic me-2"></i>Process with AI`;
                 }
-            }
-            submitButton.disabled = false;
-            submitButton.innerHTML = `<i class="bi bi-magic me-2"></i>Process with AI`;
-            feedbackDiv.style.display = 'none';
-            if (allResults.length > 0) {
-                displayResults();
-            } else {
-                alert('Processing complete, but no usable data could be extracted from the images.');
-                location.reload();
+            } catch (error) {
+                feedbackDiv.className = 'alert alert-danger mt-3';
+                feedbackDiv.innerHTML = '<i class="bi bi-wifi-off me-2"></i>Network error occurred. Please check your connection and try again.';
+                submitButton.disabled = false;
+                retakeButton.disabled = false;
+                submitButton.innerHTML = `<i class="bi bi-magic me-2"></i>Process with AI`;
             }
         });
-        function displayResults() {
+        function displayResults(results) {
             const tbody = document.getElementById('results-tbody');
-            const dispoMap = <?= json_encode(DISPOSITION_MAP) ?>;
+            const dispoMap = <?= json_encode($disposition_map) ?>;
             const connMap = <?= json_encode(CONNECTIVITY_MAP) ?>;
             tbody.innerHTML = '';
-            allResults.forEach(row => {
+            results.forEach(row => {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
-                    <td>${escapeHtml(row.customer_name || 'N/A')}</td>
+                    <td><code>${escapeHtml(row.record_id || 'N/A')}</code></td>
+                    <td>${escapeHtml(row.customer_name || 'Not Found')}</td>
                     <td>${escapeHtml(row.mobile_no || 'N/A')}</td>
                     <td>${escapeHtml(connMap[row.connectivity_code] || 'N/A')}</td>
                     <td>${escapeHtml(dispoMap[row.disposition_code] || 'Empty')}</td>
@@ -250,12 +314,12 @@ const CONNECTIVITY_MAP = [ 'Y' => 'Yes', 'N' => 'No' ];
                 `;
                 tbody.appendChild(tr);
             });
-            document.getElementById('json_results_input').value = JSON.stringify(allResults);
+            document.getElementById('json_results_input').value = JSON.stringify(results);
             uploadSection.style.display = 'none';
             resultsSection.style.display = 'block';
         }
         function escapeHtml(unsafe) {
-            return unsafe ? unsafe.toString().replace(/&/g, "&").replace(/</g, "<").replace(/>/g, ">").replace(/"/g, """).replace(/'/g, "'") : '';
+            return unsafe ? unsafe.toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;") : '';
         }
     }
 </script>

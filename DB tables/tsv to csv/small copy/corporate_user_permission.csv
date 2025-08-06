@@ -1,0 +1,3 @@
+﻿id,name,contact,pincode,username,password,flag,product,sub_product,status,created_date,modified_date,designation,team,branch_id,last_active,login_status,refercode,tm_allocated_user,allocated_partner,rm_allocated_user,rm_am_allocate,back_am_allocate,back_allocated_user,lead_allocated,created_by,zm_allocated,bm_allocated,qrcode,city,state,priority_partner,partner_id,partner_type
+1,NULL,NULL,NULL,hl@erb.ai,hl@123,hl,7,13,2,08-09-2023 16.35,21-03-2020 17.29,NULL,NULL,1,26-06-2025 23.22,0,NULL,NULL,NULL,,,,,0,NULL,NULL,NULL,,,,0,NULL,NULL
+3,NULL,NULL,NULL,lap@erb.ai,lap@123,lap,7,18,2,08-09-2023 16.35,NULL,NULL,NULL,1,26-06-2025 23.22,0,NULL,NULL,NULL,,,,,0,NULL,NULL,NULL,,,,0,NULL,NULL

@@ -2,10 +2,7 @@
 session_start();
 header('Content-Type: application/json');
 
-define('DB_HOST', 'localhost');
-define('DB_USER', 'root');
-define('DB_PASS', '123456');
-define('DB_NAME', 'caller_sheet');
+require_once 'db_config.php'; // Use centralized db config
 
 // Check authentication
 if (!isset($_SESSION['finqy_id'])) {
@@ -22,65 +19,97 @@ $uploadDir = 'marked_uploads/';
 if (!is_dir($uploadDir)) {
     mkdir($uploadDir, 0755, true);
 }
-$targetFile = $uploadDir . uniqid() . '-' . basename($_FILES['markedSheet']['name']);
+
+// Generate unique filename with finqy_id and timestamp
+$timestamp = date('YmdHis');
+$finqyId = $_SESSION['finqy_id'];
+$fileExt = pathinfo($_FILES['markedSheet']['name'], PATHINFO_EXTENSION);
+$targetFile = $uploadDir . $finqyId . '_' . $timestamp . '.' . $fileExt;
 
 if (move_uploaded_file($_FILES['markedSheet']['tmp_name'], $targetFile)) {
-    $command = "python gemini_omr_parser.py " . escapeshellarg($targetFile);
+    // Log the upload
+    error_log("Image uploaded successfully: " . $targetFile);
+    
+    // Call Python script to process the image
+    $command = "python gemini_omr_parser.py " . escapeshellarg($targetFile) . " 2>&1";
     $output = shell_exec($command);
-    @unlink($targetFile); // Clean up the image immediately
+    
+    // Log the Python output for debugging
+    error_log("Python output for $finqyId: " . $output);
+    
+    // Clean up the image after processing
+    @unlink($targetFile);
 
+    // Check if output is a JSON error
     $json_check = json_decode($output, true);
     if ($json_check && isset($json_check['error'])) {
-        echo json_encode(['success' => false, 'message' => 'Python script failed: ' . htmlspecialchars($json_check['error'])]);
+        echo json_encode(['success' => false, 'message' => 'AI Processing Error: ' . htmlspecialchars($json_check['error'])]);
         exit();
     }
 
+    // Parse CSV output
     $lines = explode("\n", trim($output));
     if (count($lines) < 2) { // Must have header + at least one data row
-         echo json_encode(['success' => false, 'message' => 'AI processing finished, but no valid data rows were detected.']);
-         exit();
+        echo json_encode(['success' => false, 'message' => 'AI could not detect any marked data on the sheet. Please ensure the image is clear and properly marked.']);
+        exit();
     }
 
     $headers = str_getcsv(array_shift($lines));
     $results = [];
 
-    $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
-    if ($conn->connect_error) {
-        echo json_encode(['success' => false, 'message' => 'Database connection failed.']);
+    $conn = getDBConnection();
+
+    // --- CHANGE: Prepare statement to fetch customer details using the record ID ---
+    $stmt = $conn->prepare("SELECT name, mobile_no FROM final_call_logs WHERE id = ?");
+    if ($stmt === false) {
+        echo json_encode(['success' => false, 'message' => 'Database query preparation failed.']);
         exit();
     }
 
-    $stmt = $conn->prepare("SELECT name FROM final_call_logs WHERE mobile_no = ?");
 
     foreach ($lines as $line) {
         if (empty(trim($line))) continue;
+        
         $row_data = str_getcsv($line);
         if (count($row_data) === count($headers)) {
             $parsed_data = array_combine($headers, $row_data);
-            $mobile_no = preg_replace('/\D/', '', $parsed_data['mobile_no'] ?? '');
+            
+            // --- CHANGE: Use 'record_id' from the CSV as the primary identifier ---
+            $record_id = trim($parsed_data['record_id'] ?? '');
 
-            if (!empty($mobile_no)) {
-                $stmt->bind_param("s", $mobile_no);
+            if (!empty($record_id)) {
+                // Fetch customer name and mobile number using the record_id
+                $stmt->bind_param("s", $record_id);
                 $stmt->execute();
                 $res = $stmt->get_result();
                 $customer = $res->fetch_assoc();
                 
-                $parsed_data['customer_name'] = $customer['name'] ?? 'Unknown Number';
-                $parsed_data['mobile_no'] = $mobile_no; // Ensure it's clean
-                $results[] = $parsed_data;
+                // Populate the data for the results table
+                $parsed_data['customer_name'] = $customer['name'] ?? 'Not Found';
+                $parsed_data['mobile_no'] = $customer['mobile_no'] ?? 'N/A';
+                // The record_id is already in $parsed_data from the CSV
+                
+                // Validate the data - at least one mark should be present to be considered a valid entry
+                if (!empty($parsed_data['connectivity_code']) || !empty($parsed_data['disposition_code']) || !empty($parsed_data['slot'])) {
+                    $results[] = $parsed_data;
+                }
             }
         }
     }
+    
     $stmt->close();
     $conn->close();
     
     if (empty($results)) {
-        echo json_encode(['success' => false, 'message' => 'AI could not read any valid mobile numbers from the sheet.']);
+        echo json_encode(['success' => false, 'message' => 'AI could not read any valid entries from the sheet. Please ensure marks are clear and visible.']);
         exit();
     }
 
+    // Log successful processing
+    error_log("Successfully processed " . count($results) . " entries for " . $finqyId);
+    
     echo json_encode(['success' => true, 'data' => $results]);
 
 } else {
-    echo json_encode(['success' => false, 'message' => 'File upload error.']);
+    echo json_encode(['success' => false, 'message' => 'Failed to upload image. Please try again.']);
 }
