@@ -145,23 +145,28 @@ document.addEventListener('DOMContentLoaded', function () {
     allocationModal.addEventListener('show.bs.modal', function (event) {
         const button = event.relatedTarget;
         const batchId = button.getAttribute('data-batch-id');
-        const currentProductCode = button.getAttribute('data-product-code');
 
         // Set the batch ID in the modal title and hidden input
         modalBatchIdSpan.textContent = batchId;
         originalBatchIdInput.value = batchId;
 
-        // Reset and filter the dropdown
+        // Hide all options except placeholder until fetch completes
         targetProductSelect.value = '';
         Array.from(targetProductSelect.options).forEach(option => {
-            if (option.value) { // Don't hide the placeholder
-                if (option.getAttribute('data-product-code') === currentProductCode) {
-                    option.style.display = 'none'; // Hide the current product
-                } else {
-                    option.style.display = 'block'; // Show other products
-                }
-            }
+            if (option.value) option.style.display = 'none';
         });
+
+        // Fetch allowed target products based on unique mobile numbers
+        fetch('fetch_allocation_targets.php?batch_id=' + batchId)
+            .then(res => res.json())
+            .then(data => {
+                const allowed = data.allowed || [];
+                Array.from(targetProductSelect.options).forEach(option => {
+                    if (allowed.includes(option.value)) {
+                        option.style.display = 'block';
+                    }
+                });
+            });
     });
 });
 </script>
