@@ -260,7 +260,10 @@ function formatDateString($value): string {
                         <form action="upload_batch.php" method="post" enctype="multipart/form-data" id="upload-form">
                             <div class="row g-3">
                                 <div class="col-md-6">
-                                    <label for="vendor_id" class="form-label"><strong>Select Vendor</strong></label>
+                                    <label for="vendor_id" class="form-label d-flex justify-content-between align-items-center">
+                                        <strong>Select Vendor</strong>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" id="addVendorBtn" title="Request New Vendor"><i class="bi bi-plus"></i></button>
+                                    </label>
                                     <select class="form-select" id="vendor_id" name="vendor_id" required>
                                         <option value="">-- Select a Vendor --</option>
                                         <?php while($row = $vendors->fetch_assoc()): ?>
@@ -289,6 +292,31 @@ function formatDateString($value): string {
             </main>
         </div>
     </div>
+
+<!-- Vendor Request Modal -->
+<div class="modal fade" id="vendorRequestModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form action="request_vendor.php" method="POST">
+                <div class="modal-header">
+                    <h5 class="modal-title">Request New Vendor</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Vendor Name</label>
+                        <input type="text" class="form-control" name="vendor_name" required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Submit</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <script>
     document.getElementById('upload-form').addEventListener('submit', function() {
         if (document.getElementById('customerFile').files.length > 0) {
@@ -328,6 +356,15 @@ function formatDateString($value): string {
             alert('Please select a disposition status from the dropdown.');
         }
     });
+
+    // Show vendor request modal
+    const addVendorBtn = document.getElementById('addVendorBtn');
+    if (addVendorBtn) {
+        addVendorBtn.addEventListener('click', () => {
+            const modal = new bootstrap.Modal(document.getElementById('vendorRequestModal'));
+            modal.show();
+        });
+    }
 </script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>

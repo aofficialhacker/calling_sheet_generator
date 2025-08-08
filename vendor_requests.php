@@ -24,8 +24,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
             $conn->begin_transaction();
             try {
                 if ($action == 'approve') {
-                    // Generate vendor ID
-                    $vendorId = generateVendorId($request['admin_id'], $conn);
+                    // Generate vendor ID starting from V61 for requested vendors
+                    $vendorId = generateVendorId($conn, 61);
                     
                     // Create vendor
                     $vendorStmt = $conn->prepare("INSERT INTO vendors (vendor_id, vendor_name, admin_id, is_approved) VALUES (?, ?, ?, 1)");
