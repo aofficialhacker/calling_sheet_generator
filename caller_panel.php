@@ -62,7 +62,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['finqy_id'])) {
         $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
         if ($conn->connect_error) { die("DB Connection Failed."); }
         
-        // Updated query to check if the refercode exists in callers table
         $stmt = $conn->prepare("SELECT finqy_id, caller_name, caller_type FROM callers WHERE finqy_id = ? AND is_active = 1");
         $stmt->bind_param("s", $_POST['finqy_id']);
         $stmt->execute();
@@ -112,11 +111,15 @@ const CONNECTIVITY_MAP = [ 'Y' => 'Yes', 'N' => 'No' ];
         body { background-color: #f0f2f5; }
         .camera-container{border:2px dashed #0dcaf0;border-radius:.5rem;padding:1.5rem;text-align:center;cursor:pointer;background-color:#f8f9fa;transition:background-color .2s}
         .camera-container:hover{background-color:#e2f8fd}
-        #imagePreviewContainer img { max-width: 100%; max-height: 400px; border-radius: .5rem; border: 2px solid #0dcaf0; }
+        #imagePreviewContainer img { max-width: 100%; max-height: 200px; border-radius: .5rem; border: 2px solid #0dcaf0; margin: 5px; }
         .form-label-icon{font-size:3rem;color:#0dcaf0}
         .panel-card { transition: all 0.3s ease; border: none; }
         .panel-card:hover { transform: translateY(-5px); box-shadow: 0 8px 25px rgba(0,0,0,0.1); }
         .captcha-img { border-radius: .5rem; border: 1px solid #dee2e6; cursor: pointer; }
+        .image-preview-item { position: relative; display: inline-block; margin: 5px; }
+        .image-preview-item .remove-image { position: absolute; top: -5px; right: -5px; background: red; color: white; border: none; border-radius: 50%; width: 25px; height: 25px; cursor: pointer; font-size: 12px; }
+        .progress-container { display: none; margin-top: 20px; }
+        .progress-container.active { display: block; }
     </style>
 </head>
 <body>
@@ -160,12 +163,20 @@ const CONNECTIVITY_MAP = [ 'Y' => 'Yes', 'N' => 'No' ];
     <div class="row g-4" id="main-options">
         <div class="col-md-6">
             <div class="card panel-card text-center h-100 shadow-sm">
-                <div class="card-body p-4 d-flex flex-column justify-content-center"><h3 class="card-title"><i class="bi bi-camera2 fs-1 text-info"></i><br>Upload Marked Sheet(s)</h3><p class="text-muted mt-2">Process new sheets by uploading their photos. You can select multiple images.</p><button class="btn btn-info text-white mt-auto" id="startUploadBtn">Start Upload</button></div>
+                <div class="card-body p-4 d-flex flex-column justify-content-center">
+                    <h3 class="card-title"><i class="bi bi-camera2 fs-1 text-info"></i><br>Upload Marked Sheet(s)</h3>
+                    <p class="text-muted mt-2">Process multiple sheets by uploading their photos. You can select multiple images at once.</p>
+                    <button class="btn btn-info text-white mt-auto" id="startUploadBtn">Start Upload</button>
+                </div>
             </div>
         </div>
         <div class="col-md-6">
             <div class="card panel-card text-center h-100 shadow-sm">
-                <div class="card-body p-4 d-flex flex-column justify-content-center"><h3 class="card-title"><i class="bi bi-bar-chart-line-fill fs-1 text-success"></i><br>View Performance</h3><p class="text-muted mt-2">Check your call statistics and recent activity.</p><a href="view_performance.php" class="btn btn-success mt-auto">View All Logs</a></div>
+                <div class="card-body p-4 d-flex flex-column justify-content-center">
+                    <h3 class="card-title"><i class="bi bi-bar-chart-line-fill fs-1 text-success"></i><br>View Performance</h3>
+                    <p class="text-muted mt-2">Check your call statistics and recent activity.</p>
+                    <a href="view_performance.php" class="btn btn-success mt-auto">View All Logs</a>
+                </div>
             </div>
         </div>
     </div>
@@ -174,33 +185,65 @@ const CONNECTIVITY_MAP = [ 'Y' => 'Yes', 'N' => 'No' ];
         <div class="card-header"><h3 class="h5 mb-0">Upload Marked Sheets</h3></div>
         <div class="card-body">
             <form id="captureForm">
-                <label for="markedSheet" class="camera-container" id="cameraLabel">
-                    <div class="form-label-icon"><i class="bi bi-camera2"></i></div><h5 class="mt-2 text-info">Tap to open Camera</h5>
+                <label for="markedSheets" class="camera-container" id="cameraLabel">
+                    <div class="form-label-icon"><i class="bi bi-camera2"></i></div>
+                    <h5 class="mt-2 text-info">Tap to select or capture images</h5>
+                    <p class="text-muted">You can select multiple images at once</p>
                 </label>
-                <input class="form-control d-none" type="file" name="markedSheet[]" id="markedSheet" accept="image/*" multiple required>
+                <input class="form-control d-none" type="file" name="markedSheets" id="markedSheets" accept="image/*" capture="environment" multiple required>
                 <div id="imagePreviewContainer" class="text-center mt-3"></div>
+                <div class="alert alert-info mt-3" id="image-count-info" style="display: none;">
+                    <i class="bi bi-images me-2"></i><span id="image-count">0</span> image(s) selected
+                </div>
+                <div class="progress-container" id="progressContainer">
+                    <label class="form-label">Processing Progress:</label>
+                    <div class="progress" style="height: 25px;">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated" id="progressBar" role="progressbar" style="width: 0%">0%</div>
+                    </div>
+                    <p class="text-muted mt-2" id="progressText">Preparing to process images...</p>
+                </div>
                 <div id="processing-feedback" class="alert alert-info mt-3" style="display: none;"></div>
                 <div class="d-grid gap-2 mt-4">
-                    <button id="submitButton" type="submit" class="btn btn-info btn-lg text-white" disabled><i class="bi bi-magic me-2"></i>Process with AI</button>
-                    <button id="retakeButton" type="button" class="btn btn-secondary btn-lg" style="display: none;"><i class="bi bi-camera me-2"></i>Retake Photo</button>
+                    <button id="submitButton" type="submit" class="btn btn-info btn-lg text-white" disabled>
+                        <i class="bi bi-magic me-2"></i>Process All Images with AI
+                    </button>
+                    <button id="clearButton" type="button" class="btn btn-secondary btn-lg" style="display: none;">
+                        <i class="bi bi-x-circle me-2"></i>Clear All Images
+                    </button>
                 </div>
             </form>
         </div>
     </div>
     
     <div id="results-section" class="card mt-4 shadow-sm" style="display:none;">
-        <div class="card-header"><h3><i class="bi bi-clipboard-check-fill me-2"></i>AI Processing Results</h3><p class="mb-0 text-muted">Please review the data. If correct, click "Confirm & Save" to log these results.</p></div>
+        <div class="card-header">
+            <h3><i class="bi bi-clipboard-check-fill me-2"></i>AI Processing Results</h3>
+            <p class="mb-0 text-muted">Review the combined data from all images. If correct, click "Confirm & Save" to log these results.</p>
+        </div>
         <div class="card-body">
+            <div class="alert alert-success mb-3">
+                <i class="bi bi-check-circle-fill me-2"></i>Successfully processed <span id="total-images-processed">0</span> image(s) with <span id="total-records-found">0</span> total records found.
+            </div>
             <div class="table-responsive">
                 <table class="table table-bordered table-striped">
-                    <thead class="table-light"><tr><th>Record ID</th><th>Customer Name</th><th>Mobile No</th><th>Connectivity</th><th>Disposition</th><th>Slot</th></tr></thead>
+                    <thead class="table-light">
+                        <tr>
+                            <th>Record ID</th>
+                            <th>Customer Name</th>
+                            <th>Mobile No</th>
+                            <th>Connectivity</th>
+                            <th>Disposition</th>
+                            <th>Slot</th>
+                            <th>Image #</th>
+                        </tr>
+                    </thead>
                     <tbody id="results-tbody"></tbody>
                 </table>
             </div>
             <form action="save_final_log.php" method="post" class="mt-3">
                 <input type="hidden" name="json_results" id="json_results_input">
                 <input type="hidden" name="finqy_id" value="<?= htmlspecialchars($_SESSION['finqy_id']) ?>">
-                <button type="submit" class="btn btn-success"><i class="bi bi-save-fill me-2"></i>Confirm & Save</button>
+                <button type="submit" class="btn btn-success"><i class="bi bi-save-fill me-2"></i>Confirm & Save All</button>
                 <a href="caller_panel.php" class="btn btn-secondary">Cancel and Start Over</a>
             </form>
         </div>
@@ -214,105 +257,158 @@ const CONNECTIVITY_MAP = [ 'Y' => 'Yes', 'N' => 'No' ];
         const mainOptions = document.getElementById('main-options');
         const uploadSection = document.getElementById('upload-section');
         const resultsSection = document.getElementById('results-section');
-        const markedSheetInput = document.getElementById('markedSheet');
+        const markedSheetsInput = document.getElementById('markedSheets');
         const imagePreviewContainer = document.getElementById('imagePreviewContainer');
         const cameraLabel = document.getElementById('cameraLabel');
         const submitButton = document.getElementById('submitButton');
+        const clearButton = document.getElementById('clearButton');
         const captureForm = document.getElementById('captureForm');
         const feedbackDiv = document.getElementById('processing-feedback');
-        const retakeButton = document.getElementById('retakeButton');
-        let currentImages = [];
+        const imageCountInfo = document.getElementById('image-count-info');
+        const imageCount = document.getElementById('image-count');
+        const progressContainer = document.getElementById('progressContainer');
+        const progressBar = document.getElementById('progressBar');
+        const progressText = document.getElementById('progressText');
+        
+        let selectedImages = [];
+        let allResults = [];
         
         startUploadBtn.addEventListener('click', () => {
             mainOptions.style.display = 'none';
             uploadSection.style.display = 'block';
         });
         
-        markedSheetInput.addEventListener('change', (e) => {
-            imagePreviewContainer.innerHTML = '';
-            currentImages = Array.from(e.target.files);
-            if (currentImages.length > 0) {
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    const img = document.createElement('img');
-                    img.src = event.target.result;
-                    imagePreviewContainer.appendChild(img);
-                    if (currentImages.length > 1) {
-                        const info = document.createElement('div');
-                        info.textContent = `${currentImages.length} images selected`;
-                        info.classList.add('mt-2');
-                        imagePreviewContainer.appendChild(info);
-                    }
-                };
-                reader.readAsDataURL(currentImages[0]);
-                cameraLabel.style.display = 'none';
-                submitButton.disabled = false;
-                retakeButton.style.display = 'block';
-            } else {
-                cameraLabel.style.display = 'block';
-                submitButton.disabled = true;
-                retakeButton.style.display = 'none';
+        markedSheetsInput.addEventListener('change', (e) => {
+            const files = Array.from(e.target.files);
+            if (files.length > 0) {
+                selectedImages = files;
+                displayImagePreviews();
+                updateUI();
             }
         });
         
-        retakeButton.addEventListener('click', () => {
-            markedSheetInput.value = '';
+        function displayImagePreviews() {
             imagePreviewContainer.innerHTML = '';
-            cameraLabel.style.display = 'block';
-            submitButton.disabled = true;
-            retakeButton.style.display = 'none';
-            currentImages = [];
+            selectedImages.forEach((file, index) => {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const previewItem = document.createElement('div');
+                    previewItem.className = 'image-preview-item';
+                    previewItem.innerHTML = `
+                        <img src="${event.target.result}" alt="Image ${index + 1}">
+                        <button class="remove-image" data-index="${index}" type="button">&times;</button>
+                    `;
+                    imagePreviewContainer.appendChild(previewItem);
+                }
+                reader.readAsDataURL(file);
+            });
+        }
+        
+        imagePreviewContainer.addEventListener('click', (e) => {
+            if (e.target.classList.contains('remove-image')) {
+                const index = parseInt(e.target.dataset.index);
+                selectedImages.splice(index, 1);
+                displayImagePreviews();
+                updateUI();
+            }
         });
+        
+        clearButton.addEventListener('click', () => {
+            selectedImages = [];
+            markedSheetsInput.value = '';
+            imagePreviewContainer.innerHTML = '';
+            updateUI();
+        });
+        
+        function updateUI() {
+            if (selectedImages.length > 0) {
+                cameraLabel.style.display = 'none';
+                imageCountInfo.style.display = 'block';
+                imageCount.textContent = selectedImages.length;
+                submitButton.disabled = false;
+                clearButton.style.display = 'block';
+            } else {
+                cameraLabel.style.display = 'block';
+                imageCountInfo.style.display = 'none';
+                submitButton.disabled = true;
+                clearButton.style.display = 'none';
+            }
+        }
         
         captureForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-            if (currentImages.length === 0) return;
-
+            if (selectedImages.length === 0) return;
+            
             submitButton.disabled = true;
-            retakeButton.disabled = true;
-            submitButton.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Processing with AI...`;
+            clearButton.disabled = true;
+            progressContainer.classList.add('active');
             feedbackDiv.style.display = 'block';
-            feedbackDiv.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>AI is analyzing your marked sheet...';
-
-            let allResults = [];
-            const processNext = async (index) => {
-                if (index >= currentImages.length) {
-                    if (allResults.length > 0) {
-                        feedbackDiv.innerHTML = '<i class="bi bi-check-circle-fill me-2"></i>AI processing complete! Review the results below.';
-                        displayResults(allResults);
-                    } else {
-                        feedbackDiv.className = 'alert alert-danger mt-3';
-                        feedbackDiv.innerHTML = '<i class="bi bi-x-circle-fill me-2"></i>AI could not read the marked sheets. Please ensure the images are clear and try again.';
-                        submitButton.disabled = false;
-                        retakeButton.disabled = false;
-                        submitButton.innerHTML = `<i class="bi bi-magic me-2"></i>Process with AI`;
-                    }
-                    return;
-                }
-
+            feedbackDiv.className = 'alert alert-info mt-3';
+            allResults = [];
+            
+            const totalImages = selectedImages.length;
+            let processedCount = 0;
+            let successCount = 0;
+            
+            for (let i = 0; i < selectedImages.length; i++) {
+                const image = selectedImages[i];
+                const imageNum = i + 1;
+                
+                progressText.textContent = `Processing image ${imageNum} of ${totalImages}...`;
+                updateProgressBar((processedCount / totalImages) * 100);
+                feedbackDiv.innerHTML = `<i class="bi bi-hourglass-split me-2"></i>AI is analyzing image ${imageNum}...`;
+                
                 const formData = new FormData();
-                formData.append('markedSheet', currentImages[index]);
-
+                formData.append('markedSheet', image);
+                
                 try {
-                    const response = await fetch('ajax_process_image.php', { method: 'POST', body: formData });
+                    const response = await fetch('ajax_process_image.php', {
+                        method: 'POST',
+                        body: formData
+                    });
                     const result = await response.json();
+                    
                     if (result.success && result.data && result.data.length > 0) {
+                        // Add image number to each result
+                        result.data.forEach(row => {
+                            row.image_number = imageNum;
+                        });
                         allResults = allResults.concat(result.data);
+                        successCount++;
                     }
-                } catch (err) {
-                    // ignore individual image errors
+                } catch (error) {
+                    console.error(`Error processing image ${imageNum}:`, error);
                 }
-
-                processNext(index + 1);
-            };
-
-            processNext(0);
+                
+                processedCount++;
+                updateProgressBar((processedCount / totalImages) * 100);
+            }
+            
+            if (allResults.length > 0) {
+                progressText.textContent = `Processing complete! ${successCount} image(s) processed successfully.`;
+                feedbackDiv.innerHTML = `<i class="bi bi-check-circle-fill me-2"></i>AI processing complete! Found ${allResults.length} records across ${successCount} images.`;
+                displayResults(allResults);
+                document.getElementById('total-images-processed').textContent = successCount;
+                document.getElementById('total-records-found').textContent = allResults.length;
+            } else {
+                feedbackDiv.className = 'alert alert-danger mt-3';
+                feedbackDiv.innerHTML = `<i class="bi bi-x-circle-fill me-2"></i>No data could be extracted from the images. Please ensure the images are clear and try again.`;
+                submitButton.disabled = false;
+                clearButton.disabled = false;
+            }
         });
+        
+        function updateProgressBar(percent) {
+            progressBar.style.width = percent + '%';
+            progressBar.textContent = Math.round(percent) + '%';
+        }
+        
         function displayResults(results) {
             const tbody = document.getElementById('results-tbody');
             const dispoMap = <?= json_encode($disposition_map) ?>;
             const connMap = <?= json_encode(CONNECTIVITY_MAP) ?>;
             tbody.innerHTML = '';
+            
             results.forEach(row => {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
@@ -322,13 +418,16 @@ const CONNECTIVITY_MAP = [ 'Y' => 'Yes', 'N' => 'No' ];
                     <td>${escapeHtml(connMap[row.connectivity_code] || 'N/A')}</td>
                     <td>${escapeHtml(dispoMap[row.disposition_code] || 'Empty')}</td>
                     <td>${escapeHtml(row.slot || 'N/A')}</td>
+                    <td><span class="badge bg-info">Image ${row.image_number}</span></td>
                 `;
                 tbody.appendChild(tr);
             });
+            
             document.getElementById('json_results_input').value = JSON.stringify(results);
             uploadSection.style.display = 'none';
             resultsSection.style.display = 'block';
         }
+        
         function escapeHtml(unsafe) {
             return unsafe ? unsafe.toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;") : '';
         }

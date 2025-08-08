@@ -13,7 +13,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
     
     if ($requestId && in_array($action, ['approve', 'reject'])) {
         // Get request details
-        $stmt = $conn->prepare("SELECT admin_id, vendor_name FROM vendor_requests WHERE id = ? AND status = 'pending'");
+        $stmt = $conn->prepare("SELECT admin_id, vendor_name, is_additional FROM vendor_requests WHERE id = ? AND status = 'pending'");
         $stmt->bind_param("i", $requestId);
         $stmt->execute();
         $result = $stmt->get_result();
@@ -24,8 +24,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
             $conn->begin_transaction();
             try {
                 if ($action == 'approve') {
-                    // Generate vendor ID starting from V61 for requested vendors
-                    $vendorId = generateVendorId($conn, 61);
+                    // Generate vendor ID based on whether it's an additional request
+                    $vendorId = generateVendorId($conn, $request['is_additional']);
+                    
+                    if ($vendorId === null) {
+                        throw new Exception("Unable to generate vendor ID. Maximum limit reached.");
+                    }
                     
                     // Create vendor
                     $vendorStmt = $conn->prepare("INSERT INTO vendors (vendor_id, vendor_name, admin_id, is_approved) VALUES (?, ?, ?, 1)");
@@ -60,7 +64,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
 
 // Fetch pending requests
 $pendingRequests = $conn->query("
-    SELECT vr.*, au.name as admin_name, au.admin_id as admin_code
+    SELECT vr.*, au.name as admin_name, au.admin_id as admin_code,
+           (SELECT COUNT(*) FROM vendor_requests WHERE admin_id = vr.admin_id) as total_admin_requests
     FROM vendor_requests vr
     JOIN admin_users au ON vr.admin_id = au.admin_id
     WHERE vr.status = 'pending'
@@ -70,10 +75,12 @@ $pendingRequests = $conn->query("
 // Fetch processed requests
 $processedRequests = $conn->query("
     SELECT vr.*, au.name as admin_name, au.admin_id as admin_code,
-           sau.name as processed_by_name
+           sau.name as processed_by_name,
+           v.vendor_id
     FROM vendor_requests vr
     JOIN admin_users au ON vr.admin_id = au.admin_id
     LEFT JOIN admin_users sau ON vr.processed_by = sau.id
+    LEFT JOIN vendors v ON v.vendor_name = vr.vendor_name AND v.admin_id = vr.admin_id
     WHERE vr.status != 'pending'
     ORDER BY vr.processed_at DESC
     LIMIT 50
@@ -201,6 +208,8 @@ $conn->close();
                                             <th>Admin</th>
                                             <th>Admin ID</th>
                                             <th>Vendor Name</th>
+                                            <th>Type</th>
+                                            <th>Admin's Total</th>
                                             <th>Requested</th>
                                             <th>Actions</th>
                                         </tr>
@@ -211,15 +220,31 @@ $conn->close();
                                                 <td><?= htmlspecialchars($request['admin_name']) ?></td>
                                                 <td><span class="badge bg-secondary"><?= htmlspecialchars($request['admin_code']) ?></span></td>
                                                 <td><strong><?= htmlspecialchars($request['vendor_name']) ?></strong></td>
+                                                <td>
+                                                    <?php if ($request['is_additional']): ?>
+                                                        <span class="badge bg-info">Additional</span>
+                                                    <?php else: ?>
+                                                        <span class="badge bg-primary">Default</span>
+                                                    <?php endif; ?>
+                                                </td>
+                                                <td>
+                                                    <span class="badge <?= $request['total_admin_requests'] >= 4 ? 'bg-danger' : 'bg-secondary' ?>">
+                                                        <?= $request['total_admin_requests'] ?>/4
+                                                    </span>
+                                                </td>
                                                 <td><?= date('d-M-Y H:i', strtotime($request['requested_at'])) ?></td>
                                                 <td>
-                                                    <form method="POST" class="d-inline">
-                                                        <input type="hidden" name="request_id" value="<?= $request['id'] ?>">
-                                                        <input type="hidden" name="action" value="approve">
-                                                        <button type="submit" class="btn btn-sm btn-success">
-                                                            <i class="bi bi-check-circle"></i> Approve
-                                                        </button>
-                                                    </form>
+                                                    <?php if ($request['total_admin_requests'] <= 4): ?>
+                                                        <form method="POST" class="d-inline">
+                                                            <input type="hidden" name="request_id" value="<?= $request['id'] ?>">
+                                                            <input type="hidden" name="action" value="approve">
+                                                            <button type="submit" class="btn btn-sm btn-success">
+                                                                <i class="bi bi-check-circle"></i> Approve
+                                                            </button>
+                                                        </form>
+                                                    <?php else: ?>
+                                                        <span class="text-danger">Limit Exceeded</span>
+                                                    <?php endif; ?>
                                                     <form method="POST" class="d-inline">
                                                         <input type="hidden" name="request_id" value="<?= $request['id'] ?>">
                                                         <input type="hidden" name="action" value="reject">
@@ -253,6 +278,8 @@ $conn->close();
                                             <th>Admin</th>
                                             <th>Admin ID</th>
                                             <th>Vendor Name</th>
+                                            <th>Vendor ID</th>
+                                            <th>Type</th>
                                             <th>Status</th>
                                             <th>Processed By</th>
                                             <th>Processed At</th>
@@ -264,6 +291,20 @@ $conn->close();
                                                 <td><?= htmlspecialchars($request['admin_name']) ?></td>
                                                 <td><span class="badge bg-secondary"><?= htmlspecialchars($request['admin_code']) ?></span></td>
                                                 <td><?= htmlspecialchars($request['vendor_name']) ?></td>
+                                                <td>
+                                                    <?php if ($request['vendor_id']): ?>
+                                                        <span class="badge bg-primary"><?= htmlspecialchars($request['vendor_id']) ?></span>
+                                                    <?php else: ?>
+                                                        -
+                                                    <?php endif; ?>
+                                                </td>
+                                                <td>
+                                                    <?php if ($request['is_additional']): ?>
+                                                        <span class="badge bg-info">Additional</span>
+                                                    <?php else: ?>
+                                                        <span class="badge bg-primary">Default</span>
+                                                    <?php endif; ?>
+                                                </td>
                                                 <td>
                                                     <span class="badge status-badge <?= $request['status'] == 'approved' ? 'bg-success' : 'bg-danger' ?>">
                                                         <?= ucfirst($request['status']) ?>

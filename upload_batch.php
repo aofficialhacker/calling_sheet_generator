@@ -30,8 +30,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['customerFile'])) {
     try {
         $spreadsheet = IOFactory::load($tempFile);
         $worksheet = $spreadsheet->getActiveSheet();
-        $rowCount = $worksheet->getHighestRow() - 1;
+        $rowCount = $worksheet->getHighestRow() - 1; // Subtract header row
 
+        // MODIFICATION 1: Check for 10,000 row limit
         if ($rowCount > 10000) {
             throw new Exception("File contains {$rowCount} rows. The maximum allowed is 10,000 rows per batch.");
         }
@@ -63,8 +64,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['customerFile'])) {
         if ($stmt === false) { throw new Exception("Prepare failed (INSERT): " . $conn->error); }
 
         $rowCounter = 1;
+        $processedCount = 0;
         foreach ($dataRows as $dataRow) {
             if (empty(implode('', $dataRow))) continue;
+            
+            // Stop if we've processed 10,000 rows
+            if ($processedCount >= 10000) {
+                break;
+            }
             
             $mobile_no_raw = ($columnMap['mobile_no'] !== -1 && isset($dataRow[$columnMap['mobile_no']])) ? (string)$dataRow[$columnMap['mobile_no']] : null;
             if (empty($mobile_no_raw)) continue;
@@ -98,6 +105,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['customerFile'])) {
             $stmt->bind_param("sssssssssissssssssss", $log_id, $mobile_no, $batch_id, $status, $title, $name, $policy_number, $pan, $dob, $age, $expiry, $address, $city, $state, $country, $pincode, $plan, $premium, $sum_insured, $extraData);
             $stmt->execute();
             $rowCounter++;
+            $processedCount++;
         }
         $stmt->close();
         $conn->commit();
@@ -122,6 +130,13 @@ $products = $conn->query("SELECT id, product_name FROM products WHERE is_active 
 
 // Fetch dispositions for dropdown
 $dispositions = $conn->query("SELECT DISTINCT code, description FROM disposition_codes WHERE is_active = 1 ORDER BY code");
+
+// Check vendor request count for this admin
+$requestCountStmt = $conn->prepare("SELECT COUNT(*) as request_count FROM vendor_requests WHERE admin_id = ?");
+$requestCountStmt->bind_param("s", $adminId);
+$requestCountStmt->execute();
+$requestCount = $requestCountStmt->get_result()->fetch_assoc()['request_count'];
+$requestCountStmt->close();
 
 $conn->close();
 
@@ -256,20 +271,24 @@ function formatDateString($value): string {
 
                 <div class="card shadow-sm">
                     <div class="card-body">
-                        <p class="card-text">Upload a source file (.xlsx, .csv) with a maximum of 10,000 data rows. The data will be saved, and you can download the PDF from the "Manage Batches" page.</p>
+                        <p class="card-text">Upload a source file (.xlsx, .csv) with a <strong>maximum of 10,000 data rows</strong>. The data will be saved, and you can download the PDF from the "Manage Batches" page.</p>
                         <form action="upload_batch.php" method="post" enctype="multipart/form-data" id="upload-form">
                             <div class="row g-3">
                                 <div class="col-md-6">
-                                    <label for="vendor_id" class="form-label d-flex justify-content-between align-items-center">
-                                        <strong>Select Vendor</strong>
-                                        <button type="button" class="btn btn-sm btn-outline-secondary" id="addVendorBtn" title="Request New Vendor"><i class="bi bi-plus"></i></button>
-                                    </label>
-                                    <select class="form-select" id="vendor_id" name="vendor_id" required>
-                                        <option value="">-- Select a Vendor --</option>
-                                        <?php while($row = $vendors->fetch_assoc()): ?>
-                                            <option value="<?= htmlspecialchars($row['vendor_id']) ?>"><?= htmlspecialchars($row['vendor_id']) ?> (<?= htmlspecialchars($row['vendor_name']) ?>)</option>
-                                        <?php endwhile; ?>
-                                    </select>
+                                    <label for="vendor_id" class="form-label"><strong>Select Vendor</strong></label>
+                                    <div class="input-group">
+                                        <select class="form-select" id="vendor_id" name="vendor_id" required>
+                                            <option value="">-- Select a Vendor --</option>
+                                            <?php while($row = $vendors->fetch_assoc()): ?>
+                                                <option value="<?= htmlspecialchars($row['vendor_id']) ?>"><?= htmlspecialchars($row['vendor_id']) ?> (<?= htmlspecialchars($row['vendor_name']) ?>)</option>
+                                            <?php endwhile; ?>
+                                        </select>
+                                        <?php if ($requestCount < 4): ?>
+                                        <a href="request_vendor.php" class="btn btn-outline-primary" title="Request new vendor">
+                                            <i class="bi bi-plus"></i>
+                                        </a>
+                                        <?php endif; ?>
+                                    </div>
                                 </div>
                                 <div class="col-md-6">
                                     <label for="product_id" class="form-label"><strong>Select Product</strong></label>
@@ -283,6 +302,7 @@ function formatDateString($value): string {
                                 <div class="col-12">
                                     <label for="customerFile" class="form-label"><strong>Select Source File</strong></label>
                                     <input class="form-control" type="file" id="customerFile" name="customerFile" accept=".xlsx, .csv" required>
+                                    <small class="text-muted">Maximum 10,000 rows allowed per batch</small>
                                 </div>
                             </div>
                             <button type="submit" class="btn btn-primary w-100 mt-4"><i class="bi bi-gear-fill me-2"></i>Upload and Create Batch</button>
@@ -292,31 +312,6 @@ function formatDateString($value): string {
             </main>
         </div>
     </div>
-
-<!-- Vendor Request Modal -->
-<div class="modal fade" id="vendorRequestModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <form action="request_vendor.php" method="POST">
-                <div class="modal-header">
-                    <h5 class="modal-title">Request New Vendor</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="mb-3">
-                        <label class="form-label">Vendor Name</label>
-                        <input type="text" class="form-control" name="vendor_name" required>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Submit</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
 <script>
     document.getElementById('upload-form').addEventListener('submit', function() {
         if (document.getElementById('customerFile').files.length > 0) {
@@ -356,15 +351,6 @@ function formatDateString($value): string {
             alert('Please select a disposition status from the dropdown.');
         }
     });
-
-    // Show vendor request modal
-    const addVendorBtn = document.getElementById('addVendorBtn');
-    if (addVendorBtn) {
-        addVendorBtn.addEventListener('click', () => {
-            const modal = new bootstrap.Modal(document.getElementById('vendorRequestModal'));
-            modal.show();
-        });
-    }
 </script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>

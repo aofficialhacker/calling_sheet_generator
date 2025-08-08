@@ -81,25 +81,57 @@ function generateAdminId($name, $conn) {
 }
 
 /**
- * Generates the next globally unique vendor ID (e.g., V01, V02, V61).
- * Optional $minNumber allows starting the sequence from a specific number
- * (used for additional vendor requests starting from V61).
+ * Generates the next globally unique vendor ID.
+ * For additional vendor requests (is_additional = 1), starts from V61
+ * For default vendors, uses V01-V60 range
  */
-function generateVendorId($conn, $minNumber = 1) {
-    $stmt = $conn->prepare("SELECT vendor_id FROM vendors WHERE CAST(SUBSTRING(vendor_id, 2) AS UNSIGNED) >= ? ORDER BY CAST(SUBSTRING(vendor_id, 2) AS UNSIGNED) DESC LIMIT 1");
-    $stmt->bind_param("i", $minNumber);
-    $stmt->execute();
-    $result = $stmt->get_result();
-
-    if ($result->num_rows > 0) {
-        $lastId = $result->fetch_assoc()['vendor_id'];
-        $number = intval(substr($lastId, 1)) + 1;
+function generateVendorId($conn, $isAdditional = false) {
+    if ($isAdditional) {
+        // For additional vendor requests, start from V61
+        $stmt = $conn->prepare("
+            SELECT vendor_id FROM vendors 
+            WHERE CAST(SUBSTRING(vendor_id, 2) AS UNSIGNED) >= 61 
+            ORDER BY CAST(SUBSTRING(vendor_id, 2) AS UNSIGNED) DESC 
+            LIMIT 1
+        ");
+        $stmt->execute();
+        $result = $stmt->get_result();
+        
+        if ($result->num_rows > 0) {
+            $lastId = $result->fetch_assoc()['vendor_id'];
+            $number = intval(substr($lastId, 1)) + 1;
+        } else {
+            $number = 61; // Start from V61 for additional vendors
+        }
+        
+        $stmt->close();
+        return 'V' . str_pad($number, 2, '0', STR_PAD_LEFT);
     } else {
-        $number = $minNumber;
+        // Original logic for default vendors (V01-V60)
+        $stmt = $conn->prepare("
+            SELECT vendor_id FROM vendors 
+            WHERE CAST(SUBSTRING(vendor_id, 2) AS UNSIGNED) < 61 
+            ORDER BY CAST(SUBSTRING(vendor_id, 2) AS UNSIGNED) DESC 
+            LIMIT 1
+        ");
+        $stmt->execute();
+        $result = $stmt->get_result();
+        
+        if ($result->num_rows > 0) {
+            $lastId = $result->fetch_assoc()['vendor_id'];
+            $number = intval(substr($lastId, 1)) + 1;
+            if ($number > 60) {
+                // If we've exhausted V01-V60, return null or handle error
+                $stmt->close();
+                return null;
+            }
+        } else {
+            $number = 1;
+        }
+        
+        $stmt->close();
+        return 'V' . str_pad($number, 2, '0', STR_PAD_LEFT);
     }
-
-    $stmt->close();
-    return 'V' . str_pad($number, 2, '0', STR_PAD_LEFT);
 }
 
 /**
@@ -135,4 +167,3 @@ function generateBatchId($productCode, $vendorId, $adminId, $conn) {
 function generateLogRowId($batchId, $rowNumber) {
     return $batchId . str_pad($rowNumber, 5, '0', STR_PAD_LEFT);
 }
-

@@ -6,80 +6,205 @@ $conn = getDBConnection();
 $message = '';
 $error = '';
 
-// Helper to insert caller and map to admin
-function insertCallerAndMap($finqyId, $name, $mobile, $type, $adminId, $conn, &$count) {
-    $callerStmt = $conn->prepare("INSERT INTO callers (finqy_id, caller_name, mobile_no, caller_type, is_active) VALUES (?, ?, ?, ?, 1) ON DUPLICATE KEY UPDATE caller_name = VALUES(caller_name), mobile_no = VALUES(mobile_no)");
-    $callerStmt->bind_param("ssss", $finqyId, $name, $mobile, $type);
-    $callerStmt->execute();
-    $callerStmt->close();
-
-    $mapStmt = $conn->prepare("INSERT INTO admin_caller_mapping (admin_id, finqy_id) VALUES (?, ?) ON DUPLICATE KEY UPDATE admin_id = VALUES(admin_id)");
-    $mapStmt->bind_param("ss", $adminId, $finqyId);
-    $mapStmt->execute();
-    $mapStmt->close();
-    $count++;
-}
-
-// Map partner -> connector -> team hierarchy for a given partner record
-function mapPartnerTree($partner, $adminId, $conn, &$count) {
-    insertCallerAndMap($partner['refercode'], $partner['name'], $partner['mobile'], 'partner', $adminId, $conn, $count);
-
-    $connectorStmt = $conn->prepare("SELECT id, refercode, rname as name, mobile_no as mobile FROM corporate_connector WHERE master_refercode = ?");
-    $connectorStmt->bind_param("s", $partner['refercode']);
-    $connectorStmt->execute();
-    $connectors = $connectorStmt->get_result();
-    while ($connector = $connectors->fetch_assoc()) {
-        insertCallerAndMap($connector['refercode'], $connector['name'], $connector['mobile'], 'connector', $adminId, $conn, $count);
-
-        $teamStmt = $conn->prepare("SELECT id, refercode, username as name, mobile FROM corp_leader WHERE leader_of = ?");
-        $teamStmt->bind_param("s", $connector['refercode']);
-        $teamStmt->execute();
-        $teams = $teamStmt->get_result();
-        while ($team = $teams->fetch_assoc()) {
-            insertCallerAndMap($team['refercode'], $team['name'], $team['mobile'], 'team', $adminId, $conn, $count);
-        }
-        $teamStmt->close();
-    }
-    $connectorStmt->close();
-}
-
-// Recursively map all partners/connectors/teams under a corporate user
-function mapUserHierarchy($user, $adminId, $conn, &$count) {
-    // Map partners directly added by this user
-    $partnerStmt = $conn->prepare("SELECT id, refercode, rname as name, mobile_no as mobile FROM first_register WHERE addedBy = ?");
-    $partnerStmt->bind_param("i", $user['id']);
-    $partnerStmt->execute();
-    $partners = $partnerStmt->get_result();
-    while ($partner = $partners->fetch_assoc()) {
-        mapPartnerTree($partner, $adminId, $conn, $count);
-    }
-    $partnerStmt->close();
-
-    // Fetch subordinates based on designation
-    $username = $user['username'];
-    $designation = $user['designation'];
-
+// Function to map all hierarchical callers for an admin
+function mapHierarchicalCallers($corpUserId, $designation, $adminId, $conn) {
+    $callerCount = 0;
+    $processedRefercodes = []; // Track processed refercodes to avoid duplicates
+    
+    // Get the corporate user details
+    $corpStmt = $conn->prepare("SELECT username, bm_allocated, zm_allocated FROM corporate_user_permission WHERE id = ?");
+    $corpStmt->bind_param("i", $corpUserId);
+    $corpStmt->execute();
+    $corpData = $corpStmt->get_result()->fetch_assoc();
+    $corpStmt->close();
+    
+    if (!$corpData) return $callerCount;
+    
+    // Determine which users to process based on designation hierarchy
+    $usersToProcess = [];
+    
     if ($designation == 'zonal_manager') {
-        $bmStmt = $conn->prepare("SELECT id, username, designation FROM corporate_user_permission WHERE zm_allocated = ? AND designation = 'branch_manager'");
-        $bmStmt->bind_param("s", $username);
+        // ZM: Get all BMs under this ZM
+        $bmStmt = $conn->prepare("
+            SELECT id, username FROM corporate_user_permission 
+            WHERE zm_allocated = ? AND designation = 'branch_manager'
+        ");
+        $bmStmt->bind_param("s", $corpData['username']);
         $bmStmt->execute();
         $bms = $bmStmt->get_result();
         while ($bm = $bms->fetch_assoc()) {
-            mapUserHierarchy($bm, $adminId, $conn, $count);
+            $usersToProcess[] = $bm['id'];
+            
+            // Also get ADMs under each BM
+            $admStmt = $conn->prepare("
+                SELECT id FROM corporate_user_permission 
+                WHERE bm_allocated = ? AND designation = 'agency_development_manager'
+            ");
+            $admStmt->bind_param("s", $bm['username']);
+            $admStmt->execute();
+            $adms = $admStmt->get_result();
+            while ($adm = $adms->fetch_assoc()) {
+                $usersToProcess[] = $adm['id'];
+            }
+            $admStmt->close();
         }
         $bmStmt->close();
-    }
-
-    if (in_array($designation, ['zonal_manager', 'branch_manager'])) {
-        $admStmt = $conn->prepare("SELECT id, username, designation FROM corporate_user_permission WHERE bm_allocated = ? AND designation = 'agency_development_manager'");
-        $admStmt->bind_param("s", $username);
+        
+        // Also include direct ADMs under ZM (if any)
+        $admDirectStmt = $conn->prepare("
+            SELECT id FROM corporate_user_permission 
+            WHERE zm_allocated = ? AND designation = 'agency_development_manager'
+        ");
+        $admDirectStmt->bind_param("s", $corpData['username']);
+        $admDirectStmt->execute();
+        $admsDirect = $admDirectStmt->get_result();
+        while ($adm = $admsDirect->fetch_assoc()) {
+            $usersToProcess[] = $adm['id'];
+        }
+        $admDirectStmt->close();
+        
+    } elseif ($designation == 'branch_manager') {
+        // BM: Get all ADMs under this BM
+        $admStmt = $conn->prepare("
+            SELECT id FROM corporate_user_permission 
+            WHERE bm_allocated = ? AND designation = 'agency_development_manager'
+        ");
+        $admStmt->bind_param("s", $corpData['username']);
         $admStmt->execute();
         $adms = $admStmt->get_result();
         while ($adm = $adms->fetch_assoc()) {
-            mapUserHierarchy($adm, $adminId, $conn, $count);
+            $usersToProcess[] = $adm['id'];
         }
         $admStmt->close();
     }
+    
+    // Always include the current user
+    $usersToProcess[] = $corpUserId;
+    
+    // Process all users in hierarchy
+    foreach ($usersToProcess as $userId) {
+        // 1. Find all partners connected to this user
+        $partnerStmt = $conn->prepare("
+            SELECT id, refercode, rname as name, mobile_no as mobile 
+            FROM first_register 
+            WHERE addedBy = ?
+        ");
+        $partnerStmt->bind_param("i", $userId);
+        $partnerStmt->execute();
+        $partners = $partnerStmt->get_result();
+        
+        while ($partner = $partners->fetch_assoc()) {
+            if (in_array($partner['refercode'], $processedRefercodes)) continue;
+            $processedRefercodes[] = $partner['refercode'];
+            
+            // Insert partner as caller
+            $callerStmt = $conn->prepare("
+                INSERT INTO callers (finqy_id, caller_name, mobile_no, caller_type, is_active) 
+                VALUES (?, ?, ?, 'partner', 1)
+                ON DUPLICATE KEY UPDATE caller_name = VALUES(caller_name), mobile_no = VALUES(mobile_no)
+            ");
+            $finqyId = $partner['refercode'];
+            $callerName = $partner['name'];
+            $mobileNo = $partner['mobile'];
+            $callerStmt->bind_param("sss", $finqyId, $callerName, $mobileNo);
+            $callerStmt->execute();
+            $callerStmt->close();
+            
+            // Map to admin
+            $mapStmt = $conn->prepare("
+                INSERT INTO admin_caller_mapping (admin_id, finqy_id) 
+                VALUES (?, ?)
+                ON DUPLICATE KEY UPDATE admin_id = VALUES(admin_id)
+            ");
+            $mapStmt->bind_param("ss", $adminId, $finqyId);
+            $mapStmt->execute();
+            $mapStmt->close();
+            $callerCount++;
+            
+            // 2. Find all connectors connected to this partner
+            $connectorStmt = $conn->prepare("
+                SELECT id, refercode, rname as name, mobile_no as mobile 
+                FROM corporate_connector 
+                WHERE master_refercode = ?
+            ");
+            $connectorStmt->bind_param("s", $partner['refercode']);
+            $connectorStmt->execute();
+            $connectors = $connectorStmt->get_result();
+            
+            while ($connector = $connectors->fetch_assoc()) {
+                if (in_array($connector['refercode'], $processedRefercodes)) continue;
+                $processedRefercodes[] = $connector['refercode'];
+                
+                // Insert connector as caller
+                $callerStmt = $conn->prepare("
+                    INSERT INTO callers (finqy_id, caller_name, mobile_no, caller_type, is_active) 
+                    VALUES (?, ?, ?, 'connector', 1)
+                    ON DUPLICATE KEY UPDATE caller_name = VALUES(caller_name), mobile_no = VALUES(mobile_no)
+                ");
+                $finqyId = $connector['refercode'];
+                $callerName = $connector['name'];
+                $mobileNo = $connector['mobile'];
+                $callerStmt->bind_param("sss", $finqyId, $callerName, $mobileNo);
+                $callerStmt->execute();
+                $callerStmt->close();
+                
+                // Map to admin
+                $mapStmt = $conn->prepare("
+                    INSERT INTO admin_caller_mapping (admin_id, finqy_id) 
+                    VALUES (?, ?)
+                    ON DUPLICATE KEY UPDATE admin_id = VALUES(admin_id)
+                ");
+                $mapStmt->bind_param("ss", $adminId, $finqyId);
+                $mapStmt->execute();
+                $mapStmt->close();
+                $callerCount++;
+                
+                // 3. Find all teams connected to this connector
+                $teamStmt = $conn->prepare("
+                    SELECT id, refercode, username as name, mobile 
+                    FROM corp_leader 
+                    WHERE leader_of = ?
+                ");
+                $teamStmt->bind_param("s", $connector['refercode']);
+                $teamStmt->execute();
+                $teams = $teamStmt->get_result();
+                
+                while ($team = $teams->fetch_assoc()) {
+                    if (in_array($team['refercode'], $processedRefercodes)) continue;
+                    $processedRefercodes[] = $team['refercode'];
+                    
+                    // Insert team member as caller
+                    $callerStmt = $conn->prepare("
+                        INSERT INTO callers (finqy_id, caller_name, mobile_no, caller_type, is_active) 
+                        VALUES (?, ?, ?, 'team', 1)
+                        ON DUPLICATE KEY UPDATE caller_name = VALUES(caller_name), mobile_no = VALUES(mobile_no)
+                    ");
+                    $finqyId = $team['refercode'];
+                    $callerName = $team['name'];
+                    $mobileNo = $team['mobile'];
+                    $callerStmt->bind_param("sss", $finqyId, $callerName, $mobileNo);
+                    $callerStmt->execute();
+                    $callerStmt->close();
+                    
+                    // Map to admin
+                    $mapStmt = $conn->prepare("
+                        INSERT INTO admin_caller_mapping (admin_id, finqy_id) 
+                        VALUES (?, ?)
+                        ON DUPLICATE KEY UPDATE admin_id = VALUES(admin_id)
+                    ");
+                    $mapStmt->bind_param("ss", $adminId, $finqyId);
+                    $mapStmt->execute();
+                    $mapStmt->close();
+                    $callerCount++;
+                }
+                $teamStmt->close();
+            }
+            $connectorStmt->close();
+        }
+        $partnerStmt->close();
+    }
+    
+    return $callerCount;
 }
 
 // Handle admin creation with hierarchical mapping
@@ -127,7 +252,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
                     
                     // Create default 5 vendors for the new admin
                     for ($i = 1; $i <= 5; $i++) {
-                        $vendorId = generateVendorId($conn);
+                        $vendorId = generateVendorId($conn, false);
                         $vendorName = "Default Vendor $i";
                         
                         $vendorStmt = $conn->prepare("INSERT INTO vendors (vendor_id, vendor_name, admin_id, is_approved) VALUES (?, ?, ?, 1)");
@@ -136,10 +261,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
                         $vendorStmt->close();
                     }
                     
-                    // Map entire hierarchy of callers under this corporate user
-                    $callerCount = 0;
-                    mapUserHierarchy($corpUser, $adminId, $conn, $callerCount);
-
+                    // Map hierarchical callers
+                    $callerCount = mapHierarchicalCallers($corpUserId, $corpUser['designation'], $adminId, $conn);
+                    
                     $conn->commit();
                     $message = "Admin user created successfully with ID: $adminId, 5 default vendors, and $callerCount callers mapped from hierarchy.";
                 } catch (Exception $e) {
@@ -331,7 +455,13 @@ $conn->close();
                                                 <td><span class="badge bg-primary"><?= htmlspecialchars($admin['admin_id']) ?></span></td>
                                                 <td><?= htmlspecialchars($admin['name']) ?></td>
                                                 <td><?= htmlspecialchars($admin['username']) ?></td>
-                                                <td><?= htmlspecialchars($admin['designation']) ?></td>
+                                                <td>
+                                                    <?php 
+                                                    $designationDisplay = str_replace('_', ' ', $admin['designation']);
+                                                    $designationDisplay = ucwords($designationDisplay);
+                                                    echo htmlspecialchars($designationDisplay);
+                                                    ?>
+                                                </td>
                                                 <td><?= $admin['vendor_count'] ?></td>
                                                 <td><?= $admin['active_caller_count'] ?>/<?= $admin['total_caller_count'] ?></td>
                                                 <td><?= $admin['batch_count'] ?></td>
@@ -397,12 +527,12 @@ $conn->close();
                                 <?php if ($corpUsers && $corpUsers->num_rows > 0): ?>
                                     <?php while($user = $corpUsers->fetch_assoc()): ?>
                                         <option value="<?= htmlspecialchars($user['username']) ?>">
-                                            <?= htmlspecialchars($user['name']) ?> (<?= htmlspecialchars($user['designation']) ?>)
+                                            <?= htmlspecialchars($user['name']) ?> (<?= str_replace('_', ' ', ucwords($user['designation'])) ?>)
                                         </option>
                                     <?php endwhile; ?>
                                 <?php endif; ?>
                             </select>
-                            <small class="text-muted">This will automatically map all partners, connectors, and teams under this admin as callers.</small>
+                            <small class="text-muted">This will automatically map all partners, connectors, and teams under this admin's hierarchy as callers.</small>
                         </div>
                         
                         <div class="form-check">

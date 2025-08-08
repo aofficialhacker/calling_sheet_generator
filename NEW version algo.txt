@@ -10,3 +10,5 @@ first_register,corporate_connector and corp_leader. now currently the mapping is
 4.disposition column values should always be in this format circles should be on left side followed by 2digit and it should not happen like circle is on above line and digit comes on next line as it will get difficult for AI to ocr. and disposition column should be dynamic as per the dispositions created by superadmin. and pdf table should not exceed 12 columns.
 
 5. callers should be able to add multiple photos and then click on process with ai button so all photo gets processed one by one automatically.
+
+6. when allocation of data is done through allocation page of admin then if same mobile no data is present for that product then that entries shouldn't get allocated and if no unique entries are found then in action dropdown no product name should appear, for example: i allocated data from Life Insurance to Motor Insurance and Motor Insurance to Health Insurance , now if i again click on action to health insurance allocated entry it should not show Life insurance again as life insurance already contains that data hence dropdown will be empty.
