@@ -81,21 +81,23 @@ function generateAdminId($name, $conn) {
 }
 
 /**
- * Generates the next globally unique vendor ID (e.g., V01, V02, V10).
- * This logic remains global as vendor IDs are unique system-wide.
+ * Generates the next globally unique vendor ID (e.g., V01, V02, V61).
+ * Optional $minNumber allows starting the sequence from a specific number
+ * (used for additional vendor requests starting from V61).
  */
-function generateVendorId($conn) {
-    $stmt = $conn->prepare("SELECT vendor_id FROM vendors ORDER BY CAST(SUBSTRING(vendor_id, 2) AS UNSIGNED) DESC LIMIT 1");
+function generateVendorId($conn, $minNumber = 1) {
+    $stmt = $conn->prepare("SELECT vendor_id FROM vendors WHERE CAST(SUBSTRING(vendor_id, 2) AS UNSIGNED) >= ? ORDER BY CAST(SUBSTRING(vendor_id, 2) AS UNSIGNED) DESC LIMIT 1");
+    $stmt->bind_param("i", $minNumber);
     $stmt->execute();
     $result = $stmt->get_result();
-    
+
     if ($result->num_rows > 0) {
         $lastId = $result->fetch_assoc()['vendor_id'];
         $number = intval(substr($lastId, 1)) + 1;
     } else {
-        $number = 1;
+        $number = $minNumber;
     }
-    
+
     $stmt->close();
     return 'V' . str_pad($number, 2, '0', STR_PAD_LEFT);
 }

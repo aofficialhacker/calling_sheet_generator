@@ -63,7 +63,8 @@ $fullBaseSql = $baseSql . $whereSql;
 
 // Define columns in the order they should appear (excluding status)
 // Fixed order: id, slot, connectivity, disposition, then dynamic columns
-$optionalColumns = ['name', 'mobile_no', 'title', 'policy_number', 'pan', 'dob', 'age', 'expiry', 'address', 'city', 'state', 'country', 'pincode', 'plan', 'premium', 'sum_insured'];
+// Mobile number now comes before name as per new requirement
+$optionalColumns = ['mobile_no', 'name', 'title', 'policy_number', 'pan', 'dob', 'age', 'expiry', 'address', 'city', 'state', 'country', 'pincode', 'plan', 'premium', 'sum_insured'];
 $selects = [];
 foreach ($optionalColumns as $column) {
     $selects[] = "MAX(CASE WHEN `{$column}` IS NOT NULL AND `{$column}` != '' THEN 1 ELSE 0 END) as has_{$column}";
@@ -85,9 +86,11 @@ $stmt->close();
 $finalHeaders = ['id', 'slot', 'connectivity', 'disposition'];
 
 // Add optional columns that have data, in the correct order
+// Ensure the table does not exceed 12 columns in total
 foreach ($optionalColumns as $column) {
     if (!empty($columnPresence["has_{$column}"])) {
         $finalHeaders[] = $column;
+        if (count($finalHeaders) >= 12) break;
     }
 }
 
@@ -101,9 +104,11 @@ $mpdf->SetTitle($pdfTitle);
 $dispResult = $conn->query("SELECT code, description, category FROM disposition_codes WHERE is_active = 1 ORDER BY category, code");
 $dispLegendY = "<strong>DISPO (Y):</strong>";
 $dispLegendN = "<strong>DISPO (N):</strong>";
+$dispCodes = [];
 while($d = $dispResult->fetch_assoc()){
     if($d['category'] == 'connected') $dispLegendY .= " {$d['code']}:{$d['description']} |";
     else $dispLegendN .= " {$d['code']}:{$d['description']} |";
+    $dispCodes[] = $d['code'];
 }
 $dispLegend = rtrim($dispLegendY, ' |') . ' || ' . rtrim($dispLegendN, ' |');
 $slotLegend = "<strong>SLOTS:</strong> 1 (10-11a) | 2 (11a-12p) | 3 (12-1p) | 4 (1-2p) | 5 (2-3p) | 6 (3-4p) | 7 (4-5p) | 8 (5-6p)";
@@ -116,14 +121,14 @@ $html_head = '<html><head><style>
     tr { page-break-inside: avoid; page-break-after: auto; }
     th, td { border: 1px solid #333; padding: 3px; text-align: left; vertical-align: middle; word-wrap: break-word; }
     thead th, .legend-cell { text-align: center; font-weight: bold; background-color: #f2f2f2; }
-    td:nth-child(6) { position: relative; font-weight: bold; font-family: monospace;} /* Mobile column is 6th */
+    td:nth-child(5) { position: relative; font-weight: bold; font-family: monospace;} /* Mobile column is 5th */
     .id-col { font-size: 6.5pt; font-family: monospace; }
     .scissor-line { position: absolute; top: 0; bottom: 0; left: 50%; border-left: 1px dashed #000; width: 1px; height: 100%; }
     .scissor-icon { position: absolute; top: -8px; left: 45%; font-size: 10pt; }
     .connectivity-col, .slot-cell { text-align: center; }
     .disposition-cell { font-size: 7pt; padding: 1px !important; }
     .dispo-grid { border: none !important; width: 100%; table-layout: fixed; }
-    .dispo-grid td { border: none !important; padding: 1px 2px; text-align: left; }
+    .dispo-grid td { border: none !important; padding: 1px 2px; text-align: left; white-space: nowrap; }
 </style></head><body>';
 
 // Create Table Header Row
@@ -207,7 +212,16 @@ while (true) {
             $cellContent = '';
             switch($header) {
                 case 'disposition':
-                    $cellContent = '<table class="dispo-grid"><tr><td>○ 11</td><td>○ 12</td><td>○ 13</td><td>○ 14</td><td>○ 15</td><td>○ 16</td><td>○ 17</td></tr><tr><td>○ 21</td><td>○ 22</td><td>○ 23</td><td>○ 24</td><td>○ 25</td><td>○ 26</td><td></td></tr></table>';
+                    $cellContent = '<table class="dispo-grid"><tr>';
+                    $codeCounter = 0;
+                    foreach ($dispCodes as $code) {
+                        if ($codeCounter > 0 && $codeCounter % 7 == 0) {
+                            $cellContent .= '</tr><tr>';
+                        }
+                        $cellContent .= '<td>○ ' . htmlspecialchars($code) . '</td>';
+                        $codeCounter++;
+                    }
+                    $cellContent .= '</tr></table>';
                     $class = 'disposition-cell';
                     break;
                 case 'connectivity':
