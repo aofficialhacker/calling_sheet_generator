@@ -177,7 +177,7 @@ const CONNECTIVITY_MAP = [ 'Y' => 'Yes', 'N' => 'No' ];
                 <label for="markedSheet" class="camera-container" id="cameraLabel">
                     <div class="form-label-icon"><i class="bi bi-camera2"></i></div><h5 class="mt-2 text-info">Tap to open Camera</h5>
                 </label>
-                <input class="form-control d-none" type="file" name="markedSheet" id="markedSheet" accept="image/*" capture="environment" required>
+                <input class="form-control d-none" type="file" name="markedSheet[]" id="markedSheet" accept="image/*" multiple required>
                 <div id="imagePreviewContainer" class="text-center mt-3"></div>
                 <div id="processing-feedback" class="alert alert-info mt-3" style="display: none;"></div>
                 <div class="d-grid gap-2 mt-4">
@@ -221,7 +221,7 @@ const CONNECTIVITY_MAP = [ 'Y' => 'Yes', 'N' => 'No' ];
         const captureForm = document.getElementById('captureForm');
         const feedbackDiv = document.getElementById('processing-feedback');
         const retakeButton = document.getElementById('retakeButton');
-        let currentImage = null;
+        let currentImages = [];
         
         startUploadBtn.addEventListener('click', () => {
             mainOptions.style.display = 'none';
@@ -230,16 +230,21 @@ const CONNECTIVITY_MAP = [ 'Y' => 'Yes', 'N' => 'No' ];
         
         markedSheetInput.addEventListener('change', (e) => {
             imagePreviewContainer.innerHTML = '';
-            const file = e.target.files[0];
-            if (file) {
-                currentImage = file;
+            currentImages = Array.from(e.target.files);
+            if (currentImages.length > 0) {
                 const reader = new FileReader();
                 reader.onload = (event) => {
                     const img = document.createElement('img');
                     img.src = event.target.result;
                     imagePreviewContainer.appendChild(img);
-                }
-                reader.readAsDataURL(file);
+                    if (currentImages.length > 1) {
+                        const info = document.createElement('div');
+                        info.textContent = `${currentImages.length} images selected`;
+                        info.classList.add('mt-2');
+                        imagePreviewContainer.appendChild(info);
+                    }
+                };
+                reader.readAsDataURL(currentImages[0]);
                 cameraLabel.style.display = 'none';
                 submitButton.disabled = false;
                 retakeButton.style.display = 'block';
@@ -256,46 +261,52 @@ const CONNECTIVITY_MAP = [ 'Y' => 'Yes', 'N' => 'No' ];
             cameraLabel.style.display = 'block';
             submitButton.disabled = true;
             retakeButton.style.display = 'none';
-            currentImage = null;
+            currentImages = [];
         });
         
         captureForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-            if (!currentImage) return;
-            
+            if (currentImages.length === 0) return;
+
             submitButton.disabled = true;
             retakeButton.disabled = true;
             submitButton.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Processing with AI...`;
             feedbackDiv.style.display = 'block';
             feedbackDiv.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>AI is analyzing your marked sheet...';
-            
-            const formData = new FormData();
-            formData.append('markedSheet', currentImage);
-            
-            try {
-                const response = await fetch('ajax_process_image.php', {
-                    method: 'POST',
-                    body: formData
-                });
-                const result = await response.json();
-                
-                if (result.success && result.data && result.data.length > 0) {
-                    feedbackDiv.innerHTML = '<i class="bi bi-check-circle-fill me-2"></i>AI processing complete! Review the results below.';
-                    displayResults(result.data);
-                } else {
-                    feedbackDiv.className = 'alert alert-danger mt-3';
-                    feedbackDiv.innerHTML = `<i class="bi bi-x-circle-fill me-2"></i>${result.message || 'AI could not read the marked sheet. Please ensure the image is clear and try again.'}`;
-                    submitButton.disabled = false;
-                    retakeButton.disabled = false;
-                    submitButton.innerHTML = `<i class="bi bi-magic me-2"></i>Process with AI`;
+
+            let allResults = [];
+            const processNext = async (index) => {
+                if (index >= currentImages.length) {
+                    if (allResults.length > 0) {
+                        feedbackDiv.innerHTML = '<i class="bi bi-check-circle-fill me-2"></i>AI processing complete! Review the results below.';
+                        displayResults(allResults);
+                    } else {
+                        feedbackDiv.className = 'alert alert-danger mt-3';
+                        feedbackDiv.innerHTML = '<i class="bi bi-x-circle-fill me-2"></i>AI could not read the marked sheets. Please ensure the images are clear and try again.';
+                        submitButton.disabled = false;
+                        retakeButton.disabled = false;
+                        submitButton.innerHTML = `<i class="bi bi-magic me-2"></i>Process with AI`;
+                    }
+                    return;
                 }
-            } catch (error) {
-                feedbackDiv.className = 'alert alert-danger mt-3';
-                feedbackDiv.innerHTML = '<i class="bi bi-wifi-off me-2"></i>Network error occurred. Please check your connection and try again.';
-                submitButton.disabled = false;
-                retakeButton.disabled = false;
-                submitButton.innerHTML = `<i class="bi bi-magic me-2"></i>Process with AI`;
-            }
+
+                const formData = new FormData();
+                formData.append('markedSheet', currentImages[index]);
+
+                try {
+                    const response = await fetch('ajax_process_image.php', { method: 'POST', body: formData });
+                    const result = await response.json();
+                    if (result.success && result.data && result.data.length > 0) {
+                        allResults = allResults.concat(result.data);
+                    }
+                } catch (err) {
+                    // ignore individual image errors
+                }
+
+                processNext(index + 1);
+            };
+
+            processNext(0);
         });
         function displayResults(results) {
             const tbody = document.getElementById('results-tbody');

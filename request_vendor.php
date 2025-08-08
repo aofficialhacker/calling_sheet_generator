@@ -12,15 +12,28 @@ $vendorName = trim($_POST['vendor_name']);
 
 if (empty($vendorName)) {
     $_SESSION['flash_message'] = ['type' => 'danger', 'text' => 'Vendor name cannot be empty.'];
-    header("Location: admin_panel.php");
+    header("Location: upload_batch.php");
     exit();
 }
 
 $conn = getDBConnection();
 
+// Ensure admin has not exceeded maximum of 4 requests
+$countStmt = $conn->prepare("SELECT COUNT(*) as total FROM vendor_requests WHERE admin_id = ?");
+$countStmt->bind_param("s", $adminId);
+$countStmt->execute();
+$totalRequests = $countStmt->get_result()->fetch_assoc()['total'];
+$countStmt->close();
+
+if ($totalRequests >= 4) {
+    $_SESSION['flash_message'] = ['type' => 'warning', 'text' => 'You have reached the maximum number of vendor requests (4).'];
+    header("Location: upload_batch.php");
+    exit();
+}
+
 // Check if a similar request is already pending
 $checkStmt = $conn->prepare("
-    SELECT id FROM vendor_requests 
+    SELECT id FROM vendor_requests
     WHERE admin_id = ? AND vendor_name = ? AND status = 'pending'
 ");
 $checkStmt->bind_param("ss", $adminId, $vendorName);
@@ -48,5 +61,5 @@ if ($result->num_rows > 0) {
 $checkStmt->close();
 $conn->close();
 
-header("Location: admin_panel.php");
+header("Location: upload_batch.php");
 exit();
