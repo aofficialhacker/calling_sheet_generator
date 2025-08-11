@@ -16,7 +16,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['customerFile'])) {
     $adminId = $_SESSION['admin_id'];
 
     if (!$vendorId || !$productId) {
-        $_SESSION['flash_message'] = ['type' => 'danger', 'text' => 'Please select a vendor and a product.'];
+        $_SESSION['flash_message'] = ['type' => 'danger', 'text' => 'Please select a unit and a product.'];
         header("Location: upload_batch.php");
         exit();
     }
@@ -275,16 +275,16 @@ function formatDateString($value): string {
                         <form action="upload_batch.php" method="post" enctype="multipart/form-data" id="upload-form">
                             <div class="row g-3">
                                 <div class="col-md-6">
-                                    <label for="vendor_id" class="form-label"><strong>Select Vendor</strong></label>
+                                    <label for="vendor_id" class="form-label"><strong>Select Unit</strong></label>
                                     <div class="input-group">
                                         <select class="form-select" id="vendor_id" name="vendor_id" required>
-                                            <option value="">-- Select a Vendor --</option>
+                                            <option value="">-- Select a Unit --</option>
                                             <?php while($row = $vendors->fetch_assoc()): ?>
                                                 <option value="<?= htmlspecialchars($row['vendor_id']) ?>"><?= htmlspecialchars($row['vendor_id']) ?> (<?= htmlspecialchars($row['vendor_name']) ?>)</option>
                                             <?php endwhile; ?>
                                         </select>
                                         <?php if ($requestCount < 4): ?>
-                                        <a href="request_vendor.php" class="btn btn-outline-primary" title="Request new vendor">
+                                        <a href="request_vendor.php" class="btn btn-outline-primary" title="Request new unit">
                                             <i class="bi bi-plus"></i>
                                         </a>
                                         <?php endif; ?>

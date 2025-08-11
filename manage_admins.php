@@ -250,10 +250,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
                     $insertStmt->execute();
                     $insertStmt->close();
                     
-                    // Create default 5 vendors for the new admin
+                    // Create default 5 units for the new admin
                     for ($i = 1; $i <= 5; $i++) {
                         $vendorId = generateVendorId($conn, false);
-                        $vendorName = "Default Vendor $i";
+                        $vendorName = "Default Unit $i";
                         
                         $vendorStmt = $conn->prepare("INSERT INTO vendors (vendor_id, vendor_name, admin_id, is_approved) VALUES (?, ?, ?, 1)");
                         $vendorStmt->bind_param("sss", $vendorId, $vendorName, $adminId);
@@ -265,7 +265,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
                     $callerCount = mapHierarchicalCallers($corpUserId, $corpUser['designation'], $adminId, $conn);
                     
                     $conn->commit();
-                    $message = "Admin user created successfully with ID: $adminId, 5 default vendors, and $callerCount callers mapped from hierarchy.";
+                    $message = "Admin user created successfully with ID: $adminId, 5 default units, and $callerCount callers mapped from hierarchy.";
                 } catch (Exception $e) {
                     $conn->rollback();
                     $error = "Failed to create admin user: " . $e->getMessage();
@@ -391,7 +391,7 @@ $conn->close();
                         </li>
                         <li class="nav-item">
                             <a class="nav-link" href="vendor_requests.php">
-                                <i class="bi bi-bell-fill me-2"></i>Vendor Requests
+                                <i class="bi bi-bell-fill me-2"></i>Unit Requests
                             </a>
                         </li>
                         <li class="nav-item">
@@ -440,7 +440,7 @@ $conn->close();
                                         <th>Name</th>
                                         <th>Username</th>
                                         <th>Designation</th>
-                                        <th>Vendors</th>
+                                        <th>Units</th>
                                         <th>Callers (Active/Total)</th>
                                         <th>Batches</th>
                                         <th>Multi-Status</th>
