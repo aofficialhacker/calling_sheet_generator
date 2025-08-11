@@ -122,7 +122,7 @@ $stmt->execute();
 $columnPresence = $stmt->get_result()->fetch_assoc();
 $stmt->close();
 
-// Build final headers in the correct order
+// Build final headers with mobile_no before name (MODIFICATION 1)
 $finalHeaders = ['id', 'slot', 'connectivity', 'disposition', 'mobile_no'];
 
 // Add name if it has data
