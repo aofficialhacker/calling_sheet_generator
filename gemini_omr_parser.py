@@ -2,19 +2,14 @@ import sys
 import json
 import pathlib
 import re
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from PIL import Image
 import cv2
 import numpy as np
+import os
 
 def preprocess_image(input_path: pathlib.Path) -> pathlib.Path | None:
-    """
-    Applies preprocessing steps to an image to improve OCR/OMR accuracy.
-    - Converts to grayscale
-    - Denoises
-    - Applies adaptive thresholding
-    Returns the path to the temporary preprocessed image.
-    """
     try:
         image = cv2.imread(str(input_path))
         if image is None:
@@ -32,11 +27,11 @@ def preprocess_image(input_path: pathlib.Path) -> pathlib.Path | None:
         return input_path
 
 def main():
-    """
-    Takes an image, preprocesses it, sends it to Gemini, and prints a CSV
-    of detected marks by anchoring its search to the printed Record ID.
-    """
-    API_KEY = 'AIzaSyDD1HTQWJNbrzFxwH5YWIHbnmcx9-FD_4s'
+    # Preferred: use environment variables for your API key
+    api_key = "AIzaSyDD1HTQWJNbrzFxwH5YWIHbnmcx9-FD_4s"
+    if not api_key or api_key == 'YOUR_API_KEY':
+        print(json.dumps({"error": "API key not set. Set GEMINI_API_KEY environment variable."}))
+        sys.exit(1)
 
     if len(sys.argv) < 2:
         print(json.dumps({"error": "No file path provided."}))
@@ -53,10 +48,6 @@ def main():
         sys.exit(1)
 
     try:
-        genai.configure(api_key=API_KEY)
-        generation_config = genai.types.GenerationConfig(temperature=0.0)
-        model = genai.GenerativeModel('gemini-2.5-flash', generation_config=generation_config)
-        
         prompt = """
 You are a hyper-accurate Optical Mark and Character Recognition (OMR/OCR) system.
 Your task is to analyze the provided image of a calling sheet. The columns in the image are: Id, Slot, Connectivity, Disposition.
@@ -82,35 +73,42 @@ For every single row you can find on the sheet, follow these steps precisely:
     ```
 6.  Do not include any text, explanations, or markdown formatting outside of the single `csv` block.
 """
-        # --- FIX: Use a 'with' statement to ensure the image file is closed ---
-        # This releases the file lock before the 'finally' block is executed.
         with Image.open(preprocessed_path) as image:
-            response = model.generate_content([prompt, image])
-        
+            client = genai.Client(api_key=api_key)
+            # Supply both prompt and image as content parts, latest supports passing image byte data
+            response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=[prompt, image],
+                config=types.GenerateContentConfig(
+                    thinking_config=types.ThinkingConfig(
+                        thinking_budget=0  # disables "thinking"/reflection
+                    )
+                ),
+            )
         text = response.text
-        csv_match = re.search(r"```csv\s*([\s\S]*?)\s*```", text)
+        
+        # Look for CSV content in markdown code blocks
+        csv_match = re.search(r"```(?:csv)?\s*\n(.*?)\n```", text, re.DOTALL)
         if csv_match:
             cleaned_text = csv_match.group(1).strip()
         else:
+            # If no code block found, use the entire text
             cleaned_text = text.strip()
 
         if cleaned_text and not cleaned_text.lower().startswith('record_id'):
             print(json.dumps({"error": f"AI response did not start with the expected CSV header 'record_id'. Response: {cleaned_text}"}))
             sys.exit(1)
-            
+
         print(cleaned_text)
 
     except Exception as e:
         print(json.dumps({"error": f"An error occurred during the process: {str(e)}"}))
     finally:
-        # This cleanup will now run after the image file has been closed, preventing the lock error.
         if preprocessed_path.exists():
             try:
                 preprocessed_path.unlink()
             except OSError as e:
-                # This warning will no longer appear, but it's good practice to keep it.
-                error_json = json.dumps({"warning": f"Could not remove temp file: {e}"})
-                print(error_json, file=sys.stderr)
+                print(json.dumps({"warning": f"Could not remove temp file: {e}"}), file=sys.stderr)
 
 if __name__ == "__main__":
     main()

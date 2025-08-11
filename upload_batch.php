@@ -332,7 +332,7 @@ function formatDateString($value): string {
             
             window.location.href = url;
             
-            // Poll for cookie to hide overlay
+            // Enhanced polling for cookie to hide overlay
             const timer = setInterval(function() {
                 const value = `; ${document.cookie}`;
                 const parts = value.split(`; download_token_${downloadToken}=`);
@@ -341,12 +341,28 @@ function formatDateString($value): string {
                     clearInterval(timer);
                     document.cookie = `download_token_${downloadToken}=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;`;
                 }
-            }, 1000);
+            }, 500); // Faster polling for better responsiveness
             
+            // Extended timeout for large datasets
+            const maxTimeout = 120000; // 2 minutes for large files
             setTimeout(() => {
                 clearInterval(timer);
                 document.getElementById('loading-overlay').style.display = 'none';
-            }, 20000);
+            }, maxTimeout);
+            
+            // Additional check for download dialog appearance
+            let downloadStarted = false;
+            const checkDownloadStart = setInterval(() => {
+                if (!downloadStarted && document.hasFocus && !document.hasFocus()) {
+                    // Browser lost focus, likely due to download dialog
+                    downloadStarted = true;
+                    setTimeout(() => {
+                        document.getElementById('loading-overlay').style.display = 'none';
+                        clearInterval(timer);
+                        clearInterval(checkDownloadStart);
+                    }, 1000);
+                }
+            }, 200);
         } else {
             alert('Please select a disposition status from the dropdown.');
         }

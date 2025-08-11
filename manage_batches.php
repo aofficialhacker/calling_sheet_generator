@@ -108,11 +108,28 @@ document.addEventListener('DOMContentLoaded', function() {
                 clearInterval(timer);
                 document.cookie = `${cookieName}=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;`;
             }
-        }, 1000);
+        }, 500); // Reduced polling interval for faster detection
+        
+        // Enhanced timeout handling for large datasets
+        const maxTimeout = 120000; // 2 minutes for large files
         setTimeout(() => {
             clearInterval(timer);
             loadingOverlay.style.display = 'none';
-        }, 20000);
+        }, maxTimeout);
+        
+        // Additional check for download dialog appearance
+        let downloadStarted = false;
+        const checkDownloadStart = setInterval(() => {
+            if (!downloadStarted && document.hasFocus && !document.hasFocus()) {
+                // Browser lost focus, likely due to download dialog
+                downloadStarted = true;
+                setTimeout(() => {
+                    loadingOverlay.style.display = 'none';
+                    clearInterval(timer);
+                    clearInterval(checkDownloadStart);
+                }, 1000);
+            }
+        }, 200);
     };
 
     document.querySelectorAll('.download-pdf-btn').forEach(button => {
