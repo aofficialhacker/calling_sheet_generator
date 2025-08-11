@@ -38,10 +38,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
                     $vendorStmt->close();
                     
                     $newStatus = 'approved';
-                    $message = "Vendor request approved and vendor created with ID: $vendorId";
+                    $message = "Unit request approved and unit created with ID: $vendorId";
                 } else {
                     $newStatus = 'rejected';
-                    $message = "Vendor request rejected.";
+                    $message = "Unit request rejected.";
                 }
                 
                 // Update request status
@@ -93,7 +93,7 @@ $conn->close();
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Vendor Requests - Superadmin Panel</title>
+    <title>Unit Requests - Superadmin Panel</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <style>
@@ -157,7 +157,7 @@ $conn->close();
                         </li>
                         <li class="nav-item">
                             <a class="nav-link active" href="vendor_requests.php">
-                                <i class="bi bi-bell-fill me-2"></i>Vendor Requests
+                                <i class="bi bi-bell-fill me-2"></i>Unit Requests
                             </a>
                         </li>
                         <li class="nav-item">
@@ -177,7 +177,7 @@ $conn->close();
             <!-- Main content -->
             <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
                 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-                    <h1 class="h2"><i class="bi bi-bell-fill me-2"></i>Vendor Requests</h1>
+                    <h1 class="h2"><i class="bi bi-bell-fill me-2"></i>Unit Requests</h1>
                 </div>
 
                 <?php if ($message): ?>
@@ -207,7 +207,7 @@ $conn->close();
                                         <tr>
                                             <th>Admin</th>
                                             <th>Admin ID</th>
-                                            <th>Vendor Name</th>
+                                            <th>Unit Name</th>
                                             <th>Type</th>
                                             <th>Admin's Total</th>
                                             <th>Requested</th>
@@ -259,7 +259,7 @@ $conn->close();
                                 </table>
                             </div>
                         <?php else: ?>
-                            <p class="text-muted text-center mb-0">No pending vendor requests</p>
+                            <p class="text-muted text-center mb-0">No pending unit requests</p>
                         <?php endif; ?>
                     </div>
                 </div>
@@ -278,7 +278,7 @@ $conn->close();
                                             <th>Admin</th>
                                             <th>Admin ID</th>
                                             <th>Vendor Name</th>
-                                            <th>Vendor ID</th>
+                                            <th>Unit ID</th>
                                             <th>Type</th>
                                             <th>Status</th>
                                             <th>Processed By</th>
