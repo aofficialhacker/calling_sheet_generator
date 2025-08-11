@@ -13,7 +13,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
         $vendorName = trim($_POST['vendor_name'] ?? '');
         
         if (empty($vendorName)) {
-            $error = 'Vendor name cannot be empty.';
+            $error = 'Unit name cannot be empty.';
         } else {
             // Check total requests by this admin (including approved ones)
             $countStmt = $conn->prepare("
@@ -27,7 +27,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
             $countStmt->close();
             
             if ($countResult['total_requests'] >= 4) {
-                $error = 'You have reached the maximum limit of 4 vendor requests.';
+                $error = 'You have reached the maximum limit of 4 unit requests.';
             } else {
                 // Check if similar request is pending
                 $checkStmt = $conn->prepare("
@@ -39,7 +39,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
                 $result = $checkStmt->get_result();
                 
                 if ($result->num_rows > 0) {
-                    $error = 'A request for this vendor is already pending.';
+                    $error = 'A request for this unit is already pending.';
                 } else {
                     // Insert new request with is_additional flag
                     $insertStmt = $conn->prepare("
@@ -49,9 +49,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
                     $insertStmt->bind_param("ss", $adminId, $vendorName);
                     
                     if ($insertStmt->execute()) {
-                        $message = 'Vendor request submitted successfully. You will be notified once approved.';
+                        $message = 'Unit request submitted successfully. You will be notified once approved.';
                     } else {
-                        $error = 'Failed to submit vendor request.';
+                        $error = 'Failed to submit unit request.';
                     }
                     $insertStmt->close();
                 }
@@ -102,7 +102,7 @@ $conn->close();
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Vendor Management</title>
+    <title>Unit Management</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <style>
@@ -119,7 +119,7 @@ $conn->close();
 
             <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
                 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-                    <h1 class="h2"><i class="bi bi-shop me-2"></i>Vendor Management</h1>
+                    <h1 class="h2"><i class="bi bi-shop me-2"></i>Unit Management</h1>
                     <div>
                         <span class="badge bg-info">Requests: <?= $totalRequests ?>/4</span>
                         <?php if ($pendingCount > 0): ?>
@@ -145,15 +145,15 @@ $conn->close();
                 <!-- Current Vendors -->
                 <div class="card shadow-sm mb-4">
                     <div class="card-header">
-                        <h5 class="mb-0">Your Vendors</h5>
+                        <h5 class="mb-0">Your Units</h5>
                     </div>
                     <div class="card-body">
                         <div class="table-responsive">
                             <table class="table table-hover">
                                 <thead>
                                     <tr>
-                                        <th>Vendor ID</th>
-                                        <th>Vendor Name</th>
+                                        <th>Unit ID</th>
+                                        <th>Unit Name</th>
                                         <th>Status</th>
                                     </tr>
                                 </thead>
@@ -172,7 +172,7 @@ $conn->close();
                                         <?php endwhile; ?>
                                     <?php else: ?>
                                         <tr>
-                                            <td colspan="3" class="text-center text-muted">No vendors assigned yet</td>
+                                            <td colspan="3" class="text-center text-muted">No units assigned yet</td>
                                         </tr>
                                     <?php endif; ?>
                                 </tbody>
@@ -185,7 +185,7 @@ $conn->close();
                 <?php if ($totalRequests < 4): ?>
                 <div class="card shadow-sm">
                     <div class="card-header">
-                        <h5 class="mb-0">Request Additional Vendor</h5>
+                        <h5 class="mb-0">Request Additional Unit</h5>
                     </div>
                     <div class="card-body">
                         <form method="POST">
@@ -193,7 +193,7 @@ $conn->close();
                             <div class="row">
                                 <div class="col-md-8">
                                     <input type="text" class="form-control" name="vendor_name" 
-                                           placeholder="Enter vendor name" required maxlength="255">
+                                           placeholder="Enter unit name" required maxlength="255">
                                 </div>
                                 <div class="col-md-4">
                                     <button type="submit" class="btn btn-primary w-100">
@@ -202,14 +202,14 @@ $conn->close();
                                 </div>
                             </div>
                             <small class="text-muted mt-2 d-block">
-                                You can request up to 4 additional vendors. Each request requires superadmin approval.
+                                You can request up to 4 additional units. Each request requires superadmin approval.
                             </small>
                         </form>
                     </div>
                 </div>
                 <?php else: ?>
                 <div class="alert alert-info">
-                    <i class="bi bi-info-circle me-2"></i>You have reached the maximum limit of 4 vendor requests.
+                    <i class="bi bi-info-circle me-2"></i>You have reached the maximum limit of 4 unit requests.
                 </div>
                 <?php endif; ?>
             </main>

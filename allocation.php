@@ -172,7 +172,7 @@ $conn->close();
                                         <th>Batch No</th>
                                         <th>Current Product</th>
                                         <th>Records</th>
-                                        <th>Source</th>
+                                        <th>Unit</th>
                                         <th>Action</th>
                                     </tr>
                                 </thead>

@@ -142,7 +142,7 @@ $conn->close();
                         </li>
                         <li class="nav-item">
                             <a class="nav-link" href="vendor_requests.php">
-                                <i class="bi bi-bell-fill me-2"></i>Vendor Requests
+                                <i class="bi bi-bell-fill me-2"></i>Unit Requests
                             </a>
                         </li>
                         <li class="nav-item">
