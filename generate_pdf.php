@@ -185,7 +185,6 @@ $html_head = '<html><head><style>
     thead th, .legend-cell { text-align: center; font-weight: bold; background-color: #f2f2f2; font-size: 7pt; }
     .id-col { font-size: 6pt; font-family: monospace; }
     .mobile-col { font-weight: bold; font-family: monospace; }
-    .cutline { border-right: 1px dashed #888; }
     .connectivity-col, .slot-cell { text-align: center; }
     .disposition-cell { font-size: 6.5pt; padding: 1px !important; }
     .dispo-grid { border: none !important; width: 100%; table-layout: fixed; }
@@ -211,11 +210,11 @@ foreach ($finalHeaders as $header) {
     if ($header === 'id') {
         $headerClass = 'id-col';
     } elseif ($header === 'mobile_no') {
-        $headerClass = 'mobile-col cutline';
+        $headerClass = 'mobile-col';
     }
     $displayHeader = str_replace('_', ' ', ucwords($header));
-    if ($header === 'mobile_no') $displayHeader = '&#x2704; Mobile';
-    $tableHeaderHtml .= '<th class="' . $headerClass . '">' . $displayHeader . '</th>';
+    if ($header === 'mobile_no') $displayHeader = 'Mobile';
+    $tableHeaderHtml .= '<th class="' . $headerClass . '">' . htmlspecialchars($displayHeader) . '</th>';
 }
 $tableHeaderHtml .= '</tr></thead>';
 
@@ -285,7 +284,7 @@ while ($rowsProcessed < $totalRecords) {
                     break;
                 case 'mobile_no':
                     $cellContent = htmlspecialchars($row[$header] ?? '');
-                    $class = 'mobile-col cutline';
+                    $class = 'mobile-col';
                     break;
                 case 'id':
                     $cellContent = htmlspecialchars($row[$header] ?? '');
@@ -324,7 +323,7 @@ if (strpos($fullHtml, '<tbody>') !== false) {
 
 // Finalize and Output
 $mpdf->WriteHTML('</body></html>');
-$mpdf->Output('test.pdf', 'F');
+$mpdf->Output($pdfFileName, 'D');
 
 $conn->close();
 exit;
