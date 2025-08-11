@@ -50,7 +50,7 @@ $active_page = basename($_SERVER['PHP_SELF']);
             </li>
             <li class="nav-item">
                 <a class="nav-link position-relative <?= $active_page == 'request_vendor.php' ? 'active' : '' ?>" href="request_vendor.php">
-                    <i class="bi bi-shop me-2"></i>Units
+                    <i class="bi bi-shop me-2"></i>Vendors
                     <?php if ($pending_requests_count > 0): ?>
                         <span class="badge bg-warning rounded-pill position-absolute top-0 start-100 translate-middle">
                             <?= $pending_requests_count ?>
