@@ -122,8 +122,8 @@ $stmt->execute();
 $columnPresence = $stmt->get_result()->fetch_assoc();
 $stmt->close();
 
-// Build final headers with mobile_no before name (MODIFICATION 1)
-$finalHeaders = ['id', 'slot', 'mobile_no'];
+// Build final headers in the correct order
+$finalHeaders = ['id', 'slot', 'connectivity', 'disposition', 'mobile_no'];
 
 // Add name if it has data
 if (!empty($columnPresence["has_title"]) || !empty($columnPresence["has_name"])) {
@@ -132,10 +132,6 @@ if (!empty($columnPresence["has_title"]) || !empty($columnPresence["has_name"]))
     }
     $finalHeaders[] = 'name';
 }
-
-// Add connectivity and disposition
-$finalHeaders[] = 'connectivity';
-$finalHeaders[] = 'disposition';
 
 // Add remaining optional columns that have data, limiting to 12 total columns (MODIFICATION 4)
 $remainingSlots = 12 - count($finalHeaders);
@@ -149,7 +145,7 @@ foreach ($optionalColumns as $column) {
 }
 
 // Configure mPDF with optimizations
-$colCount = count($finalHeaders) + 1;
+$colCount = count($finalHeaders);
 $mpdf = new Mpdf([
     'mode' => 'utf-8', 
     'format' => 'A4-L', 
@@ -188,8 +184,15 @@ $html_head = '<html><head><style>
     th, td { border: 1px solid #333; padding: 2px 3px; text-align: left; vertical-align: middle; word-wrap: break-word; overflow: hidden; }
     thead th, .legend-cell { text-align: center; font-weight: bold; background-color: #f2f2f2; font-size: 7pt; }
     .id-col { font-size: 6pt; font-family: monospace; }
-    .mobile-col { font-weight: bold; font-family: monospace; }
-    .cutline-left { border-right: 1px dashed black !important; }
+    .mobile-col { font-weight: bold; font-family: monospace; position: relative; }
+    .mobile-col-content::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 50%;
+        border-left: 1px dashed black;
+    }
     .connectivity-col, .slot-cell { text-align: center; }
     .disposition-cell { font-size: 6.5pt; padding: 1px !important; }
     .dispo-grid { border: none !important; width: 100%; table-layout: fixed; }
@@ -215,11 +218,10 @@ foreach ($finalHeaders as $header) {
     if ($header === 'id') {
         $headerClass = 'id-col';
     } elseif ($header === 'mobile_no') {
-        $tableHeaderHtml .= '<th class="cutline-left mobile-col">✂ Mobile</th>';
-        $tableHeaderHtml .= '<th class="mobile-col">No.</th>';
-        continue;
+        $headerClass = 'mobile-col';
     }
     $displayHeader = str_replace('_', ' ', ucwords($header));
+    if ($header === 'mobile_no') $displayHeader = 'Mobile ✂';
     $tableHeaderHtml .= '<th class="' . $headerClass . '">' . htmlspecialchars($displayHeader) . '</th>';
 }
 $tableHeaderHtml .= '</tr></thead>';
@@ -289,12 +291,9 @@ while ($rowsProcessed < $totalRecords) {
                     $class = 'slot-cell';
                     break;
                 case 'mobile_no':
-                    $mobile_no = $row[$header] ?? '';
-                    $mobile_no_1 = substr($mobile_no, 0, 5);
-                    $mobile_no_2 = substr($mobile_no, 5);
-                    $fullHtml .= '<td class="cutline-left mobile-col">' . htmlspecialchars($mobile_no_1) . '</td>';
-                    $fullHtml .= '<td class="mobile-col">' . htmlspecialchars($mobile_no_2) . '</td>';
-                    continue 2;
+                    $cellContent = '<div class="mobile-col-content">' . htmlspecialchars($row[$header] ?? '') . '</div>';
+                    $class = 'mobile-col';
+                    break;
                 case 'id':
                     $cellContent = htmlspecialchars($row[$header] ?? '');
                     $class = 'id-col';
