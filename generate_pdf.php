@@ -123,7 +123,7 @@ $columnPresence = $stmt->get_result()->fetch_assoc();
 $stmt->close();
 
 // Build final headers with mobile_no before name (MODIFICATION 1)
-$finalHeaders = ['id', 'slot', 'mobile_no'];
+$finalHeaders = ['id', 'slot', 'connectivity', 'disposition', 'mobile_no'];
 
 // Add name if it has data
 if (!empty($columnPresence["has_title"]) || !empty($columnPresence["has_name"])) {
@@ -132,10 +132,6 @@ if (!empty($columnPresence["has_title"]) || !empty($columnPresence["has_name"]))
     }
     $finalHeaders[] = 'name';
 }
-
-// Add connectivity and disposition
-$finalHeaders[] = 'connectivity';
-$finalHeaders[] = 'disposition';
 
 // Add remaining optional columns that have data, limiting to 12 total columns (MODIFICATION 4)
 $remainingSlots = 12 - count($finalHeaders);
