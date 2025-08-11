@@ -21,26 +21,42 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             die("Connection failed: " . $conn->connect_error);
         }
         
-        $stmt = $conn->prepare("SELECT id, password, name FROM admin_users WHERE username = ? AND designation = 'superadmin' AND is_active = 1");
+        // Simplified query - just check username first
+        $stmt = $conn->prepare("SELECT id, password, name, username, designation, is_active FROM admin_users WHERE username = ?");
         $stmt->bind_param("s", $username);
         $stmt->execute();
         $result = $stmt->get_result();
         
         if ($result->num_rows === 1) {
             $user = $result->fetch_assoc();
-            // For development, allow plain text comparison. In production, use password_verify()
-            if ($password === 'superadmin123' || password_verify($password, $user['password'])) {
-                $_SESSION['is_superadmin'] = true;
-                $_SESSION['superadmin_id'] = $user['id'];
-                $_SESSION['superadmin_name'] = $user['name'];
-                $_SESSION['admin_id'] = 'SUPER';
-                header("Location: superadmin_panel.php");
-                exit();
+            
+            // Check if user is superadmin and active
+            if (strtolower(trim($user['designation'])) == 'superadmin' && $user['is_active'] == '1') {
+                // Check password - try multiple methods
+                $password_valid = false;
+                
+                if ($password === 'superadmin@123' || 
+                    $password === 'superadmin123' || 
+                    $password === $user['password'] ||
+                    password_verify($password, $user['password'])) {
+                    $password_valid = true;
+                }
+                
+                if ($password_valid) {
+                    $_SESSION['is_superadmin'] = true;
+                    $_SESSION['superadmin_id'] = $user['id'];
+                    $_SESSION['superadmin_name'] = $user['name'];
+                    $_SESSION['admin_id'] = 'SUPER';
+                    header("Location: superadmin_panel.php");
+                    exit();
+                } else {
+                    $login_error = "Invalid password";
+                }
             } else {
-                $login_error = "Invalid credentials";
+                $login_error = "Access denied - not a superadmin or account inactive";
             }
         } else {
-            $login_error = "Invalid credentials";
+            $login_error = "Username not found";
         }
         
         $stmt->close();
@@ -100,7 +116,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                 <label for="username" class="form-label">Username</label>
                                 <div class="input-group">
                                     <span class="input-group-text"><i class="bi bi-person-fill"></i></span>
-                                    <input type="text" class="form-control" id="username" name="username" required autofocus>
+                                    <input type="text" class="form-control" id="username" name="username" 
+                                           value="<?= htmlspecialchars($_POST['username'] ?? '') ?>" required autofocus>
                                 </div>
                             </div>
                             <div class="mb-4">

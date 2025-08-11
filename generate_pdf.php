@@ -104,7 +104,7 @@ $countStmt->close();
 
 // Define columns in the order they should appear (MODIFICATION: mobile_no before name)
 // Fixed order: id, slot, mobile_no, name, connectivity, disposition, then dynamic columns
-$optionalColumns = ['title', 'policy_number', 'pan', 'dob', 'age', 'expiry', 'address', 'city', 'state', 'country', 'pincode', 'plan', 'premium', 'sum_insured'];
+$optionalColumns = ['title','name', 'policy_number', 'pan', 'dob', 'age', 'expiry', 'address', 'city', 'state', 'country', 'pincode', 'plan', 'premium', 'sum_insured'];
 $selects = [];
 foreach ($optionalColumns as $column) {
     $selects[] = "MAX(CASE WHEN `{$column}` IS NOT NULL AND `{$column}` != '' THEN 1 ELSE 0 END) as has_{$column}";
