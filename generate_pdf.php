@@ -184,15 +184,7 @@ $html_head = '<html><head><style>
     th, td { border: 1px solid #333; padding: 2px 3px; text-align: left; vertical-align: middle; word-wrap: break-word; overflow: hidden; }
     thead th, .legend-cell { text-align: center; font-weight: bold; background-color: #f2f2f2; font-size: 7pt; }
     .id-col { font-size: 6pt; font-family: monospace; }
-    .mobile-col { font-weight: bold; font-family: monospace; position: relative; }
-    .mobile-col-content::after {
-        content: '';
-        position: absolute;
-        top: 0;
-        bottom: 0;
-        left: 50%;
-        border-left: 1px dashed black;
-    }
+    .mobile-col { font-weight: bold; font-family: monospace; }
     .connectivity-col, .slot-cell { text-align: center; }
     .disposition-cell { font-size: 6.5pt; padding: 1px !important; }
     .dispo-grid { border: none !important; width: 100%; table-layout: fixed; }
@@ -221,7 +213,7 @@ foreach ($finalHeaders as $header) {
         $headerClass = 'mobile-col';
     }
     $displayHeader = str_replace('_', ' ', ucwords($header));
-    if ($header === 'mobile_no') $displayHeader = 'Mobile ✂';
+    if ($header === 'mobile_no') $displayHeader = 'Mobile';
     $tableHeaderHtml .= '<th class="' . $headerClass . '">' . htmlspecialchars($displayHeader) . '</th>';
 }
 $tableHeaderHtml .= '</tr></thead>';
@@ -291,7 +283,7 @@ while ($rowsProcessed < $totalRecords) {
                     $class = 'slot-cell';
                     break;
                 case 'mobile_no':
-                    $cellContent = '<div class="mobile-col-content">' . htmlspecialchars($row[$header] ?? '') . '</div>';
+                    $cellContent = htmlspecialchars($row[$header] ?? '');
                     $class = 'mobile-col';
                     break;
                 case 'id':

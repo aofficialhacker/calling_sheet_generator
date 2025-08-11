@@ -132,7 +132,7 @@ $conn->close();
                         </li>
                         <li class="nav-item">
                             <a class="nav-link" href="vendor_requests.php">
-                                <i class="bi bi-bell-fill me-2"></i>Unit Requests
+                                <i class="bi bi-bell-fill me-2"></i>Source Requests
                                 <?php if ($stats['pending_requests'] > 0): ?>
                                     <span class="badge bg-danger ms-2"><?= $stats['pending_requests'] ?></span>
                                 <?php endif; ?>
