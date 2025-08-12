@@ -113,6 +113,11 @@ $conn->close();
                             </a>
                         </li>
                         <li class="nav-item">
+                            <a class="nav-link" href="superadmin_dashboard.php">
+                                <i class="bi bi-graph-up-arrow me-2"></i>Analytics Dashboard
+                            </a>
+                        </li>
+                        <li class="nav-item">
                             <a class="nav-link position-relative" href="manage_admins.php">
                                 <i class="bi bi-people-fill me-2"></i>Manage Admins
                                 <?php if ($stats['pending_requests'] > 0): ?>

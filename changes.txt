@@ -1,0 +1,1 @@
+pie charts are not showing up according to data. connected disposition and non connected disposition bar graph is not visible. every element should be interactive.
