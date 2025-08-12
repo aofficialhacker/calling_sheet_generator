@@ -1,6 +1,7 @@
 <?php
 require 'vendor/autoload.php';
 require_once 'db_config.php';
+requireAdmin(); // Ensure admin is logged in and start session
 
 use Mpdf\Mpdf;
 use Mpdf\HTMLParserMode;
@@ -23,21 +24,57 @@ $pdfFileName = 'Calling_Sheet.pdf';
 $pdfTitle = 'Calling Sheet';
 $batch_id = null;
 $dispositions = null;
+$scope = $_GET['scope'] ?? '';
+$product_code = $_GET['product_code'] ?? '';
 
-if (isset($_GET['batch_id'])) {
+// Handle different types of requests
+if (isset($_GET['disposition'])) {
+    // Disposition-based request with new scope options
+    
+    // Handle both single and multiple dispositions
+    if (is_array($_GET['disposition'])) {
+        $dispositions = $_GET['disposition'];
+    } else {
+        $dispositions = [$_GET['disposition']];
+    }
+    
+    // Build filename and title based on scope
+    $dispNames = array_map(function($d) { return preg_replace("/[^a-zA-Z0-9]/", "", $d); }, $dispositions);
+    
+    switch ($scope) {
+        case 'batch-wise':
+            $batch_id = $_GET['batch_id'];
+            $pdfFileName = 'Batch_' . $batch_id . '_' . implode('_', $dispNames) . '.pdf';
+            $pdfTitle = "Calling Sheet for Batch $batch_id - Status: " . implode(', ', $dispositions);
+            break;
+        case 'all-batch':
+            $pdfFileName = 'AllBatches_' . implode('_', $dispNames) . '.pdf';
+            $pdfTitle = "Calling Sheet for All Batches - Status: " . implode(', ', $dispositions);
+            break;
+        case 'product-wise':
+            $pdfFileName = 'Product_' . $product_code . '_' . implode('_', $dispNames) . '.pdf';
+            $pdfTitle = "Calling Sheet for Product $product_code - Status: " . implode(', ', $dispositions);
+            break;
+        case 'all-product':
+            $pdfFileName = 'AllProducts_' . implode('_', $dispNames) . '.pdf';
+            $pdfTitle = "Calling Sheet for All Products - Status: " . implode(', ', $dispositions);
+            break;
+        default:
+            // Legacy single disposition request
+            $safeDispositionName = preg_replace("/[^a-zA-Z0-9]/", "", $dispositions[0]);
+            $pdfFileName = ucwords($safeDispositionName) . '_Sheet.pdf';
+            $pdfTitle = "Calling Sheet for Status: " . htmlspecialchars(implode(', ', $dispositions));
+    }
+} elseif (isset($_GET['batch_id'])) {
+    // Legacy single batch request (no disposition filtering)
     $batch_id = $_GET['batch_id'];
     $pdfFileName = 'Batch_' . $batch_id . '_Sheet.pdf';
     $pdfTitle = "Calling Sheet for Batch " . htmlspecialchars($batch_id);
-} elseif (isset($_GET['disposition'])) {
-    $dispositions = explode(',', $_GET['disposition']);
-    $safeDispositionName = preg_replace("/[^a-zA-Z0-9]/", "", $dispositions[0]);
-    $pdfFileName = ucwords($safeDispositionName) . '_Sheet.pdf';
-    $pdfTitle = "Calling Sheet for Status: " . htmlspecialchars(implode(', ', $dispositions));
 } else {
     die("Error: No valid batch ID or disposition provided.");
 }
 
-// --- OPTIMIZATION: Cache disposition codes ---
+// --- Fetch Dynamic Disposition Codes ---
 $dispResult = $conn->query("
     SELECT code, description, category 
     FROM disposition_codes 
@@ -68,20 +105,53 @@ if (!empty($dispLegendN)) {
 
 $slotLegend = "<strong>SLOTS:</strong> 1 (10-11a) | 2 (11a-12p) | 3 (12-1p) | 4 (1-2p) | 5 (2-3p) | 6 (3-4p) | 7 (4-5p) | 8 (5-6p)";
 
-// --- Build WHERE clause ---
-$baseSql = "FROM final_call_logs ";
+// --- Build Database Query Based on Filters ---
+$baseSql = "FROM final_call_logs fcl JOIN file_batches fb ON fcl.batch_id = fb.id ";
 $whereClauses = [];
 $params = [];
 $types = '';
 
-if ($batch_id) {
-    $whereClauses[] = "batch_id = ?";
-    $params[] = $batch_id;
-    $types .= 's';
+// Add admin filter - only show data from current admin's batches
+$adminId = $_SESSION['admin_id'];
+$whereClauses[] = "fb.admin_id = ?";
+$params[] = $adminId;
+$types .= 's';
+
+// Apply batch filters based on scope
+switch ($scope) {
+    case 'batch-wise':
+        if ($batch_id) {
+            $whereClauses[] = "fcl.batch_id = ?";
+            $params[] = $batch_id;
+            $types .= 's';
+        }
+        break;
+    case 'all-batch':
+        // No additional batch filter - include all batches for this admin
+        break;
+    case 'product-wise':
+        if ($product_code) {
+            $whereClauses[] = "fb.product_code = ?";
+            $params[] = $product_code;
+            $types .= 's';
+        }
+        break;
+    case 'all-product':
+        // No additional product filter - include all products for this admin
+        break;
+    default:
+        // Legacy: if batch_id is specified, filter by it
+        if ($batch_id) {
+            $whereClauses[] = "fcl.batch_id = ?";
+            $params[] = $batch_id;
+            $types .= 's';
+        }
 }
-if ($dispositions) {
+
+// Apply disposition filters
+if ($dispositions && !empty($dispositions)) {
     $placeholders = implode(',', array_fill(0, count($dispositions), '?'));
-    $whereClauses[] = "disposition IN ($placeholders)";
+    $whereClauses[] = "fcl.disposition IN ($placeholders)";
     $params = array_merge($params, $dispositions);
     $types .= str_repeat('s', count($dispositions));
 }
@@ -92,7 +162,7 @@ if (empty($whereClauses)) {
 $whereSql = "WHERE " . implode(' AND ', $whereClauses);
 $fullBaseSql = $baseSql . $whereSql;
 
-// --- OPTIMIZATION: Get count more efficiently ---
+// Check total record count for optimization
 $countSql = "SELECT COUNT(*) as total " . $fullBaseSql;
 $countStmt = $conn->prepare($countSql);
 if ($types) {
@@ -102,28 +172,27 @@ $countStmt->execute();
 $totalRecords = $countStmt->get_result()->fetch_assoc()['total'];
 $countStmt->close();
 
-// --- OPTIMIZATION: Simplified column detection using LIMIT 1 ---
+// Define columns in the order they should appear (MODIFICATION: mobile_no before name)
+// Fixed order: id, slot, mobile_no, name, connectivity, disposition, then dynamic columns
 $optionalColumns = ['title','name', 'policy_number', 'pan', 'dob', 'age', 'expiry', 'address', 'city', 'state', 'country', 'pincode', 'plan', 'premium', 'sum_insured'];
+$selects = [];
+foreach ($optionalColumns as $column) {
+    $selects[] = "MAX(CASE WHEN fcl.`{$column}` IS NOT NULL AND fcl.`{$column}` != '' THEN 1 ELSE 0 END) as has_{$column}";
+}
 
-// Get a sample row to check which columns have data
-$sampleSql = "SELECT * " . $fullBaseSql . " LIMIT 100";
-$stmt = $conn->prepare($sampleSql);
+$presenceCheckSql = "SELECT " . implode(', ', $selects) . " " . $fullBaseSql;
+$stmt = $conn->prepare($presenceCheckSql);
+if ($stmt === false) {
+    die("Error preparing statement (presence check): " . $conn->error);
+}
 if ($types) {
     $stmt->bind_param($types, ...$params);
 }
 $stmt->execute();
-$sampleResult = $stmt->get_result();
-$columnPresence = [];
-while ($row = $sampleResult->fetch_assoc()) {
-    foreach ($optionalColumns as $col) {
-        if (!isset($columnPresence["has_$col"]) && !empty($row[$col])) {
-            $columnPresence["has_$col"] = 1;
-        }
-    }
-}
+$columnPresence = $stmt->get_result()->fetch_assoc();
 $stmt->close();
 
-// Build final headers
+// Build final headers with mobile_no before name (MODIFICATION 1)
 $finalHeaders = ['id', 'slot', 'connectivity', 'disposition', 'mobile_no'];
 
 // Add name if it has data
@@ -134,22 +203,76 @@ if (!empty($columnPresence["has_title"]) || !empty($columnPresence["has_name"]))
     $finalHeaders[] = 'name';
 }
 
-// Add remaining columns limiting to 12 total
+// Add remaining optional columns that have data, limiting to 12 total columns (MODIFICATION 4)
 $remainingSlots = 12 - count($finalHeaders);
 $addedCount = 0;
 foreach ($optionalColumns as $column) {
     if ($addedCount >= $remainingSlots) break;
-    if ($column !== 'title' && $column !== 'name' && !empty($columnPresence["has_$column"])) {
+    if ($column !== 'title' && $column !== 'name' && !empty($columnPresence["has_{$column}"])) {
         $finalHeaders[] = $column;
         $addedCount++;
     }
 }
 
-// --- OPTIMIZATION: Pre-generate static HTML components ---
-// Create disposition grid HTML once
+// Configure mPDF with optimizations
+$colCount = count($finalHeaders);
+$mpdf = new Mpdf([
+    'mode' => 'utf-8', 
+    'format' => 'A4-L', 
+    'tempDir' => __DIR__ . '/tmp',
+    'simpleTables' => true, // Optimization for faster processing
+    'packTableData' => true // Memory optimization
+]);
+$mpdf->SetDisplayMode('fullpage');
+$mpdf->SetTitle($pdfTitle);
+
+
+// --- VERTICAL CUTLINE (A4 Landscape) ---
+$cutPosMM = 80;  // Shifted left to align near right edge of "Mobile" column
+
+$cutlineCss = "
+<style>
+  @page { size: A4-L; }
+  .cutline {
+    position: fixed;
+    top: 0;
+    left: " . ($cutPosMM - 0.2) . "mm;
+    width: 0.4mm;
+    height: 100%;
+    background: repeating-linear-gradient(
+      to bottom,
+      #555 0 6px,
+      transparent 6px 12px
+    );
+    z-index: 10;
+  }
+  .scissor {
+    position: fixed;
+    font-family: DejaVu Sans, sans-serif;
+    font-size: 12pt;
+    line-height: 1;
+    z-index: 11;
+  }
+  .scissor.top    { top: 10mm;  left: " . ($cutPosMM - 3) . "mm; }
+  .scissor.middle { top: 105mm; left: " . ($cutPosMM - 3) . "mm; }
+  .scissor.bottom { bottom: 10mm; left: " . ($cutPosMM - 3) . "mm; }
+</style>
+";
+
+$cutlineHtml = '
+  <div class="cutline"></div>
+  <div class="scissor top">&#9986;</div>
+  <div class="scissor middle">&#9986;</div>
+  <div class="scissor bottom">&#9986;</div>
+';
+
+$mpdf->WriteHTML($cutlineCss, \Mpdf\HTMLParserMode::HEADER_CSS);
+$mpdf->SetHTMLHeader($cutlineHtml);
+
+// Create dynamic disposition grid based on active codes
 $dispoGridHtml = '<table class="dispo-grid"><tr>';
 $gridCols = 0;
-$maxCols = 4;
+$maxCols = 4; // Maximum columns in disposition grid
 foreach ($dispositionList as $index => $disp) {
     if ($gridCols >= $maxCols) {
         $dispoGridHtml .= '</tr><tr>';
@@ -158,135 +281,92 @@ foreach ($dispositionList as $index => $disp) {
     $dispoGridHtml .= '<td>○ ' . htmlspecialchars($disp['code']) . '</td>';
     $gridCols++;
 }
+// Fill remaining cells if needed
 while ($gridCols < $maxCols) {
     $dispoGridHtml .= '<td></td>';
     $gridCols++;
 }
 $dispoGridHtml .= '</tr></table>';
 
-// --- OPTIMIZATION: Enhanced mPDF configuration ---
-$colCount = count($finalHeaders);
-$mpdf = new Mpdf([
-    'mode' => 'utf-8', 
-    'format' => 'A4-L', 
-    'tempDir' => __DIR__ . '/tmp',
-    'simpleTables' => true,
-    'packTableData' => true,
-    'useSubstitutions' => false,  // Disable font substitution for speed
-    'autoScriptToLang' => false,   // Disable auto script detection
-    'autoLangToFont' => false,     // Disable auto language to font
-    'allow_output_buffering' => true,
-    'shrink_tables_to_fit' => 0,  // Disable table shrinking calculations
-    'use_kwt' => false,            // Disable keep-with-table
-    'biDirectional' => false,      // Disable bidirectional text if not needed
-]);
-
-$mpdf->SetDisplayMode('fullpage');
-$mpdf->SetTitle($pdfTitle);
-
-// --- CSS optimized for performance ---
-$css = '
-<style>
-    @page { size: A4-L; margin: 10mm; }
-    body { font-family: sans-serif; font-size: 7pt; margin: 0; padding: 0; }
-    table.data-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-    th, td { border: 1px solid #333; padding: 2px 3px; text-align: left; vertical-align: middle; }
-    thead th, .legend-cell { text-align: center; font-weight: bold; background-color: #f2f2f2; }
+// CSS and HTML Head with optimizations
+$html_head = '<html><head><style>
+    body { font-family: sans-serif; font-size: 7pt; }
+    table.data-table { width: 100%; border-collapse: collapse; table-layout: fixed; page-break-inside: auto; }
+    thead { display: table-header-group; }
+    tr { page-break-inside: avoid; page-break-after: auto; }
+    th, td { border: 1px solid #333; padding: 2px 3px; text-align: left; vertical-align: middle; word-wrap: break-word; overflow: hidden; }
+    thead th, .legend-cell { text-align: center; font-weight: bold; background-color: #f2f2f2; font-size: 7pt; }
     .id-col { font-size: 6pt; font-family: monospace; }
     .mobile-col { font-weight: bold; font-family: monospace; }
     .connectivity-col, .slot-cell { text-align: center; }
     .disposition-cell { font-size: 6.5pt; padding: 1px !important; }
-    .dispo-grid { border: none !important; width: 100%; }
-    .dispo-grid td { border: none !important; padding: 0px 1px; text-align: left; font-size: 6.5pt; }
-    
-    /* Cutline styles */
-    .cutline {
-        position: fixed;
-        top: 0;
-        left: 79.8mm;
-        width: 0.4mm;
-        height: 100%;
-        background: repeating-linear-gradient(to bottom, #555 0 6px, transparent 6px 12px);
-        z-index: 10;
+    .dispo-grid { border: none !important; width: 100%; table-layout: fixed; }
+    .dispo-grid td { border: none !important; padding: 0px 1px; text-align: left; font-size: 6.5pt; white-space: nowrap; }
+    @media print { 
+        tr { page-break-inside: avoid; }
+        thead { display: table-header-group; }
     }
-    .scissor {
-        position: fixed;
-        font-family: DejaVu Sans, sans-serif;
-        font-size: 12pt;
-        z-index: 11;
-    }
-    .scissor.top { top: 10mm; left: 77mm; }
-    .scissor.middle { top: 105mm; left: 77mm; }
-    .scissor.bottom { bottom: 10mm; left: 77mm; }
-</style>';
+</style></head><body>';
 
-// Write CSS once
-$mpdf->WriteHTML($css, \Mpdf\HTMLParserMode::HEADER_CSS);
-
-// Add cutline
-$cutlineHtml = '
-<div class="cutline"></div>
-<div class="scissor top">&#9986;</div>
-<div class="scissor middle">&#9986;</div>
-<div class="scissor bottom">&#9986;</div>';
-$mpdf->WriteHTML($cutlineHtml, \Mpdf\HTMLParserMode::HTML_BODY);
-
-// Set footer
-$mpdf->SetHTMLFooter('<div style="text-align: right; font-size: 8pt;">Page {PAGENO} of {nbpg}</div>');
-
-// --- Create table header ---
-$tableHeader = '<table class="data-table">
-<thead>
+// Create Table Header Row
+$tableHeaderHtml = '<thead>
     <tr><th class="legend-cell" colspan="' . $colCount . '">' . $pdfTitle . '</th></tr>
     <tr><th class="legend-cell" colspan="' . $colCount . '">' . $slotLegend . '</th></tr>';
 
 if (!empty($dispLegend)) {
-    $tableHeader .= '<tr><th class="legend-cell" colspan="' . $colCount . '">' . $dispLegend . '</th></tr>';
+    $tableHeaderHtml .= '<tr><th class="legend-cell" colspan="' . $colCount . '">' . $dispLegend . '</th></tr>';
 }
 
-$tableHeader .= '<tr>';
+$tableHeaderHtml .= '<tr>';
 foreach ($finalHeaders as $header) {
+    $headerClass = '';
+    if ($header === 'id') {
+        $headerClass = 'id-col';
+    } elseif ($header === 'mobile_no') {
+        $headerClass = 'mobile-col';
+    }
     $displayHeader = str_replace('_', ' ', ucwords($header));
     if ($header === 'mobile_no') $displayHeader = 'Mobile';
-    $headerClass = '';
-    if ($header === 'id') $headerClass = ' class="id-col"';
-    elseif ($header === 'mobile_no') $headerClass = ' class="mobile-col"';
-    $tableHeader .= '<th' . $headerClass . '>' . htmlspecialchars($displayHeader) . '</th>';
+    $tableHeaderHtml .= '<th class="' . $headerClass . '">' . htmlspecialchars($displayHeader) . '</th>';
 }
-$tableHeader .= '</tr></thead><tbody>';
+$tableHeaderHtml .= '</tr></thead>';
 
-// --- OPTIMIZATION: Process data in larger chunks with streaming ---
-$chunkSize = 2000; // Increased chunk size
+// Write initial HTML structure to mPDF
+$mpdf->WriteHTML($html_head);
+$mpdf->SetHTMLFooter('<div style="text-align: right; font-size: 8pt;">Page {PAGENO} of {nbpg}</div>');
+
+// Process Data in Optimized Chunks
+$chunkSize = 500; // Increased chunk size for better performance
 $offset = 0;
-$columnsToSelect = '`' . implode('`, `', $finalHeaders) . '`';
-$rowBuffer = '';
-$bufferSize = 0;
-$maxBufferSize = 100; // Rows to buffer before writing
 
 // Function to format date
 function formatDateForPDF($dateValue) {
     if (empty($dateValue) || $dateValue === '0000-00-00') return '';
+    
     $timestamp = strtotime($dateValue);
-    return $timestamp !== false ? date('d-m-Y', $timestamp) : $dateValue;
+    if ($timestamp !== false) {
+        return date('d-m-Y', $timestamp);
+    }
+    
+    return $dateValue;
 }
 
-// --- OPTIMIZATION: Pre-compute static cell values ---
-$staticCells = [
-    'connectivity' => '○ Y / ○ N',
-    'disposition' => $dispoGridHtml,
-    'slot' => ''
-];
+// Pre-compile the entire document in memory for better performance
+$fullHtml = '<table class="data-table">' . $tableHeaderHtml . '<tbody>';
+$rowsProcessed = 0;
 
-// Start the table
-$mpdf->WriteHTML($tableHeader);
-
-// Process data
-while ($offset < $totalRecords) {
-    $sql = "SELECT {$columnsToSelect} " . $fullBaseSql . " ORDER BY id LIMIT ?, ?";
+while ($rowsProcessed < $totalRecords) {
+    // Properly build column selection with table alias
+    $finalHeadersWithAlias = array_map(function($header) {
+        return 'fcl.`' . $header . '`';
+    }, $finalHeaders);
+    $columnsToSelectWithAlias = implode(', ', $finalHeadersWithAlias);
+    
+    $sql = "SELECT {$columnsToSelectWithAlias} " . $fullBaseSql . " ORDER BY fcl.id LIMIT ?, ?";
     $stmt = $conn->prepare($sql);
     
     if ($stmt === false) {
-        die("Error preparing statement: " . $conn->error);
+        die("Error preparing statement (data fetch): " . $conn->error);
     }
 
     $chunkParams = array_merge($params, [$offset, $chunkSize]);
@@ -301,70 +381,66 @@ while ($offset < $totalRecords) {
         break;
     }
 
-    // --- OPTIMIZATION: Use fetch_all for batch processing ---
-    $rows = $result->fetch_all(MYSQLI_ASSOC);
-    $stmt->close();
-    
-    foreach ($rows as $row) {
-        $rowBuffer .= '<tr>';
+    while ($row = $result->fetch_assoc()) {
+        $fullHtml .= '<tr>';
         foreach ($finalHeaders as $header) {
             $class = '';
-            $content = '';
-            
-            // Use pre-computed static values
-            if (isset($staticCells[$header])) {
-                $content = $staticCells[$header];
-                $class = $header === 'disposition' ? 'disposition-cell' : 
-                        ($header === 'connectivity' ? 'connectivity-col' : 'slot-cell');
-            } else {
-                switch($header) {
-                    case 'mobile_no':
-                        $content = htmlspecialchars($row[$header] ?? '');
-                        $class = 'mobile-col';
-                        break;
-                    case 'id':
-                        $content = htmlspecialchars($row[$header] ?? '');
-                        $class = 'id-col';
-                        break;
-                    case 'dob':
-                    case 'expiry':
-                        $content = htmlspecialchars(formatDateForPDF($row[$header] ?? ''));
-                        break;
-                    default:
-                        $content = htmlspecialchars($row[$header] ?? '');
-                        break;
-                }
+            $cellContent = '';
+            switch($header) {
+                case 'disposition':
+                    // Use the dynamic disposition grid
+                    $cellContent = $dispoGridHtml;
+                    $class = 'disposition-cell';
+                    break;
+                case 'connectivity':
+                    $cellContent = '○ Y / ○ N';
+                    $class = 'connectivity-col';
+                    break;
+                case 'slot':
+                    $cellContent = '';
+                    $class = 'slot-cell';
+                    break;
+                case 'mobile_no':
+                    $cellContent = htmlspecialchars($row[$header] ?? '');
+                    $class = 'mobile-col';
+                    break;
+                case 'id':
+                    $cellContent = htmlspecialchars($row[$header] ?? '');
+                    $class = 'id-col';
+                    break;
+                case 'dob':
+                case 'expiry':
+                    $cellContent = htmlspecialchars(formatDateForPDF($row[$header] ?? ''));
+                    break;
+                default:
+                    $cellContent = htmlspecialchars($row[$header] ?? '');
+                    break;
             }
-            $rowBuffer .= '<td' . ($class ? ' class="' . $class . '"' : '') . '>' . $content . '</td>';
+            $fullHtml .= '<td class="' . $class . '">' . $cellContent . '</td>';
         }
-        $rowBuffer .= '</tr>';
-        $bufferSize++;
+        $fullHtml .= '</tr>';
+        $rowsProcessed++;
         
-        // Write buffer when it reaches max size
-        if ($bufferSize >= $maxBufferSize) {
-            $mpdf->WriteHTML($rowBuffer);
-            $rowBuffer = '';
-            $bufferSize = 0;
+        // Write in batches to prevent memory issues
+        if ($rowsProcessed % 1000 == 0) {
+            $fullHtml .= '</tbody></table>';
+            $mpdf->WriteHTML($fullHtml);
+            $fullHtml = '<table class="data-table"><tbody>';
         }
     }
     
+    $stmt->close();
     $offset += $chunkSize;
-    
-    // Optional: Add progress indicator for very large files
-    if ($totalRecords > 10000 && $offset % 10000 == 0) {
-        error_log("PDF Generation Progress: " . round(($offset / $totalRecords) * 100) . "%");
-    }
 }
 
-// Write any remaining buffer
-if (!empty($rowBuffer)) {
-    $mpdf->WriteHTML($rowBuffer);
+// Write any remaining HTML
+if (strpos($fullHtml, '<tbody>') !== false) {
+    $fullHtml .= '</tbody></table>';
+    $mpdf->WriteHTML($fullHtml);
 }
 
-// Close table
-$mpdf->WriteHTML('</tbody></table>');
-
-// Output PDF
+// Finalize and Output
+$mpdf->WriteHTML('</body></html>');
 $mpdf->Output($pdfFileName, 'D');
 
 $conn->close();

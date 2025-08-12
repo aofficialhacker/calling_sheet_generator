@@ -6,49 +6,35 @@ define('DB_USER', 'root');
 define('DB_PASS', '123456');
 define('DB_NAME', 'caller_sheet3');
 
-// --- NEW IMAGE CAPTCHA LOGIC ---
+// --- SIMPLIFIED CAPTCHA LOGIC ---
 if (isset($_GET['action']) && $_GET['action'] == 'captcha') {
     header('Content-Type: image/png');
-    $text = substr(str_shuffle('ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'), 0, 6);
-    $_SESSION['captcha_answer'] = $text;
+    
+    // Simple math problem captcha
+    $num1 = rand(1, 9);
+    $num2 = rand(1, 9);
+    $answer = $num1 + $num2;
+    $text = $num1 . ' + ' . $num2 . ' = ?';
+    $_SESSION['captcha_answer'] = (string)$answer;
 
-    $image = imagecreatetruecolor(150, 50);
+    $image = imagecreatetruecolor(180, 60);
     imageantialias($image, true);
 
-    $colors = [];
-    $red = rand(125, 175);
-    $green = rand(125, 175);
-    $blue = rand(125, 175);
-    for ($i = 0; $i < 5; $i++) {
-        $colors[] = imagecolorallocate($image, $red - 20 * $i, $green - 20 * $i, $blue - 20 * $i);
-    }
-
-    imagefill($image, 0, 0, $colors[0]);
-
-    for ($i = 0; $i < 10; $i++) {
-        imagesetthickness($image, rand(2, 10));
-        $rect_color = $colors[rand(1, 4)];
-        imagerectangle($image, rand(-10, 140), rand(-10, 40), rand(-10, 140), rand(-10, 40), $rect_color);
-    }
-
-    $black = imagecolorallocate($image, 0, 0, 0);
+    // Simple background
     $white = imagecolorallocate($image, 255, 255, 255);
-    $textcolors = [$black, $white];
-    $fonts = [__DIR__ . '/fonts/Acme-Regular.ttf', __DIR__ . '/fonts/Ubuntu-Regular.ttf'];
+    $black = imagecolorallocate($image, 0, 0, 0);
+    $blue = imagecolorallocate($image, 0, 100, 200);
+    
+    imagefill($image, 0, 0, $white);
 
-    if (!is_dir(__DIR__ . '/fonts') || count(glob(__DIR__ . '/fonts/*.ttf')) == 0) {
-        $font_size = 5;
-        $x = (150 - (imagefontwidth($font_size) * strlen($text))) / 2;
-        $y = (50 - imagefontheight($font_size)) / 2;
-        imagestring($image, $font_size, $x, $y, $text, $white);
-    } else {
-        $font_path = $fonts[array_rand($fonts)];
-        for ($i = 0; $i < strlen($text); $i++) {
-            $letter_space = 140 / strlen($text);
-            $initial = 15;
-            imagettftext($image, 24, rand(-15, 15), $initial + $i * $letter_space, rand(25, 45), $textcolors[rand(0, 1)], $font_path, $text[$i]);
-        }
-    }
+    // Simple text without complex effects
+    $font_size = 5;
+    $x = (180 - (imagefontwidth($font_size) * strlen($text))) / 2;
+    $y = (60 - imagefontheight($font_size)) / 2;
+    imagestring($image, $font_size, $x, $y, $text, $blue);
+    
+    // Add simple border
+    imagerectangle($image, 0, 0, 179, 59, $black);
     
     imagepng($image);
     imagedestroy($image);
@@ -136,10 +122,10 @@ const CONNECTIVITY_MAP = [ 'Y' => 'Yes', 'N' => 'No' ];
                             <label for="finqy_id">Refercode/FinqyID</label>
                         </div>
                         <div class="mb-3">
-                            <label class="form-label">Enter the text from the image</label>
+                            <label class="form-label">Solve the math problem shown in the image</label>
                             <div class="d-flex gap-3">
                                 <img src="caller_panel.php?action=captcha&t=<?= time() ?>" alt="Captcha Image" class="captcha-img" onclick="this.src='caller_panel.php?action=captcha&t='+new Date().getTime()">
-                                <input type="text" class="form-control" id="captcha" name="captcha" placeholder="CAPTCHA" required autocomplete="off">
+                                <input type="text" class="form-control" id="captcha" name="captcha" placeholder="Enter answer" required autocomplete="off">
                             </div>
                         </div>
                         <?php if ($login_error): ?><div class="alert alert-danger py-2"><?= $login_error ?></div><?php endif; ?>
@@ -182,36 +168,49 @@ const CONNECTIVITY_MAP = [ 'Y' => 'Yes', 'N' => 'No' ];
     </div>
     
     <div id="upload-section" class="card shadow-sm mt-4" style="display: none;">
-        <div class="card-header"><h3 class="h5 mb-0">Upload Marked Sheets</h3></div>
+        <div class="card-header">
+            <h3 class="h5 mb-0">Upload Marked Sheets</h3>
+            <p class="mb-0 text-muted small">Add multiple photos, then process them all at once</p>
+        </div>
         <div class="card-body">
-            <form id="captureForm">
-                <label for="markedSheets" class="camera-container" id="cameraLabel">
+            <!-- Photo collection section -->
+            <div id="photo-collection-section">
+                <label for="singlePhoto" class="camera-container" id="cameraLabel">
                     <div class="form-label-icon"><i class="bi bi-camera2"></i></div>
-                    <h5 class="mt-2 text-info">Tap to select or capture images</h5>
-                    <p class="text-muted">You can select multiple images at once</p>
+                    <h5 class="mt-2 text-info">Tap to add photo</h5>
+                    <p class="text-muted">Add photos one by one, then process all together</p>
                 </label>
-                <input class="form-control d-none" type="file" name="markedSheets" id="markedSheets" accept="image/*" capture="environment" multiple required>
-                <div id="imagePreviewContainer" class="text-center mt-3"></div>
-                <div class="alert alert-info mt-3" id="image-count-info" style="display: none;">
-                    <i class="bi bi-images me-2"></i><span id="image-count">0</span> image(s) selected
+                <input class="form-control d-none" type="file" name="singlePhoto" id="singlePhoto" accept="image/*" capture="environment">
+                
+                <!-- Collected photos display -->
+                <div id="collectedPhotos" class="mt-3" style="display: none;">
+                    <div class="alert alert-info">
+                        <i class="bi bi-images me-2"></i><span id="photoCount">0</span> photo(s) added
+                    </div>
+                    <div id="photoThumbnails" class="row g-2 mb-3"></div>
+                    
+                    <div class="d-grid gap-2">
+                        <button id="addMoreButton" type="button" class="btn btn-outline-info btn-lg">
+                            <i class="bi bi-plus-circle me-2"></i>Add More Photos
+                        </button>
+                        <button id="processAllButton" type="button" class="btn btn-success btn-lg">
+                            <i class="bi bi-magic me-2"></i>Process All Photos with AI
+                        </button>
+                        <button id="clearAllButton" type="button" class="btn btn-outline-danger btn-lg">
+                            <i class="bi bi-trash me-2"></i>Clear All Photos
+                        </button>
+                    </div>
                 </div>
-                <div class="progress-container" id="progressContainer">
-                    <label class="form-label">Processing Progress:</label>
-                    <div class="progress" style="height: 25px;">
+
+                <!-- Processing all photos indicator -->
+                <div id="processingAllIndicator" class="text-center mt-3" style="display: none;">
+                    <div class="progress mb-3" style="height: 25px;">
                         <div class="progress-bar progress-bar-striped progress-bar-animated" id="progressBar" role="progressbar" style="width: 0%">0%</div>
                     </div>
-                    <p class="text-muted mt-2" id="progressText">Preparing to process images...</p>
+                    <p class="text-info" id="progressText">Processing photos...</p>
+                    <div id="processing-feedback" class="alert alert-info mt-3"></div>
                 </div>
-                <div id="processing-feedback" class="alert alert-info mt-3" style="display: none;"></div>
-                <div class="d-grid gap-2 mt-4">
-                    <button id="submitButton" type="submit" class="btn btn-info btn-lg text-white" disabled>
-                        <i class="bi bi-magic me-2"></i>Process All Images with AI
-                    </button>
-                    <button id="clearButton" type="button" class="btn btn-secondary btn-lg" style="display: none;">
-                        <i class="bi bi-x-circle me-2"></i>Clear All Images
-                    </button>
-                </div>
-            </form>
+            </div>
         </div>
     </div>
     
@@ -252,114 +251,129 @@ const CONNECTIVITY_MAP = [ 'Y' => 'Yes', 'N' => 'No' ];
 </div>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-    if (document.getElementById('captureForm')) {
+    if (document.getElementById('singlePhoto')) {
+        // Elements
         const startUploadBtn = document.getElementById('startUploadBtn');
         const mainOptions = document.getElementById('main-options');
         const uploadSection = document.getElementById('upload-section');
         const resultsSection = document.getElementById('results-section');
-        const markedSheetsInput = document.getElementById('markedSheets');
-        const imagePreviewContainer = document.getElementById('imagePreviewContainer');
+        
+        // New photo collection workflow elements
+        const singlePhotoInput = document.getElementById('singlePhoto');
         const cameraLabel = document.getElementById('cameraLabel');
-        const submitButton = document.getElementById('submitButton');
-        const clearButton = document.getElementById('clearButton');
-        const captureForm = document.getElementById('captureForm');
-        const feedbackDiv = document.getElementById('processing-feedback');
-        const imageCountInfo = document.getElementById('image-count-info');
-        const imageCount = document.getElementById('image-count');
-        const progressContainer = document.getElementById('progressContainer');
+        const collectedPhotos = document.getElementById('collectedPhotos');
+        const photoCount = document.getElementById('photoCount');
+        const photoThumbnails = document.getElementById('photoThumbnails');
+        const addMoreButton = document.getElementById('addMoreButton');
+        const processAllButton = document.getElementById('processAllButton');
+        const clearAllButton = document.getElementById('clearAllButton');
+        const processingAllIndicator = document.getElementById('processingAllIndicator');
         const progressBar = document.getElementById('progressBar');
         const progressText = document.getElementById('progressText');
+        const feedbackDiv = document.getElementById('processing-feedback');
         
-        let selectedImages = [];
+        // Data storage
+        let collectedFiles = [];
         let allResults = [];
         
+        // Start the upload workflow
         startUploadBtn.addEventListener('click', () => {
             mainOptions.style.display = 'none';
             uploadSection.style.display = 'block';
+            resetToInitialState();
         });
         
-        markedSheetsInput.addEventListener('change', (e) => {
-            const files = Array.from(e.target.files);
-            if (files.length > 0) {
-                selectedImages = files;
-                displayImagePreviews();
-                updateUI();
+        // Handle photo selection
+        singlePhotoInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                addPhotoToCollection(file);
+                singlePhotoInput.value = ''; // Reset input to allow same file again
             }
         });
         
-        function displayImagePreviews() {
-            imagePreviewContainer.innerHTML = '';
-            selectedImages.forEach((file, index) => {
+        function addPhotoToCollection(file) {
+            collectedFiles.push(file);
+            updatePhotoDisplay();
+            
+            // Hide camera label and show collection
+            cameraLabel.style.display = 'none';
+            collectedPhotos.style.display = 'block';
+        }
+        
+        function updatePhotoDisplay() {
+            photoCount.textContent = collectedFiles.length;
+            photoThumbnails.innerHTML = '';
+            
+            collectedFiles.forEach((file, index) => {
                 const reader = new FileReader();
                 reader.onload = (event) => {
-                    const previewItem = document.createElement('div');
-                    previewItem.className = 'image-preview-item';
-                    previewItem.innerHTML = `
-                        <img src="${event.target.result}" alt="Image ${index + 1}">
-                        <button class="remove-image" data-index="${index}" type="button">&times;</button>
+                    const colDiv = document.createElement('div');
+                    colDiv.className = 'col-4 col-md-3';
+                    colDiv.innerHTML = `
+                        <div class="position-relative">
+                            <img src="${event.target.result}" class="img-fluid rounded border" style="height: 80px; width: 100%; object-fit: cover;" alt="Photo ${index + 1}">
+                            <button class="btn btn-sm btn-danger position-absolute top-0 end-0 rounded-circle" 
+                                    style="width: 25px; height: 25px; padding: 0; margin: -5px;" 
+                                    onclick="removePhoto(${index})" type="button">
+                                <i class="bi bi-x" style="font-size: 12px;"></i>
+                            </button>
+                            <small class="d-block text-center mt-1">Photo ${index + 1}</small>
+                        </div>
                     `;
-                    imagePreviewContainer.appendChild(previewItem);
-                }
+                    photoThumbnails.appendChild(colDiv);
+                };
                 reader.readAsDataURL(file);
             });
         }
         
-        imagePreviewContainer.addEventListener('click', (e) => {
-            if (e.target.classList.contains('remove-image')) {
-                const index = parseInt(e.target.dataset.index);
-                selectedImages.splice(index, 1);
-                displayImagePreviews();
-                updateUI();
-            }
-        });
-        
-        clearButton.addEventListener('click', () => {
-            selectedImages = [];
-            markedSheetsInput.value = '';
-            imagePreviewContainer.innerHTML = '';
-            updateUI();
-        });
-        
-        function updateUI() {
-            if (selectedImages.length > 0) {
-                cameraLabel.style.display = 'none';
-                imageCountInfo.style.display = 'block';
-                imageCount.textContent = selectedImages.length;
-                submitButton.disabled = false;
-                clearButton.style.display = 'block';
-            } else {
-                cameraLabel.style.display = 'block';
-                imageCountInfo.style.display = 'none';
-                submitButton.disabled = true;
-                clearButton.style.display = 'none';
-            }
-        }
-        
-        captureForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            if (selectedImages.length === 0) return;
+        // Make removePhoto function global so it can be called from HTML
+        window.removePhoto = function(index) {
+            collectedFiles.splice(index, 1);
+            updatePhotoDisplay();
             
-            submitButton.disabled = true;
-            clearButton.disabled = true;
-            progressContainer.classList.add('active');
-            feedbackDiv.style.display = 'block';
-            feedbackDiv.className = 'alert alert-info mt-3';
+            if (collectedFiles.length === 0) {
+                resetToInitialState();
+            }
+        };
+        
+        // Add more photos
+        addMoreButton.addEventListener('click', () => {
+            singlePhotoInput.click();
+        });
+        
+        // Clear all photos
+        clearAllButton.addEventListener('click', () => {
+            collectedFiles = [];
             allResults = [];
+            resetToInitialState();
+        });
+        
+        // Process all photos
+        processAllButton.addEventListener('click', async () => {
+            if (collectedFiles.length === 0) return;
             
-            const totalImages = selectedImages.length;
+            // Hide photo collection and show processing
+            collectedPhotos.style.display = 'none';
+            processingAllIndicator.style.display = 'block';
+            
+            allResults = [];
+            const totalFiles = collectedFiles.length;
             let processedCount = 0;
             let successCount = 0;
             
-            for (let i = 0; i < selectedImages.length; i++) {
-                const image = selectedImages[i];
+            for (let i = 0; i < collectedFiles.length; i++) {
+                const file = collectedFiles[i];
                 const imageNum = i + 1;
                 
-                progressText.textContent = `Processing image ${imageNum} of ${totalImages}...`;
-                updateProgressBar((processedCount / totalImages) * 100);
-                feedbackDiv.innerHTML = `<i class="bi bi-hourglass-split me-2"></i>AI is analyzing image ${imageNum}...`;
+                // Update progress
+                const percent = (processedCount / totalFiles) * 100;
+                updateProgressBar(percent);
+                progressText.textContent = `Processing photo ${imageNum} of ${totalFiles}...`;
+                feedbackDiv.innerHTML = `<i class="bi bi-hourglass-split me-2"></i>AI is analyzing photo ${imageNum}...`;
                 
                 const formData = new FormData();
-                formData.append('markedSheet', image);
+                formData.append('markedSheet', file);
                 
                 try {
                     const response = await fetch('ajax_process_image.php', {
@@ -377,24 +391,34 @@ const CONNECTIVITY_MAP = [ 'Y' => 'Yes', 'N' => 'No' ];
                         successCount++;
                     }
                 } catch (error) {
-                    console.error(`Error processing image ${imageNum}:`, error);
+                    console.error(`Error processing photo ${imageNum}:`, error);
                 }
                 
                 processedCount++;
-                updateProgressBar((processedCount / totalImages) * 100);
+                updateProgressBar((processedCount / totalFiles) * 100);
             }
             
+            // Processing complete
             if (allResults.length > 0) {
-                progressText.textContent = `Processing complete! ${successCount} image(s) processed successfully.`;
-                feedbackDiv.innerHTML = `<i class="bi bi-check-circle-fill me-2"></i>AI processing complete! Found ${allResults.length} records across ${successCount} images.`;
-                displayResults(allResults);
-                document.getElementById('total-images-processed').textContent = successCount;
-                document.getElementById('total-records-found').textContent = allResults.length;
+                progressText.textContent = `Processing complete! ${successCount} photo(s) processed successfully.`;
+                feedbackDiv.innerHTML = `<i class="bi bi-check-circle-fill me-2"></i>AI processing complete! Found ${allResults.length} records across ${successCount} photos.`;
+                
+                setTimeout(() => {
+                    displayFinalResults(allResults);
+                    document.getElementById('total-images-processed').textContent = successCount;
+                    document.getElementById('total-records-found').textContent = allResults.length;
+                    uploadSection.style.display = 'none';
+                    resultsSection.style.display = 'block';
+                }, 2000); // Show success for 2 seconds before proceeding
             } else {
                 feedbackDiv.className = 'alert alert-danger mt-3';
-                feedbackDiv.innerHTML = `<i class="bi bi-x-circle-fill me-2"></i>No data could be extracted from the images. Please ensure the images are clear and try again.`;
-                submitButton.disabled = false;
-                clearButton.disabled = false;
+                feedbackDiv.innerHTML = `<i class="bi bi-x-circle-fill me-2"></i>No data could be extracted from the photos. Please ensure the images are clear and try again.`;
+                
+                setTimeout(() => {
+                    // Go back to photo collection
+                    processingAllIndicator.style.display = 'none';
+                    collectedPhotos.style.display = 'block';
+                }, 3000);
             }
         });
         
@@ -403,7 +427,15 @@ const CONNECTIVITY_MAP = [ 'Y' => 'Yes', 'N' => 'No' ];
             progressBar.textContent = Math.round(percent) + '%';
         }
         
-        function displayResults(results) {
+        function resetToInitialState() {
+            cameraLabel.style.display = 'block';
+            collectedPhotos.style.display = 'none';
+            processingAllIndicator.style.display = 'none';
+            collectedFiles = [];
+            allResults = [];
+        }
+        
+        function displayFinalResults(results) {
             const tbody = document.getElementById('results-tbody');
             const dispoMap = <?= json_encode($disposition_map) ?>;
             const connMap = <?= json_encode(CONNECTIVITY_MAP) ?>;
@@ -418,14 +450,12 @@ const CONNECTIVITY_MAP = [ 'Y' => 'Yes', 'N' => 'No' ];
                     <td>${escapeHtml(connMap[row.connectivity_code] || 'N/A')}</td>
                     <td>${escapeHtml(dispoMap[row.disposition_code] || 'Empty')}</td>
                     <td>${escapeHtml(row.slot || 'N/A')}</td>
-                    <td><span class="badge bg-info">Image ${row.image_number}</span></td>
+                    <td><span class="badge bg-info">Photo ${row.image_number}</span></td>
                 `;
                 tbody.appendChild(tr);
             });
             
             document.getElementById('json_results_input').value = JSON.stringify(results);
-            uploadSection.style.display = 'none';
-            resultsSection.style.display = 'block';
         }
         
         function escapeHtml(unsafe) {

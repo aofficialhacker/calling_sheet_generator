@@ -40,7 +40,7 @@ $active_page = basename($_SERVER['PHP_SELF']);
             </li>
             <li class="nav-item">
                 <a class="nav-link <?= $active_page == 'manage_batches.php' ? 'active' : '' ?>" href="manage_batches.php">
-                    <i class="bi bi-stack me-2"></i>Manage Batches
+                    <i class="bi bi-stack me-2"></i>View Batches
                 </a>
             </li>
              <li class="nav-item">

@@ -10,53 +10,36 @@ $error = '';
 // Handle vendor request submission
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
     if ($_POST['action'] == 'request_vendor') {
-        $vendorName = trim($_POST['vendor_name'] ?? '');
+        // Generate a default unit name based on admin ID and timestamp
+        $vendorName = 'Unit_' . $adminId . '_' . time();
         
-        if (empty($vendorName)) {
-            $error = 'Unit name cannot be empty.';
+        // Check total requests by this admin (including approved ones)
+        $countStmt = $conn->prepare("
+            SELECT COUNT(*) as total_requests 
+            FROM vendor_requests 
+            WHERE admin_id = ?
+        ");
+        $countStmt->bind_param("s", $adminId);
+        $countStmt->execute();
+        $countResult = $countStmt->get_result()->fetch_assoc();
+        $countStmt->close();
+        
+        if ($countResult['total_requests'] >= 4) {
+            $error = 'You have reached the maximum limit of 4 unit requests.';
         } else {
-            // Check total requests by this admin (including approved ones)
-            $countStmt = $conn->prepare("
-                SELECT COUNT(*) as total_requests 
-                FROM vendor_requests 
-                WHERE admin_id = ?
+            // Insert new request with is_additional flag (no need to check for duplicate auto-generated names)
+            $insertStmt = $conn->prepare("
+                INSERT INTO vendor_requests (admin_id, vendor_name, is_additional) 
+                VALUES (?, ?, 1)
             ");
-            $countStmt->bind_param("s", $adminId);
-            $countStmt->execute();
-            $countResult = $countStmt->get_result()->fetch_assoc();
-            $countStmt->close();
+            $insertStmt->bind_param("ss", $adminId, $vendorName);
             
-            if ($countResult['total_requests'] >= 4) {
-                $error = 'You have reached the maximum limit of 4 unit requests.';
+            if ($insertStmt->execute()) {
+                $message = 'Unit request submitted successfully. You will be notified once approved.';
             } else {
-                // Check if similar request is pending
-                $checkStmt = $conn->prepare("
-                    SELECT id FROM vendor_requests 
-                    WHERE admin_id = ? AND vendor_name = ? AND status = 'pending'
-                ");
-                $checkStmt->bind_param("ss", $adminId, $vendorName);
-                $checkStmt->execute();
-                $result = $checkStmt->get_result();
-                
-                if ($result->num_rows > 0) {
-                    $error = 'A request for this unit is already pending.';
-                } else {
-                    // Insert new request with is_additional flag
-                    $insertStmt = $conn->prepare("
-                        INSERT INTO vendor_requests (admin_id, vendor_name, is_additional) 
-                        VALUES (?, ?, 1)
-                    ");
-                    $insertStmt->bind_param("ss", $adminId, $vendorName);
-                    
-                    if ($insertStmt->execute()) {
-                        $message = 'Unit request submitted successfully. You will be notified once approved.';
-                    } else {
-                        $error = 'Failed to submit unit request.';
-                    }
-                    $insertStmt->close();
-                }
-                $checkStmt->close();
+                $error = 'Failed to submit unit request.';
             }
+            $insertStmt->close();
         }
     }
 }
@@ -190,19 +173,14 @@ $conn->close();
                     <div class="card-body">
                         <form method="POST">
                             <input type="hidden" name="action" value="request_vendor">
-                            <div class="row">
-                                <div class="col-md-8">
-                                    <input type="text" class="form-control" name="vendor_name" 
-                                           placeholder="Enter unit name" required maxlength="255">
-                                </div>
-                                <div class="col-md-4">
-                                    <button type="submit" class="btn btn-primary w-100">
-                                        <i class="bi bi-plus-circle me-2"></i>Submit Request
-                                    </button>
-                                </div>
+                            <div class="text-center">
+                                <button type="submit" class="btn btn-primary btn-lg">
+                                    <i class="bi bi-plus-circle me-2"></i>Submit Unit Request
+                                </button>
                             </div>
-                            <small class="text-muted mt-2 d-block">
-                                You can request up to 4 additional units. Each request requires superadmin approval.
+                            <small class="text-muted mt-2 d-block text-center">
+                                You can request up to 4 additional units. Each request requires superadmin approval.<br>
+                                Unit names will be automatically generated upon approval.
                             </small>
                         </form>
                     </div>

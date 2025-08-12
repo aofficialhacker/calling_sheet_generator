@@ -7,7 +7,7 @@ use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Shared\Date;
 
 // --- FILE UPLOAD PROCESSING ---
-if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['customerFile'])) {
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && (isset($_FILES['customerFile']) || isset($_FILES['customerImage']))) {
     set_time_limit(600);
     $conn = getDBConnection();
     
@@ -24,10 +24,63 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['customerFile'])) {
     $uploadDir = 'uploads/';
     if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
 
-    $originalFileName = basename($_FILES['customerFile']['name']);
-    $tempFile = $_FILES['customerFile']['tmp_name'];
-
-    try {
+    $uploadType = $_POST['upload_type'] ?? 'file';
+    
+    if ($uploadType === 'image' && isset($_FILES['customerImage'])) {
+        // Handle image upload and OCR processing
+        $originalFileName = basename($_FILES['customerImage']['name']);
+        $tempFile = $_FILES['customerImage']['tmp_name'];
+        
+        // Validate image file type
+        $allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/bmp', 'image/tiff'];
+        $fileType = $_FILES['customerImage']['type'];
+        if (!in_array($fileType, $allowedTypes)) {
+            throw new Exception("Invalid file type. Please upload JPG, PNG, BMP, or TIFF images only.");
+        }
+        
+        // Save uploaded image temporarily
+        $tempImagePath = $uploadDir . 'temp_' . uniqid() . '_' . $originalFileName;
+        if (!move_uploaded_file($tempFile, $tempImagePath)) {
+            throw new Exception("Failed to save uploaded image.");
+        }
+        
+        // Process image with Gemini OCR
+        $pythonScript = __DIR__ . '/gemini_excel_parser.py';
+        $command = "python \"$pythonScript\" \"$tempImagePath\" 2>&1";
+        $output = shell_exec($command);
+        
+        // Clean up temporary image
+        if (file_exists($tempImagePath)) {
+            unlink($tempImagePath);
+        }
+        
+        if (!$output) {
+            throw new Exception("Failed to process image with OCR. Please ensure Python and required libraries are installed.");
+        }
+        
+        // Check if output is JSON error
+        $jsonOutput = json_decode($output, true);
+        if ($jsonOutput && isset($jsonOutput['error'])) {
+            throw new Exception("OCR Error: " . $jsonOutput['error']);
+        }
+        
+        // Parse CSV output from OCR
+        $csvLines = array_filter(explode("\n", trim($output)));
+        if (empty($csvLines)) {
+            throw new Exception("OCR processing returned no data. Please ensure the image is clear and contains tabular data.");
+        }
+        
+        // Convert CSV to array format like Excel processing
+        $headerRow = str_getcsv(array_shift($csvLines));
+        $dataRows = array_map('str_getcsv', $csvLines);
+        $columnMap = mapColumns($headerRow);
+        $rowCount = count($dataRows);
+        
+    } else {
+        // Handle regular file upload (existing logic)
+        $originalFileName = basename($_FILES['customerFile']['name']);
+        $tempFile = $_FILES['customerFile']['tmp_name'];
+        
         $spreadsheet = IOFactory::load($tempFile);
         $worksheet = $spreadsheet->getActiveSheet();
         $rowCount = $worksheet->getHighestRow() - 1; // Subtract header row
@@ -40,6 +93,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['customerFile'])) {
         $dataRows = $worksheet->toArray(null, true, true, false);
         $headerRow = array_shift($dataRows);
         $columnMap = mapColumns($headerRow);
+    }
+
+    // Common processing for both file and image uploads
+    try {
+        // Check row limit for both types
+        if ($rowCount > 10000) {
+            throw new Exception("Data contains {$rowCount} rows. The maximum allowed is 10,000 rows per batch.");
+        }
         
         // Fetch product code
         $prodStmt = $conn->prepare("SELECT product_code FROM products WHERE id = ?");
@@ -128,8 +189,7 @@ $adminId = $_SESSION['admin_id'];
 $vendors = $conn->query("SELECT vendor_id, vendor_name FROM vendors WHERE admin_id = '{$adminId}' AND is_approved = 1 ORDER BY vendor_id");
 $products = $conn->query("SELECT id, product_name FROM products WHERE is_active = 1 ORDER BY product_name");
 
-// Fetch dispositions for dropdown
-$dispositions = $conn->query("SELECT DISTINCT code, description FROM disposition_codes WHERE is_active = 1 ORDER BY code");
+// Dispositions removed - moved to view batch page
 
 // Check vendor request count for this admin
 $requestCountStmt = $conn->prepare("SELECT COUNT(*) as request_count FROM vendor_requests WHERE admin_id = ?");
@@ -242,23 +302,6 @@ function formatDateString($value): string {
             <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
                 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
                     <h1 class="h2"><i class="bi bi-cloud-upload-fill me-2"></i>Create New Batch</h1>
-                    
-                    <!-- Disposition Download Section -->
-                    <div class="d-flex gap-2">
-                        <select class="form-select form-select-sm" id="disposition-select" style="min-width: 200px;">
-                            <option value="">-- Download by Status --</option>
-                            <?php if ($dispositions && $dispositions->num_rows > 0): ?>
-                                <?php while($dispo = $dispositions->fetch_assoc()): ?>
-                                    <option value="<?= htmlspecialchars($dispo['description']) ?>">
-                                        <?= htmlspecialchars($dispo['code']) ?> - <?= htmlspecialchars($dispo['description']) ?>
-                                    </option>
-                                <?php endwhile; ?>
-                            <?php endif; ?>
-                        </select>
-                        <button type="button" class="btn btn-info btn-sm text-white" id="download-disposition-btn">
-                            <i class="bi bi-download"></i> Download
-                        </button>
-                    </div>
                 </div>
 
                 <?php if (isset($_SESSION['flash_message'])): ?>
@@ -300,9 +343,29 @@ function formatDateString($value): string {
                                     </select>
                                 </div>
                                 <div class="col-12">
-                                    <label for="customerFile" class="form-label"><strong>Select Source File</strong></label>
-                                    <input class="form-control" type="file" id="customerFile" name="customerFile" accept=".xlsx, .csv" required>
+                                    <label class="form-label"><strong>Upload Type</strong></label>
+                                    <div class="mb-3">
+                                        <div class="form-check form-check-inline">
+                                            <input class="form-check-input" type="radio" name="upload_type" id="file_upload" value="file" checked>
+                                            <label class="form-check-label" for="file_upload">Excel/CSV File</label>
+                                        </div>
+                                        <div class="form-check form-check-inline">
+                                            <input class="form-check-input" type="radio" name="upload_type" id="image_upload" value="image">
+                                            <label class="form-check-label" for="image_upload">Excel Image</label>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="col-12" id="file_upload_section">
+                                    <label for="customerFile" class="form-label"><strong>Select Excel/CSV File</strong></label>
+                                    <input class="form-control" type="file" id="customerFile" name="customerFile" accept=".xlsx, .csv">
                                     <small class="text-muted">Maximum 10,000 rows allowed per batch</small>
+                                </div>
+                                
+                                <div class="col-12" id="image_upload_section" style="display: none;">
+                                    <label for="customerImage" class="form-label"><strong>Select Excel Sheet Image</strong></label>
+                                    <input class="form-control" type="file" id="customerImage" name="customerImage" accept=".jpg, .jpeg, .png, .bmp, .tiff">
+                                    <small class="text-muted">Upload a clear image of your Excel spreadsheet for OCR processing</small>
                                 </div>
                             </div>
                             <button type="submit" class="btn btn-primary w-100 mt-4"><i class="bi bi-gear-fill me-2"></i>Upload and Create Batch</button>
@@ -313,58 +376,49 @@ function formatDateString($value): string {
         </div>
     </div>
 <script>
-    document.getElementById('upload-form').addEventListener('submit', function() {
-        if (document.getElementById('customerFile').files.length > 0) {
-            document.getElementById('loading-message').textContent = 'Uploading and processing file... This may take a while.';
-            document.getElementById('loading-overlay').style.display = 'flex';
+    // Handle upload type toggle
+    document.addEventListener('DOMContentLoaded', function() {
+        const fileUploadRadio = document.getElementById('file_upload');
+        const imageUploadRadio = document.getElementById('image_upload');
+        const fileSection = document.getElementById('file_upload_section');
+        const imageSection = document.getElementById('image_upload_section');
+        const fileInput = document.getElementById('customerFile');
+        const imageInput = document.getElementById('customerImage');
+
+        function toggleUploadSections() {
+            if (fileUploadRadio.checked) {
+                fileSection.style.display = 'block';
+                imageSection.style.display = 'none';
+                fileInput.required = true;
+                imageInput.required = false;
+            } else {
+                fileSection.style.display = 'none';
+                imageSection.style.display = 'block';
+                fileInput.required = false;
+                imageInput.required = true;
+            }
         }
+
+        fileUploadRadio.addEventListener('change', toggleUploadSections);
+        imageUploadRadio.addEventListener('change', toggleUploadSections);
     });
-    
-    // Handle disposition download
-    document.getElementById('download-disposition-btn').addEventListener('click', function() {
-        const select = document.getElementById('disposition-select');
-        if (select.value) {
-            document.getElementById('loading-message').textContent = 'Generating PDF... Please wait.';
+
+    document.getElementById('upload-form').addEventListener('submit', function() {
+        const uploadType = document.querySelector('input[name="upload_type"]:checked').value;
+        let hasFile = false;
+        let message = '';
+
+        if (uploadType === 'file' && document.getElementById('customerFile').files.length > 0) {
+            hasFile = true;
+            message = 'Uploading and processing file... This may take a while.';
+        } else if (uploadType === 'image' && document.getElementById('customerImage').files.length > 0) {
+            hasFile = true;
+            message = 'Processing image with AI OCR... This may take a while.';
+        }
+
+        if (hasFile) {
+            document.getElementById('loading-message').textContent = message;
             document.getElementById('loading-overlay').style.display = 'flex';
-            
-            const downloadToken = new Date().getTime();
-            const url = 'generate_pdf.php?disposition=' + encodeURIComponent(select.value) + '&download_token=' + downloadToken;
-            
-            window.location.href = url;
-            
-            // Enhanced polling for cookie to hide overlay
-            const timer = setInterval(function() {
-                const value = `; ${document.cookie}`;
-                const parts = value.split(`; download_token_${downloadToken}=`);
-                if (parts.length === 2) {
-                    document.getElementById('loading-overlay').style.display = 'none';
-                    clearInterval(timer);
-                    document.cookie = `download_token_${downloadToken}=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;`;
-                }
-            }, 500); // Faster polling for better responsiveness
-            
-            // Extended timeout for large datasets
-            const maxTimeout = 120000; // 2 minutes for large files
-            setTimeout(() => {
-                clearInterval(timer);
-                document.getElementById('loading-overlay').style.display = 'none';
-            }, maxTimeout);
-            
-            // Additional check for download dialog appearance
-            let downloadStarted = false;
-            const checkDownloadStart = setInterval(() => {
-                if (!downloadStarted && document.hasFocus && !document.hasFocus()) {
-                    // Browser lost focus, likely due to download dialog
-                    downloadStarted = true;
-                    setTimeout(() => {
-                        document.getElementById('loading-overlay').style.display = 'none';
-                        clearInterval(timer);
-                        clearInterval(checkDownloadStart);
-                    }, 1000);
-                }
-            }, 200);
-        } else {
-            alert('Please select a disposition status from the dropdown.');
         }
     });
 </script>
