@@ -1,1 +1,1 @@
-improve index.php UI a little keep it simple but attractive , instead of AI calling sheet system call it something else, give some good name to this portal.
+in view batches page on action button for pdf download, download is happening late and animation stops way before.

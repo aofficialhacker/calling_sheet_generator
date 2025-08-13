@@ -437,6 +437,17 @@ if (strpos($fullHtml, '<tbody>') !== false) {
 // Finalize and Output
 $mpdf->WriteHTML('</body></html>');
 
+// Clear any output buffers
+while (ob_get_level()) {
+    ob_end_clean();
+}
+
+// Set proper headers for PDF download
+header('Content-Type: application/pdf');
+header('Content-Disposition: attachment; filename="' . $pdfFileName . '"');
+header('Cache-Control: private, max-age=0, must-revalidate');
+header('Pragma: public');
+
 $mpdf->Output($pdfFileName, 'D');
 
 $conn->close();
