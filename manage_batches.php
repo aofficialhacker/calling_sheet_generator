@@ -418,30 +418,124 @@ document.addEventListener('DOMContentLoaded', function() {
         scopeInfo.textContent = 'Select a download scope first';
     });
     
-    // PDF download function
+    // PDF download function with browser-based download detection
     const startPdfDownload = function(url) {
         const loadingOverlay = document.getElementById('loading-overlay');
+        const loadingMessage = document.getElementById('loading-message');
+        
         loadingOverlay.style.display = 'flex';
-        const downloadToken = new URLSearchParams(url.split('?')[1]).get('download_token');
-        const cookieName = `download_token_${downloadToken}`;
+        loadingMessage.textContent = 'Generating PDF, please wait...';
         
-        window.location.href = url;
+        let downloadStarted = false;
+        let checkCount = 0;
         
-        const timer = setInterval(function() {
-            const value = `; ${document.cookie}`;
-            const parts = value.split(`; ${cookieName}=`);
-            if (parts.length === 2) {
-                loadingOverlay.style.display = 'none';
+        // Method 1: Detect download via hidden iframe + focus detection
+        const iframe = document.createElement('iframe');
+        iframe.style.display = 'none';
+        iframe.style.width = '1px';
+        iframe.style.height = '1px';
+        document.body.appendChild(iframe);
+        
+        // Method 2: Detect when browser regains focus (download dialog appeared/closed)
+        let windowBlurred = false;
+        const originalTitle = document.title;
+        
+        const onWindowBlur = () => {
+            windowBlurred = true;
+        };
+        
+        const onWindowFocus = () => {
+            if (windowBlurred && !downloadStarted) {
+                downloadStarted = true;
                 clearInterval(timer);
-                document.cookie = `${cookieName}=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;`;
+                loadingMessage.textContent = 'Download started!';
+                setTimeout(() => {
+                    loadingOverlay.style.display = 'none';
+                    cleanup();
+                }, 1500);
+            }
+        };
+        
+        const onBeforeUnload = () => {
+            if (!downloadStarted) {
+                downloadStarted = true;
+                clearInterval(timer);
+                loadingOverlay.style.display = 'none';
+                cleanup();
+            }
+        };
+        
+        // Method 3: Monitor iframe load event
+        const onIframeLoad = () => {
+            if (!downloadStarted) {
+                downloadStarted = true;
+                clearInterval(timer);
+                loadingMessage.textContent = 'Download started!';
+                setTimeout(() => {
+                    loadingOverlay.style.display = 'none';
+                    cleanup();
+                }, 1500);
+            }
+        };
+        
+        const cleanup = () => {
+            window.removeEventListener('blur', onWindowBlur);
+            window.removeEventListener('focus', onWindowFocus);
+            window.removeEventListener('beforeunload', onBeforeUnload);
+            iframe.removeEventListener('load', onIframeLoad);
+            if (iframe.parentNode) {
+                iframe.parentNode.removeChild(iframe);
+            }
+            document.title = originalTitle;
+        };
+        
+        // Set up event listeners
+        window.addEventListener('blur', onWindowBlur);
+        window.addEventListener('focus', onWindowFocus);
+        window.addEventListener('beforeunload', onBeforeUnload);
+        iframe.addEventListener('load', onIframeLoad);
+        
+        // Start the download
+        iframe.src = url;
+        
+        // Progress timer with smarter timeout
+        const timer = setInterval(() => {
+            checkCount++;
+            
+            if (downloadStarted) {
+                clearInterval(timer);
+                return;
+            }
+            
+            // Update progress message
+            const elapsed = Math.floor(checkCount * 0.5);
+            if (elapsed % 5 === 0 && elapsed > 0) {
+                loadingMessage.textContent = `Generating PDF, please wait... (${elapsed}s)`;
+                // Change browser title to show progress
+                document.title = `Generating PDF... (${elapsed}s) - ${originalTitle}`;
+            }
+            
+            // Auto-hide after reasonable time (30 seconds)
+            if (checkCount >= 60) {
+                downloadStarted = true;
+                clearInterval(timer);
+                loadingMessage.textContent = 'Download should have started. Please check your downloads folder.';
+                setTimeout(() => {
+                    loadingOverlay.style.display = 'none';
+                    cleanup();
+                }, 3000);
             }
         }, 500);
         
-        const maxTimeout = 120000; // 2 minutes
+        // Final safety timeout
         setTimeout(() => {
-            clearInterval(timer);
-            loadingOverlay.style.display = 'none';
-        }, maxTimeout);
+            if (!downloadStarted) {
+                downloadStarted = true;
+                clearInterval(timer);
+                loadingOverlay.style.display = 'none';
+                cleanup();
+            }
+        }, 35000);
     };
 
     // Handle existing batch PDF downloads

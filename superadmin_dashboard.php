@@ -12,7 +12,10 @@ $from_date = $_GET['from_date'] ?? date('Y-m-d', strtotime('-30 days'));
 $to_date = $_GET['to_date'] ?? date('Y-m-d');
 
 // Build WHERE clauses based on filters
-$where_conditions = [];
+$where_conditions = [
+    // Only include records that have been processed by callers (have disposition or connectivity marked)
+    "((fcl.disposition IS NOT NULL AND fcl.disposition != '') OR (fcl.connectivity IS NOT NULL AND fcl.connectivity != ''))"
+];
 $params = [];
 $types = '';
 
@@ -42,17 +45,17 @@ if ($from_date && $to_date) {
     $types .= 'ss';
 }
 
-$where_clause = !empty($where_conditions) ? "WHERE " . implode(' AND ', $where_conditions) : "";
+$where_clause = "WHERE " . implode(' AND ', $where_conditions);
 
 // Fetch overall performance metrics
 $overall_query = "
     SELECT 
         COUNT(*) as total_calls,
-        SUM(CASE WHEN connectivity = 'Y' THEN 1 ELSE 0 END) as connected_calls,
+        SUM(CASE WHEN connectivity IN ('Y', 'Yes') THEN 1 ELSE 0 END) as connected_calls,
         SUM(CASE WHEN disposition IN ('Interested', 'Call Back', 'More Info') THEN 1 ELSE 0 END) as conversions
     FROM final_call_logs fcl 
     JOIN file_batches fb ON fcl.batch_id = fb.id 
-    $where_clause AND fcl.processed_at IS NOT NULL
+    $where_clause
 ";
 
 $stmt = $conn->prepare($overall_query);
@@ -73,15 +76,15 @@ $connected_rate = $overall_metrics['total_calls'] > 0 ?
 $connectivity_query = "
     SELECT 
         CASE 
-            WHEN connectivity = 'Y' THEN 'Connected' 
-            WHEN connectivity = 'N' THEN 'Not Connected'
-            WHEN connectivity IS NULL OR connectivity = '' THEN 'Not Connected'
+            WHEN fcl.connectivity IN ('Y', 'Yes') THEN 'Connected' 
+            WHEN fcl.connectivity IN ('N', 'No') THEN 'Not Connected'
+            WHEN fcl.connectivity IS NULL OR fcl.connectivity = '' THEN 'Not Connected'
             ELSE 'Not Connected'
         END as connectivity_status,
         COUNT(*) as count
     FROM final_call_logs fcl 
     JOIN file_batches fb ON fcl.batch_id = fb.id 
-    $where_clause AND fcl.processed_at IS NOT NULL
+    $where_clause
     GROUP BY connectivity_status 
     ORDER BY count DESC
 ";
@@ -100,12 +103,12 @@ $stmt->close();
 // Fetch disposition breakdown for connected calls
 $connected_disposition_query = "
     SELECT 
-        COALESCE(disposition, 'No Disposition') as disposition, 
+        COALESCE(fcl.disposition, 'No Disposition') as disposition, 
         COUNT(*) as count
     FROM final_call_logs fcl 
     JOIN file_batches fb ON fcl.batch_id = fb.id 
-    $where_clause AND fcl.processed_at IS NOT NULL AND connectivity = 'Y'
-    GROUP BY COALESCE(disposition, 'No Disposition')
+    $where_clause AND fcl.connectivity IN ('Y', 'Yes')
+    GROUP BY COALESCE(fcl.disposition, 'No Disposition')
     HAVING count > 0
     ORDER BY count DESC
 ";
@@ -124,12 +127,12 @@ $stmt->close();
 // Fetch disposition breakdown for non-connected calls
 $not_connected_disposition_query = "
     SELECT 
-        COALESCE(disposition, 'No Disposition') as disposition, 
+        COALESCE(fcl.disposition, 'No Disposition') as disposition, 
         COUNT(*) as count
     FROM final_call_logs fcl 
     JOIN file_batches fb ON fcl.batch_id = fb.id 
-    $where_clause AND fcl.processed_at IS NOT NULL AND (connectivity = 'N' OR connectivity IS NULL OR connectivity = '')
-    GROUP BY COALESCE(disposition, 'No Disposition')
+    $where_clause AND (fcl.connectivity IN ('N', 'No') OR fcl.connectivity IS NULL OR fcl.connectivity = '')
+    GROUP BY COALESCE(fcl.disposition, 'No Disposition')
     HAVING count > 0
     ORDER BY count DESC
 ";
@@ -158,11 +161,11 @@ $slot_query = "
     SELECT 
         slot,
         COUNT(*) as total_calls,
-        SUM(CASE WHEN connectivity = 'Y' THEN 1 ELSE 0 END) as connected_calls,
+        SUM(CASE WHEN connectivity IN ('Y', 'Yes') THEN 1 ELSE 0 END) as connected_calls,
         SUM(CASE WHEN disposition IN ('Interested', 'Call Back', 'More Info') THEN 1 ELSE 0 END) as conversions
     FROM final_call_logs fcl 
     JOIN file_batches fb ON fcl.batch_id = fb.id 
-    $where_clause AND fcl.processed_at IS NOT NULL AND slot IS NOT NULL
+    $where_clause AND slot IS NOT NULL
     GROUP BY slot 
     ORDER BY slot
 ";
@@ -174,23 +177,25 @@ if ($types) {
 $stmt->execute();
 $slot_performance = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 
-// Fetch vendor insights
-$vendor_query = "
+// Fetch unit insights
+$unit_query = "
     SELECT 
-        v.vendor_name,
+        v.vendor_name as unit_name,
         COUNT(fcl.id) as leads_provided,
+        SUM(CASE WHEN fcl.connectivity IN ('Y', 'Yes') THEN 1 ELSE 0 END) as connected_calls,
         SUM(CASE WHEN fcl.disposition IN ('Interested', 'Call Back', 'More Info') THEN 1 ELSE 0 END) as conversions,
+        ROUND((SUM(CASE WHEN fcl.connectivity IN ('Y', 'Yes') THEN 1 ELSE 0 END) * 100.0 / COUNT(fcl.id)), 2) as connected_rate,
         ROUND((SUM(CASE WHEN fcl.disposition IN ('Interested', 'Call Back', 'More Info') THEN 1 ELSE 0 END) * 100.0 / COUNT(fcl.id)), 2) as conversion_rate
     FROM vendors v
     LEFT JOIN file_batches fb ON v.vendor_id = fb.vendor_id
     LEFT JOIN final_call_logs fcl ON fb.id = fcl.batch_id
-    WHERE fcl.processed_at IS NOT NULL
+    WHERE ((fcl.disposition IS NOT NULL AND fcl.disposition != '') OR (fcl.connectivity IS NOT NULL AND fcl.connectivity != ''))
     GROUP BY v.vendor_id, v.vendor_name
     HAVING leads_provided > 0
     ORDER BY conversion_rate DESC
 ";
 
-$vendor_insights = $conn->query($vendor_query)->fetch_all(MYSQLI_ASSOC);
+$unit_insights = $conn->query($unit_query)->fetch_all(MYSQLI_ASSOC);
 
 // Fetch admin performance
 $admin_query = "
@@ -198,12 +203,14 @@ $admin_query = "
         au.name as admin_name,
         fb.admin_id,
         COUNT(fcl.id) as calls_made,
+        SUM(CASE WHEN fcl.connectivity IN ('Y', 'Yes') THEN 1 ELSE 0 END) as connected_calls,
         SUM(CASE WHEN fcl.disposition IN ('Interested', 'Call Back', 'More Info') THEN 1 ELSE 0 END) as conversions,
+        ROUND((SUM(CASE WHEN fcl.connectivity IN ('Y', 'Yes') THEN 1 ELSE 0 END) * 100.0 / COUNT(fcl.id)), 2) as connected_rate,
         ROUND((SUM(CASE WHEN fcl.disposition IN ('Interested', 'Call Back', 'More Info') THEN 1 ELSE 0 END) * 100.0 / COUNT(fcl.id)), 2) as conversion_rate
     FROM admin_users au
     JOIN file_batches fb ON au.admin_id = fb.admin_id
     JOIN final_call_logs fcl ON fb.id = fcl.batch_id
-    WHERE fcl.processed_at IS NOT NULL
+    WHERE ((fcl.disposition IS NOT NULL AND fcl.disposition != '') OR (fcl.connectivity IS NOT NULL AND fcl.connectivity != ''))
     GROUP BY au.admin_id, au.name
     ORDER BY conversion_rate DESC
 ";
@@ -217,13 +224,16 @@ $caller_performance_query = "
         c.finqy_id,
         au.name as admin_name,
         COUNT(fcl.id) as calls_made,
+        SUM(CASE WHEN fcl.connectivity IN ('Y', 'Yes') THEN 1 ELSE 0 END) as connected_calls,
         SUM(CASE WHEN fcl.disposition IN ('Interested', 'Call Back', 'More Info') THEN 1 ELSE 0 END) as conversions,
+        ROUND((SUM(CASE WHEN fcl.connectivity IN ('Y', 'Yes') THEN 1 ELSE 0 END) * 100.0 / COUNT(fcl.id)), 2) as connected_rate,
         ROUND((SUM(CASE WHEN fcl.disposition IN ('Interested', 'Call Back', 'More Info') THEN 1 ELSE 0 END) * 100.0 / COUNT(fcl.id)), 2) as conversion_rate
     FROM callers c
     JOIN admin_caller_mapping acm ON c.finqy_id = acm.finqy_id
     JOIN admin_users au ON acm.admin_id = au.admin_id
     JOIN final_call_logs fcl ON c.finqy_id = fcl.finqy_id
-    WHERE fcl.processed_at IS NOT NULL
+    JOIN file_batches fb ON fcl.batch_id = fb.id
+    WHERE ((fcl.disposition IS NOT NULL AND fcl.disposition != '') OR (fcl.connectivity IS NOT NULL AND fcl.connectivity != ''))
     GROUP BY c.finqy_id, c.caller_name, au.name
     HAVING calls_made >= 10
     ORDER BY conversion_rate DESC
@@ -480,19 +490,19 @@ $conn->close();
                     </div>
                 </div>
 
-                <!-- Vendor Insights -->
+                <!-- Unit Insights -->
                 <div class="row mb-4">
                     <div class="col-12">
                         <div class="card">
                             <div class="card-header">
-                                <h5><i class="bi bi-building me-2"></i>Vendor Insights</h5>
+                                <h5><i class="bi bi-building me-2"></i>Unit Insights</h5>
                             </div>
                             <div class="card-body">
                                 <div class="table-responsive">
                                     <table class="table table-hover">
                                         <thead class="table-light">
                                             <tr>
-                                                <th>Vendor</th>
+                                                <th>Unit</th>
                                                 <th>Leads Provided</th>
                                                 <th>Conversions</th>
                                                 <th>Conversion Rate</th>
@@ -500,15 +510,15 @@ $conn->close();
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            <?php foreach($vendor_insights as $vendor): ?>
+                                            <?php foreach($unit_insights as $unit): ?>
                                             <tr>
-                                                <td><?= htmlspecialchars($vendor['vendor_name']) ?></td>
-                                                <td><?= number_format($vendor['leads_provided']) ?></td>
-                                                <td><?= number_format($vendor['conversions']) ?></td>
-                                                <td><?= $vendor['conversion_rate'] ?>%</td>
+                                                <td><?= htmlspecialchars($unit['unit_name']) ?></td>
+                                                <td><?= number_format($unit['leads_provided']) ?></td>
+                                                <td><?= number_format($unit['conversions']) ?></td>
+                                                <td><?= $unit['conversion_rate'] ?>%</td>
                                                 <td>
                                                     <div class="progress">
-                                                        <div class="progress-bar" style="width: <?= min($vendor['conversion_rate'], 100) ?>%"></div>
+                                                        <div class="progress-bar" style="width: <?= min($unit['conversion_rate'], 100) ?>%"></div>
                                                     </div>
                                                 </td>
                                             </tr>
@@ -716,8 +726,8 @@ $conn->close();
                         }
                     },
                     interaction: {
-                        intersect: false,
-                        mode: 'index'
+                        intersect: true,
+                        mode: 'point'
                     },
                     onHover: (event, activeElements) => {
                         event.native.target.style.cursor = activeElements.length > 0 ? 'pointer' : 'default';

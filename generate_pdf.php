@@ -6,13 +6,8 @@ requireAdmin(); // Ensure admin is logged in and start session
 use Mpdf\Mpdf;
 use Mpdf\HTMLParserMode;
 
-// --- Server-Side Download Token ---
-if (isset($_GET['download_token'])) {
-    $token = preg_replace('/[^0-9]/', '', $_GET['download_token']);
-    if (!empty($token)) {
-        setcookie("download_token_" . $token, "true", time() + 30, "/");
-    }
-}
+// --- Optional Download Token (for client-side tracking only) ---
+$download_token = $_GET['download_token'] ?? null;
 
 set_time_limit(0);
 ini_set('memory_limit', '2048M');
@@ -441,6 +436,7 @@ if (strpos($fullHtml, '<tbody>') !== false) {
 
 // Finalize and Output
 $mpdf->WriteHTML('</body></html>');
+
 $mpdf->Output($pdfFileName, 'D');
 
 $conn->close();
