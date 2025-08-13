@@ -478,13 +478,13 @@ $conn->close();
     const connectedDispositionCtx = document.getElementById('connectedDispositionChart').getContext('2d');
     const connectedData = <?= json_encode(array_column($connected_disposition_breakdown, 'count')) ?>;
     const connectedLabels = <?= json_encode(array_column($connected_disposition_breakdown, 'disposition')) ?>;
-    createInteractivePieChart(connectedDispositionCtx, connectedData, connectedLabels, ['#28a745', '#ffc107', '#17a2b8', '#6f42c1', '#fd7e14']);
+    createInteractivePieChart(connectedDispositionCtx, connectedData, connectedLabels, ['#28a745', '#007bff', '#6f42c1', '#ff6b35', '#20c997']);
 
     // 3. Non-connected Calls Disposition Chart
     const notConnectedDispositionCtx = document.getElementById('notConnectedDispositionChart').getContext('2d');
     const notConnectedData = <?= json_encode(array_column($not_connected_disposition_breakdown, 'count')) ?>;
     const notConnectedLabels = <?= json_encode(array_column($not_connected_disposition_breakdown, 'disposition')) ?>;
-    createInteractivePieChart(notConnectedDispositionCtx, notConnectedData, notConnectedLabels, ['#dc3545', '#6c757d', '#ffc107', '#fd7e14']);
+    createInteractivePieChart(notConnectedDispositionCtx, notConnectedData, notConnectedLabels, ['#dc3545', '#6c757d', '#ffc107', '#e74c3c']);
 
     </script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>

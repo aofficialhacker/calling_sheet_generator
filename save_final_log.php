@@ -2,6 +2,14 @@
 session_start();
 require_once 'db_config.php'; // Use centralized db config
 
+// Check if this is an AJAX request
+$isAjax = !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest' 
+          || (isset($_SERVER['HTTP_ACCEPT']) && strpos($_SERVER['HTTP_ACCEPT'], 'application/json') !== false);
+
+if ($isAjax) {
+    header('Content-Type: application/json');
+}
+
 $conn = getDBConnection();
 
 // Fetch disposition map from database for conversion
@@ -71,6 +79,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['json_results']) && iss
     $error = "No data submitted or invalid request method.";
 }
 $conn->close();
+
+// Return JSON response for AJAX requests
+if ($isAjax) {
+    if (!empty($message)) {
+        echo json_encode(['success' => true, 'message' => $message, 'saved_count' => $saved_count, 'updated_count' => $updated_count]);
+    } else {
+        echo json_encode(['success' => false, 'message' => $error]);
+    }
+    exit();
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">

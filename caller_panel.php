@@ -401,15 +401,12 @@ const CONNECTIVITY_MAP = [ 'Y' => 'Yes', 'N' => 'No' ];
             // Processing complete
             if (allResults.length > 0) {
                 progressText.textContent = `Processing complete! ${successCount} photo(s) processed successfully.`;
-                feedbackDiv.innerHTML = `<i class="bi bi-check-circle-fill me-2"></i>AI processing complete! Found ${allResults.length} records across ${successCount} photos.`;
+                feedbackDiv.innerHTML = `<i class="bi bi-check-circle-fill me-2"></i>AI processing complete! Found ${allResults.length} records. Auto-saving to database...`;
                 
                 setTimeout(() => {
-                    displayFinalResults(allResults);
-                    document.getElementById('total-images-processed').textContent = successCount;
-                    document.getElementById('total-records-found').textContent = allResults.length;
-                    uploadSection.style.display = 'none';
-                    resultsSection.style.display = 'block';
-                }, 2000); // Show success for 2 seconds before proceeding
+                    // Automatically save the data without showing the table
+                    autoSaveResults(allResults);
+                }, 2000); // Show success for 2 seconds before auto-saving
             } else {
                 feedbackDiv.className = 'alert alert-danger mt-3';
                 feedbackDiv.innerHTML = `<i class="bi bi-x-circle-fill me-2"></i>No data could be extracted from the photos. Please ensure the images are clear and try again.`;
@@ -460,6 +457,54 @@ const CONNECTIVITY_MAP = [ 'Y' => 'Yes', 'N' => 'No' ];
         
         function escapeHtml(unsafe) {
             return unsafe ? unsafe.toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;") : '';
+        }
+        
+        async function autoSaveResults(results) {
+            try {
+                // Show saving message
+                feedbackDiv.innerHTML = `<i class="bi bi-cloud-upload-fill me-2"></i>Saving ${results.length} records to database...`;
+                
+                // Prepare the form data
+                const formData = new FormData();
+                formData.append('json_results', JSON.stringify(results));
+                formData.append('finqy_id', '<?= htmlspecialchars($_SESSION['finqy_id']) ?>');
+                
+                // Send the data to save_final_log.php
+                const response = await fetch('save_final_log.php', {
+                    method: 'POST',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    // Show success message with tick symbol
+                    feedbackDiv.className = 'alert alert-success mt-3';
+                    feedbackDiv.innerHTML = `
+                        <div class="text-center">
+                            <i class="bi bi-check-circle-fill text-success" style="font-size: 3rem;"></i>
+                            <h4 class="mt-2">Data Saved Successfully!</h4>
+                            <p class="mb-0">${result.message}</p>
+                        </div>
+                    `;
+                    
+                    // Reset to initial state after 3 seconds
+                    setTimeout(() => {
+                        resetToInitialState();
+                        uploadSection.style.display = 'none';
+                        mainOptions.style.display = 'block';
+                    }, 3000);
+                } else {
+                    throw new Error(result.message || 'Failed to save data');
+                }
+            } catch (error) {
+                console.error('Error saving data:', error);
+                feedbackDiv.className = 'alert alert-danger mt-3';
+                feedbackDiv.innerHTML = `<i class="bi bi-x-circle-fill me-2"></i>Error saving data. Please try again.`;
+            }
         }
     }
 </script>

@@ -675,7 +675,7 @@ $conn->close();
         const connectedDispositionCtx = document.getElementById('connectedDispositionChart').getContext('2d');
         const connectedData = <?= json_encode(array_column($connected_disposition_breakdown, 'count')) ?>;
         const connectedLabels = <?= json_encode(array_column($connected_disposition_breakdown, 'disposition')) ?>;
-        const connectedColors = ['#28a745', '#ffc107', '#17a2b8', '#6f42c1', '#fd7e14', '#20c997', '#6c757d', '#e83e8c'];
+        const connectedColors = ['#28a745', '#17a2b8', '#6f42c1', '#20c997', '#e83e8c', '#007bff', '#795548', '#009688'];
         const connectedDispositionChart = createInteractivePieChart(
             connectedDispositionCtx, 
             connectedData, 
@@ -688,7 +688,7 @@ $conn->close();
         const notConnectedDispositionCtx = document.getElementById('notConnectedDispositionChart').getContext('2d');
         const notConnectedData = <?= json_encode(array_column($not_connected_disposition_breakdown, 'count')) ?>;
         const notConnectedLabels = <?= json_encode(array_column($not_connected_disposition_breakdown, 'disposition')) ?>;
-        const notConnectedColors = ['#dc3545', '#6c757d', '#ffc107', '#fd7e14', '#e83e8c', '#6f42c1', '#20c997', '#17a2b8'];
+        const notConnectedColors = ['#dc3545', '#6c757d', '#f8d7da', '#ffeeba', '#ffcccc', '#d6d8db', '#fef2f2', '#ffeeee'];
         const notConnectedDispositionChart = createInteractivePieChart(
             notConnectedDispositionCtx, 
             notConnectedData, 

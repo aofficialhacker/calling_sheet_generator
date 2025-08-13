@@ -1,5 +1,1 @@
-still pie charts are not appearing,
-replace Date and Month filter with
-"From" and "To" date filter. 
-
-keep Line chart only for Time slot Analysis, remove other time slot analysis we have in caller dashboard.
+improve index.php UI a little keep it simple but attractive , instead of AI calling sheet system call it something else, give some good name to this portal.
