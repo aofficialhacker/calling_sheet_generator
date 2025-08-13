@@ -76,8 +76,8 @@ $slot_query = "
         ROUND((SUM(CASE WHEN disposition IN ('Interested', 'Call Back', 'More Info') THEN 1 ELSE 0 END) * 100.0 / COUNT(*)), 2) as conversion_rate
     FROM final_call_logs fcl 
     $where_clause AND fcl.processed_at IS NOT NULL AND slot IS NOT NULL
-    GROUP BY slot 
-    ORDER BY slot
+    GROUP BY slot
+    ORDER BY CAST(slot AS UNSIGNED)
 ";
 
 $stmt = $conn->prepare($slot_query);
