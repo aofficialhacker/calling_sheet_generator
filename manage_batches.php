@@ -491,17 +491,6 @@ document.addEventListener('DOMContentLoaded', function() {
         // Start the download via iframe
         iframe.src = url;
         
-        // Also try direct download as fallback
-        setTimeout(() => {
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = '';
-            link.style.display = 'none';
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        }, 1000);
-        
         // Start monitoring
         setTimeout(checkDownloadComplete, 1000);
         
