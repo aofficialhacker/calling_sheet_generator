@@ -29,6 +29,9 @@ switch($type) {
     case 'caller':
         header("Location: caller_panel.php");
         break;
+    case 'team_leader':
+        header("Location: team_leader_login.php");
+        break;
     default:
         header("Location: index.php");
         break;

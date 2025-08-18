@@ -1,0 +1,70 @@
+[2025-08-18 08:26:14] PDF generation started
+[2025-08-18 08:26:14] Total records found: 0
+[2025-08-18 08:26:14] No records found - exiting
+[2025-08-18 08:27:29] PDF generation started
+[2025-08-18 08:27:29] Total records found: 99
+[2025-08-18 08:27:29] Creating mPDF instance with 11 columns
+[2025-08-18 08:27:29] mPDF instance created successfully
+[2025-08-18 08:28:06] PDF generation started
+[2025-08-18 08:28:06] Total records found: 9998
+[2025-08-18 08:28:06] Creating mPDF instance with 12 columns
+[2025-08-18 08:28:07] mPDF instance created successfully
+[2025-08-18 08:29:10] PDF generation started
+[2025-08-18 08:29:11] Total records found: 0
+[2025-08-18 08:29:11] No records found - exiting
+[2025-08-18 08:30:40] PDF generation started
+[2025-08-18 08:30:40] Total records found: 99
+[2025-08-18 08:30:40] Creating mPDF instance with 11 columns
+[2025-08-18 08:30:40] mPDF instance created successfully
+[2025-08-18 08:37:50] PDF generation started
+[2025-08-18 08:37:50] Total records found: 99
+[2025-08-18 08:37:50] Creating mPDF instance with 11 columns
+[2025-08-18 08:37:51] mPDF instance created successfully
+[2025-08-18 09:12:19] PDF generation started
+[2025-08-18 09:12:19] Total records found: 1122
+[2025-08-18 09:12:19] Creating mPDF instance with 11 columns
+[2025-08-18 09:12:19] mPDF instance created successfully
+[2025-08-18 09:12:23] PDF generation started
+[2025-08-18 09:12:23] Total records found: 1122
+[2025-08-18 09:12:23] Creating mPDF instance with 11 columns
+[2025-08-18 09:12:23] mPDF instance created successfully
+[2025-08-18 09:12:31] PDF generation started
+[2025-08-18 09:12:31] Total records found: 9998
+[2025-08-18 09:12:31] Creating mPDF instance with 12 columns
+[2025-08-18 09:12:31] mPDF instance created successfully
+[2025-08-18 09:28:37] TCPDF PDF generation started
+[2025-08-18 09:28:37] Total records found: 1122
+[2025-08-18 09:28:37] Creating TCPDF instance with 11 columns
+[2025-08-18 09:28:38] Starting data processing
+[2025-08-18 09:28:40] Data processing complete, outputting PDF
+[2025-08-18 09:28:40] PDF output successful
+[2025-08-18 09:32:42] TCPDF PDF generation started
+[2025-08-18 09:32:42] Total records found: 9998
+[2025-08-18 09:32:42] Creating TCPDF instance with 12 columns
+[2025-08-18 09:32:42] Starting data processing
+[2025-08-18 09:32:55] Data processing complete, outputting PDF
+[2025-08-18 09:32:57] PDF output successful
+[2025-08-18 09:41:16] TCPDF PDF generation started
+[2025-08-18 09:41:16] Total records found: 9998
+[2025-08-18 09:41:16] Creating TCPDF instance with 12 columns
+[2025-08-18 09:41:16] Starting data processing
+[2025-08-18 09:41:45] Data processing complete, outputting PDF
+[2025-08-18 09:41:46] PDF output successful
+[2025-08-18 09:50:21] TCPDF PDF generation started
+[2025-08-18 09:50:21] Total records found: 9998
+[2025-08-18 09:50:21] Creating TCPDF instance with 12 columns
+[2025-08-18 09:50:21] Starting data processing
+[2025-08-18 09:50:52] Data processing complete, outputting PDF
+[2025-08-18 09:50:54] PDF output successful
+[2025-08-18 10:01:43] TCPDF PDF generation started
+[2025-08-18 10:01:43] Total records found: 9998
+[2025-08-18 10:01:43] Creating TCPDF instance with 12 columns
+[2025-08-18 10:01:44] Starting data processing
+[2025-08-18 10:02:15] Data processing complete, outputting PDF
+[2025-08-18 10:02:16] PDF output successful
+[2025-08-18 10:03:09] TCPDF PDF generation started
+[2025-08-18 10:03:09] Total records found: 9998
+[2025-08-18 10:03:09] Creating TCPDF instance with 12 columns
+[2025-08-18 10:03:09] Starting data processing
+[2025-08-18 10:03:40] Data processing complete, outputting PDF
+[2025-08-18 10:03:42] PDF output successful

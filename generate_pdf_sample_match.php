@@ -16,7 +16,6 @@ use TCPDF;
 
 set_time_limit(0);
 ini_set('memory_limit', '2048M');
-ini_set('display_errors', 0);
 
 $conn = getDBConnection();
 
@@ -201,161 +200,150 @@ foreach ($optionalColumns as $column) {
     }
 }
 
-// Create custom PDF class with proper header/footer for every page
-class CompletePDF extends TCPDF {
-    private $pdfTitle;
-    private $slotLegend;
-    private $dispLegend;
-    
-    public function __construct($title, $slotLegend, $dispLegend) {
-        parent::__construct('L', 'mm', 'A4', true, 'UTF-8', false);
-        $this->pdfTitle = $title;
-        $this->slotLegend = $slotLegend;
-        $this->dispLegend = $dispLegend;
-    }
-    
-    public function Header() {
-        // Title and legends on EVERY page
-        $this->SetY(10);
-        $this->SetFont('helvetica', 'B', 11);
-        $this->Cell(0, 6, $this->pdfTitle, 0, 1, 'C');
-        
-        $this->SetFont('helvetica', '', 7);
-        $this->Cell(0, 4, $this->slotLegend, 0, 1, 'C');
-        
-        // Handle long disposition legend
-        $dispLines = strlen($this->dispLegend) > 140 ? explode(' || ', $this->dispLegend) : [$this->dispLegend];
-        foreach ($dispLines as $line) {
-            $this->Cell(0, 3, $line, 0, 1, 'C');
-        }
-        $this->Ln(2);
-    }
-    
-    public function Footer() {
-        $this->SetY(-15);
-        $this->SetFont('helvetica', 'I', 8);
-        $this->Cell(0, 10, 'Page ' . $this->getAliasNumPage() . ' of ' . $this->getAliasNbPages(), 0, 0, 'R');
-    }
-}
+// Create PDF to match sample exactly
+$pdf = new TCPDF('L', 'mm', 'A4', true, 'UTF-8', false);
 
-// Create PDF with proper header/footer
-$pdf = new CompletePDF($pdfTitle, $slotLegend, $dispLegend);
 $pdf->SetCreator('Calling Sheet Generator');
 $pdf->SetTitle($pdfTitle);
-$pdf->SetMargins(4, 35, 4); // More space for header
-$pdf->SetAutoPageBreak(true, 15);
+$pdf->SetMargins(10, 25, 10);
+$pdf->SetAutoPageBreak(true, 20);
 
 $pdf->AddPage();
 
-// Set up exact column structure matching sample
-$columnData = [];
-$totalWidth = 287; // A4 landscape minus margins
+// Header - match sample format
+$pdf->SetFont('helvetica', 'B', 12);
+$pdf->Cell(0, 8, $pdfTitle, 0, 1, 'C');
 
+// Legends
+$pdf->SetFont('helvetica', '', 8);
+$pdf->Cell(0, 5, $slotLegend, 0, 1, 'C');
+
+// Split disposition legend if too long
+if (strlen($dispLegend) > 120) {
+    $lines = explode(' || ', $dispLegend);
+    foreach ($lines as $line) {
+        $pdf->Cell(0, 4, $line, 0, 1, 'C');
+    }
+} else {
+    $pdf->Cell(0, 4, $dispLegend, 0, 1, 'C');
+}
+
+$pdf->Ln(3);
+
+// Table headers - exactly like sample
+$headers = [];
+$widths = [];
 foreach ($finalHeaders as $header) {
     switch ($header) {
         case 'id':
-            $columnData[] = ['header' => 'Id', 'width' => 22];
+            $headers[] = 'Id';
+            $widths[] = 25;
             break;
         case 'slot':
-            $columnData[] = ['header' => 'Slot', 'width' => 12];
+            $headers[] = 'Slot';
+            $widths[] = 15;
             break;
         case 'connectivity':
-            $columnData[] = ['header' => 'Connectivity', 'width' => 20];
+            $headers[] = 'Connectivity';
+            $widths[] = 25;
             break;
         case 'disposition':
-            $columnData[] = ['header' => 'Disposition', 'width' => 45]; // Increased for less congestion
+            $headers[] = 'Disposition';
+            $widths[] = 50;
             break;
         case 'mobile_no':
-            $columnData[] = ['header' => 'Mobile', 'width' => 24];
-            break;
-        case 'title':
-            $columnData[] = ['header' => 'Title', 'width' => 12];
+            $headers[] = 'Mobile';
+            $widths[] = 25;
             break;
         case 'name':
-            $columnData[] = ['header' => 'Name', 'width' => 28];
-            break;
-        case 'pan':
-            $columnData[] = ['header' => 'Pan', 'width' => 18];
+            $headers[] = 'Name';
+            $widths[] = 35;
             break;
         case 'dob':
-            $columnData[] = ['header' => 'Dob', 'width' => 18];
+            $headers[] = 'Dob';
+            $widths[] = 22;
             break;
         case 'age':
-            $columnData[] = ['header' => 'Age', 'width' => 10];
+            $headers[] = 'Age';
+            $widths[] = 15;
             break;
         case 'address':
-            $columnData[] = ['header' => 'Address', 'width' => 35];
+            $headers[] = 'Address';
+            $widths[] = 40;
             break;
         case 'city':
-            $columnData[] = ['header' => 'City', 'width' => 20];
+            $headers[] = 'City';
+            $widths[] = 20;
             break;
         case 'state':
-            $columnData[] = ['header' => 'State', 'width' => 20];
-            break;
-        case 'pincode':
-            $columnData[] = ['header' => 'Pincode', 'width' => 18];
+            $headers[] = 'State';
+            $widths[] = 20;
             break;
         default:
-            $columnData[] = ['header' => ucwords(str_replace('_', ' ', $header)), 'width' => 18];
+            $headers[] = ucwords(str_replace('_', ' ', $header));
+            $widths[] = 20;
             break;
     }
 }
 
-// Scale to fit if necessary
-$currentTotal = array_sum(array_column($columnData, 'width'));
-if ($currentTotal > $totalWidth) {
-    $scale = $totalWidth / $currentTotal;
-    foreach ($columnData as &$col) {
-        $col['width'] *= $scale;
-    }
-}
+$pdf->SetFont('helvetica', 'B', 9);
+$pdf->SetFillColor(220, 220, 220);
 
-// Draw header row exactly like sample
-$pdf->SetFont('helvetica', 'B', 7);
-$pdf->SetFillColor(240, 240, 240);
-foreach ($columnData as $col) {
-    $pdf->Cell($col['width'], 6, $col['header'], 1, 0, 'C', true);
+foreach ($headers as $i => $header) {
+    $pdf->Cell($widths[$i], 10, $header, 1, 0, 'C', true);
 }
 $pdf->Ln();
 
-// Calculate cutline position (after Mobile column)
-$cutlineX = 5; // Start from left margin
-$mobileIndex = array_search('mobile_no', $finalHeaders);
-for ($i = 0; $i <= $mobileIndex; $i++) {
-    $cutlineX += $columnData[$i]['width'];
+// Draw cutline after mobile column (match sample position)
+$cutlineX = 10; // Start position
+for ($i = 0; $i <= 4; $i++) { // Up to and including mobile column (index 4)
+    $cutlineX += $widths[$i];
 }
 
-// Draw cutline (dashed vertical line like sample)
-$pdf->SetDrawColor(0, 0, 0);
-$pdf->SetLineWidth(0.2);
-$startY = $pdf->GetY();
-for ($y = $startY; $y < 200; $y += 2) {
-    $pdf->Line($cutlineX, $y, $cutlineX, $y + 1);
+$pdf->SetDrawColor(100, 100, 100);
+$pdf->SetLineWidth(0.3);
+
+// Draw dashed line
+for ($y = $pdf->GetY(); $y < 200; $y += 3) {
+    $pdf->Line($cutlineX, $y, $cutlineX, $y + 1.5);
 }
 
-// Create better spaced disposition grid
-$dispGrid = '';
-$gridRow1 = [];
-$gridRow2 = [];
-$gridRow3 = [];
+// Fetch and display data
+$finalHeadersWithAlias = array_map(function($header) {
+    return 'fcl.`' . $header . '`';
+}, $finalHeaders);
+$columnsToSelectWithAlias = implode(', ', $finalHeadersWithAlias);
+
+$sql = "SELECT {$columnsToSelectWithAlias} " . $fullBaseSql . " ORDER BY fcl.id LIMIT 100";
+$stmt = $conn->prepare($sql);
+if ($types) {
+    $stmt->bind_param($types, ...$params);
+}
+$stmt->execute();
+$result = $stmt->get_result();
+
+// Create disposition grid exactly like sample
+$dispositionGrid = '';
+$dispRow1 = [];
+$dispRow2 = [];
+$dispRow3 = [];
 
 foreach ($dispositionList as $i => $disp) {
-    if ($i < 5) { // 5 codes per row instead of 4 for better spacing
-        $gridRow1[] = 'O ' . $disp['code'];
-    } elseif ($i < 10) {
-        $gridRow2[] = 'O ' . $disp['code'];
+    if ($i < 4) {
+        $dispRow1[] = 'O ' . $disp['code'];
+    } elseif ($i < 8) {
+        $dispRow2[] = 'O ' . $disp['code'];
     } else {
-        $gridRow3[] = 'O ' . $disp['code'];
+        $dispRow3[] = 'O ' . $disp['code'];
     }
 }
 
-// Better spacing between disposition codes
-$dispGrid = implode('  ', $gridRow1); // Double space for better readability
-if (!empty($gridRow2)) {
-    $dispGrid .= "\n" . implode('  ', $gridRow2);
+$dispositionGrid = implode(' ', $dispRow1);
+if (!empty($dispRow2)) {
+    $dispositionGrid .= "\n" . implode(' ', $dispRow2);
 }
-if (!empty($gridRow3)) {
-    $dispGrid .= "\n" . implode('  ', $gridRow3);
+if (!empty($dispRow3)) {
+    $dispositionGrid .= "\n" . implode(' ', $dispRow3);
 }
 
 function formatDateForPDF($dateValue) {
@@ -369,55 +357,27 @@ function formatDateForPDF($dateValue) {
     return $dateValue;
 }
 
-// Fetch and display data with exact sample formatting
-$finalHeadersWithAlias = array_map(function($header) {
-    return 'fcl.`' . $header . '`';
-}, $finalHeaders);
-$columnsToSelectWithAlias = implode(', ', $finalHeadersWithAlias);
-
-$sql = "SELECT {$columnsToSelectWithAlias} " . $fullBaseSql . " ORDER BY fcl.id"; // Removed LIMIT to get ALL data
-$stmt = $conn->prepare($sql);
-if ($types) {
-    $stmt->bind_param($types, ...$params);
-}
-$stmt->execute();
-$result = $stmt->get_result();
-
-// Function to redraw headers on new page
-function redrawHeaders($pdf, $columnData, $cutlineX) {
-    $pdf->SetFont('helvetica', 'B', 8);
-    $pdf->SetFillColor(240, 240, 240);
-    foreach ($columnData as $col) {
-        $pdf->Cell($col['width'], 7, $col['header'], 1, 0, 'C', true);
-    }
-    $pdf->Ln();
-    
-    // Redraw cutline
-    $startY = $pdf->GetY();
-    for ($y = $startY; $y < 200; $y += 2) {
-        $pdf->Line($cutlineX, $y, $cutlineX, $y + 1);
-    }
-}
-
-$rowHeight = 10; // Increased row height to prevent overlapping
-
 while ($row = $result->fetch_assoc()) {
-    if ($pdf->GetY() + $rowHeight > 190) {
+    if ($pdf->GetY() > 180) {
         $pdf->AddPage();
-        redrawHeaders($pdf, $columnData, $cutlineX);
+        
+        // Redraw headers
+        $pdf->SetFont('helvetica', 'B', 9);
+        $pdf->SetFillColor(220, 220, 220);
+        foreach ($headers as $i => $header) {
+            $pdf->Cell($widths[$i], 10, $header, 1, 0, 'C', true);
+        }
+        $pdf->Ln();
     }
     
-    $startY = $pdf->GetY();
+    $pdf->SetFont('helvetica', '', 8);
     
     foreach ($finalHeaders as $i => $header) {
         $cellContent = '';
-        $fontSize = 7; // Slightly larger font
-        $isBold = false;
         
         switch($header) {
             case 'disposition':
-                $cellContent = $dispGrid;
-                $fontSize = 6; // Readable size for disposition
+                $cellContent = $dispositionGrid;
                 break;
             case 'connectivity':
                 $cellContent = 'O Y / O N';
@@ -427,7 +387,7 @@ while ($row = $result->fetch_assoc()) {
                 break;
             case 'mobile_no':
                 $cellContent = $row[$header] ?? '';
-                $isBold = true;
+                $pdf->SetFont('helvetica', 'B', 8);
                 break;
             case 'id':
                 $cellContent = $row[$header] ?? '';
@@ -436,37 +396,31 @@ while ($row = $result->fetch_assoc()) {
             case 'expiry':
                 $cellContent = formatDateForPDF($row[$header] ?? '');
                 break;
-            case 'address':
-                $addr = $row[$header] ?? '';
-                if (strlen($addr) > 25) {
-                    $cellContent = substr($addr, 0, 25) . '..';
-                } else {
-                    $cellContent = $addr;
-                }
-                $fontSize = 6;
-                break;
             default:
                 $cellContent = $row[$header] ?? '';
-                if (strlen($cellContent) > 20) {
-                    $cellContent = substr($cellContent, 0, 20) . '..';
+                if (strlen($cellContent) > 30) {
+                    $cellContent = substr($cellContent, 0, 30) . '...';
                 }
                 break;
         }
         
-        $pdf->SetFont('helvetica', $isBold ? 'B' : '', $fontSize);
-        
-        // Proper cell alignment to prevent overlapping
+        // Use MultiCell for disposition column to handle multiple lines
         if ($header === 'disposition') {
             $currentX = $pdf->GetX();
-            $pdf->MultiCell($columnData[$i]['width'], $rowHeight, $cellContent, 1, 'C', false);
-            $pdf->SetXY($currentX + $columnData[$i]['width'], $startY);
+            $currentY = $pdf->GetY();
+            
+            $pdf->MultiCell($widths[$i], 12, $cellContent, 1, 'L', false);
+            
+            $pdf->SetXY($currentX + $widths[$i], $currentY);
         } else {
-            $pdf->SetXY($pdf->GetX(), $startY);
-            $pdf->Cell($columnData[$i]['width'], $rowHeight, $cellContent, 1, 0, 'L');
+            $pdf->Cell($widths[$i], 12, $cellContent, 1, 0, 'L');
         }
+        
+        // Reset font
+        $pdf->SetFont('helvetica', '', 8);
     }
     
-    $pdf->SetXY(4, $startY + $rowHeight);
+    $pdf->Ln();
 }
 
 // Output PDF

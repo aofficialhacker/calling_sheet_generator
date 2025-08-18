@@ -47,6 +47,22 @@ function requireAdmin() {
     }
 }
 
+// Function to check if user is team leader
+function isTeamLeader() {
+    return isset($_SESSION['is_team_leader']) && $_SESSION['is_team_leader'] === true;
+}
+
+// Function to require team leader access
+function requireTeamLeader() {
+    if (session_status() == PHP_SESSION_NONE) {
+        session_start();
+    }
+    if (!isTeamLeader()) {
+        header("Location: team_leader_login.php");
+        exit();
+    }
+}
+
 // Function to generate unique admin ID (No changes needed, logic is sound)
 function generateAdminId($name, $conn) {
     $nameParts = explode(' ', trim($name));

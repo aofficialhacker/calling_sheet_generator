@@ -63,6 +63,11 @@ $active_page = basename($_SERVER['PHP_SELF']);
                     <?php endif; ?>
                 </a>
             </li>
+            <li class="nav-item">
+                <a class="nav-link <?= $active_page == 'manage_team_leaders.php' ? 'active' : '' ?>" href="manage_team_leaders.php">
+                    <i class="bi bi-people-fill me-2"></i>Team Leaders
+                </a>
+            </li>
             <li class="nav-item mt-4">
                 <a class="nav-link text-danger" href="logout.php?type=admin">
                     <i class="bi bi-box-arrow-right me-2"></i>Logout

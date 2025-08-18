@@ -201,51 +201,33 @@ foreach ($optionalColumns as $column) {
     }
 }
 
-// Create custom PDF class with proper header/footer for every page
-class CompletePDF extends TCPDF {
-    private $pdfTitle;
-    private $slotLegend;
-    private $dispLegend;
-    
-    public function __construct($title, $slotLegend, $dispLegend) {
-        parent::__construct('L', 'mm', 'A4', true, 'UTF-8', false);
-        $this->pdfTitle = $title;
-        $this->slotLegend = $slotLegend;
-        $this->dispLegend = $dispLegend;
-    }
-    
-    public function Header() {
-        // Title and legends on EVERY page
-        $this->SetY(10);
-        $this->SetFont('helvetica', 'B', 11);
-        $this->Cell(0, 6, $this->pdfTitle, 0, 1, 'C');
-        
-        $this->SetFont('helvetica', '', 7);
-        $this->Cell(0, 4, $this->slotLegend, 0, 1, 'C');
-        
-        // Handle long disposition legend
-        $dispLines = strlen($this->dispLegend) > 140 ? explode(' || ', $this->dispLegend) : [$this->dispLegend];
-        foreach ($dispLines as $line) {
-            $this->Cell(0, 3, $line, 0, 1, 'C');
-        }
-        $this->Ln(2);
-    }
-    
-    public function Footer() {
-        $this->SetY(-15);
-        $this->SetFont('helvetica', 'I', 8);
-        $this->Cell(0, 10, 'Page ' . $this->getAliasNumPage() . ' of ' . $this->getAliasNbPages(), 0, 0, 'R');
-    }
-}
-
-// Create PDF with proper header/footer
-$pdf = new CompletePDF($pdfTitle, $slotLegend, $dispLegend);
+// Create exactly matching PDF layout
+$pdf = new TCPDF('L', 'mm', 'A4', true, 'UTF-8', false);
 $pdf->SetCreator('Calling Sheet Generator');
 $pdf->SetTitle($pdfTitle);
-$pdf->SetMargins(4, 35, 4); // More space for header
+$pdf->SetMargins(5, 20, 5);
 $pdf->SetAutoPageBreak(true, 15);
 
+// Custom header function
+$pdf->SetHeaderData('', 0, '', '');
+$pdf->setHeaderFont(Array('helvetica', '', 10));
+$pdf->setFooterFont(Array('helvetica', '', 8));
+
 $pdf->AddPage();
+
+// Title and legends exactly like sample
+$pdf->SetFont('helvetica', 'B', 11);
+$pdf->Cell(0, 6, $pdfTitle, 0, 1, 'C');
+
+$pdf->SetFont('helvetica', '', 7);
+$pdf->Cell(0, 4, $slotLegend, 0, 1, 'C');
+
+// Handle long disposition legend
+$dispLines = strlen($dispLegend) > 140 ? explode(' || ', $dispLegend) : [$dispLegend];
+foreach ($dispLines as $line) {
+    $pdf->Cell(0, 3, $line, 0, 1, 'C');
+}
+$pdf->Ln(2);
 
 // Set up exact column structure matching sample
 $columnData = [];
@@ -263,7 +245,7 @@ foreach ($finalHeaders as $header) {
             $columnData[] = ['header' => 'Connectivity', 'width' => 20];
             break;
         case 'disposition':
-            $columnData[] = ['header' => 'Disposition', 'width' => 45]; // Increased for less congestion
+            $columnData[] = ['header' => 'Disposition', 'width' => 32];
             break;
         case 'mobile_no':
             $columnData[] = ['header' => 'Mobile', 'width' => 24];
@@ -287,13 +269,13 @@ foreach ($finalHeaders as $header) {
             $columnData[] = ['header' => 'Address', 'width' => 35];
             break;
         case 'city':
-            $columnData[] = ['header' => 'City', 'width' => 20];
+            $columnData[] = ['header' => 'City', 'width' => 16];
             break;
         case 'state':
-            $columnData[] = ['header' => 'State', 'width' => 20];
+            $columnData[] = ['header' => 'State', 'width' => 16];
             break;
         case 'pincode':
-            $columnData[] = ['header' => 'Pincode', 'width' => 18];
+            $columnData[] = ['header' => 'Pincode', 'width' => 16];
             break;
         default:
             $columnData[] = ['header' => ucwords(str_replace('_', ' ', $header)), 'width' => 18];
@@ -333,29 +315,28 @@ for ($y = $startY; $y < 200; $y += 2) {
     $pdf->Line($cutlineX, $y, $cutlineX, $y + 1);
 }
 
-// Create better spaced disposition grid
+// Create compact disposition grid exactly like sample
 $dispGrid = '';
 $gridRow1 = [];
 $gridRow2 = [];
 $gridRow3 = [];
 
 foreach ($dispositionList as $i => $disp) {
-    if ($i < 5) { // 5 codes per row instead of 4 for better spacing
+    if ($i < 4) {
         $gridRow1[] = 'O ' . $disp['code'];
-    } elseif ($i < 10) {
+    } elseif ($i < 8) {
         $gridRow2[] = 'O ' . $disp['code'];
     } else {
         $gridRow3[] = 'O ' . $disp['code'];
     }
 }
 
-// Better spacing between disposition codes
-$dispGrid = implode('  ', $gridRow1); // Double space for better readability
+$dispGrid = implode(' ', $gridRow1);
 if (!empty($gridRow2)) {
-    $dispGrid .= "\n" . implode('  ', $gridRow2);
+    $dispGrid .= "\n" . implode(' ', $gridRow2);
 }
 if (!empty($gridRow3)) {
-    $dispGrid .= "\n" . implode('  ', $gridRow3);
+    $dispGrid .= "\n" . implode(' ', $gridRow3);
 }
 
 function formatDateForPDF($dateValue) {
@@ -375,7 +356,7 @@ $finalHeadersWithAlias = array_map(function($header) {
 }, $finalHeaders);
 $columnsToSelectWithAlias = implode(', ', $finalHeadersWithAlias);
 
-$sql = "SELECT {$columnsToSelectWithAlias} " . $fullBaseSql . " ORDER BY fcl.id"; // Removed LIMIT to get ALL data
+$sql = "SELECT {$columnsToSelectWithAlias} " . $fullBaseSql . " ORDER BY fcl.id LIMIT 100";
 $stmt = $conn->prepare($sql);
 if ($types) {
     $stmt->bind_param($types, ...$params);
@@ -383,41 +364,38 @@ if ($types) {
 $stmt->execute();
 $result = $stmt->get_result();
 
-// Function to redraw headers on new page
-function redrawHeaders($pdf, $columnData, $cutlineX) {
-    $pdf->SetFont('helvetica', 'B', 8);
-    $pdf->SetFillColor(240, 240, 240);
-    foreach ($columnData as $col) {
-        $pdf->Cell($col['width'], 7, $col['header'], 1, 0, 'C', true);
-    }
-    $pdf->Ln();
-    
-    // Redraw cutline
-    $startY = $pdf->GetY();
-    for ($y = $startY; $y < 200; $y += 2) {
-        $pdf->Line($cutlineX, $y, $cutlineX, $y + 1);
-    }
-}
-
-$rowHeight = 10; // Increased row height to prevent overlapping
+$rowHeight = 8; // Compact row height like sample
 
 while ($row = $result->fetch_assoc()) {
     if ($pdf->GetY() + $rowHeight > 190) {
         $pdf->AddPage();
-        redrawHeaders($pdf, $columnData, $cutlineX);
+        
+        // Redraw header
+        $pdf->SetFont('helvetica', 'B', 7);
+        $pdf->SetFillColor(240, 240, 240);
+        foreach ($columnData as $col) {
+            $pdf->Cell($col['width'], 6, $col['header'], 1, 0, 'C', true);
+        }
+        $pdf->Ln();
+        
+        // Redraw cutline
+        $startY = $pdf->GetY();
+        for ($y = $startY; $y < 200; $y += 2) {
+            $pdf->Line($cutlineX, $y, $cutlineX, $y + 1);
+        }
     }
     
-    $startY = $pdf->GetY();
+    $pdf->SetFont('helvetica', '', 6);
     
     foreach ($finalHeaders as $i => $header) {
         $cellContent = '';
-        $fontSize = 7; // Slightly larger font
+        $fontSize = 6;
         $isBold = false;
         
         switch($header) {
             case 'disposition':
                 $cellContent = $dispGrid;
-                $fontSize = 6; // Readable size for disposition
+                $fontSize = 5;
                 break;
             case 'connectivity':
                 $cellContent = 'O Y / O N';
@@ -436,37 +414,27 @@ while ($row = $result->fetch_assoc()) {
             case 'expiry':
                 $cellContent = formatDateForPDF($row[$header] ?? '');
                 break;
-            case 'address':
-                $addr = $row[$header] ?? '';
-                if (strlen($addr) > 25) {
-                    $cellContent = substr($addr, 0, 25) . '..';
-                } else {
-                    $cellContent = $addr;
-                }
-                $fontSize = 6;
-                break;
             default:
                 $cellContent = $row[$header] ?? '';
-                if (strlen($cellContent) > 20) {
-                    $cellContent = substr($cellContent, 0, 20) . '..';
+                if (strlen($cellContent) > 15) {
+                    $cellContent = substr($cellContent, 0, 15) . '..';
                 }
                 break;
         }
         
         $pdf->SetFont('helvetica', $isBold ? 'B' : '', $fontSize);
         
-        // Proper cell alignment to prevent overlapping
         if ($header === 'disposition') {
             $currentX = $pdf->GetX();
-            $pdf->MultiCell($columnData[$i]['width'], $rowHeight, $cellContent, 1, 'C', false);
-            $pdf->SetXY($currentX + $columnData[$i]['width'], $startY);
+            $currentY = $pdf->GetY();
+            $pdf->MultiCell($columnData[$i]['width'], $rowHeight, $cellContent, 1, 'L', false);
+            $pdf->SetXY($currentX + $columnData[$i]['width'], $currentY);
         } else {
-            $pdf->SetXY($pdf->GetX(), $startY);
             $pdf->Cell($columnData[$i]['width'], $rowHeight, $cellContent, 1, 0, 'L');
         }
     }
     
-    $pdf->SetXY(4, $startY + $rowHeight);
+    $pdf->Ln();
 }
 
 // Output PDF
