@@ -56,9 +56,9 @@ while ($row = $result->fetch_assoc()) {
     $row['current_code'] = $codeInfo['code'];
     $row['code_expires_at'] = $codeInfo['expires_at'];
     
-    // Calculate time remaining for code expiry
-    if ($row['code_generated_at']) {
-        $expiryTime = strtotime($row['code_generated_at']) + 14400; // 4 hours
+    // Calculate time remaining for code expiry using the correct expires_at from refreshTeamLeaderCode
+    if ($codeInfo['expires_at']) {
+        $expiryTime = strtotime($codeInfo['expires_at']);
         $timeRemaining = $expiryTime - time();
         $row['time_remaining_seconds'] = max(0, $timeRemaining);
         $row['time_remaining_formatted'] = gmdate("H:i:s", max(0, $timeRemaining));

@@ -14,11 +14,23 @@ if (!isAdmin() && !isSuperadmin()) {
 
 use TCPDF;
 
-set_time_limit(0);
-ini_set('memory_limit', '2048M');
+set_time_limit(300); // 5 minute timeout instead of unlimited
+ini_set('memory_limit', '1024M'); // Reasonable memory limit
 ini_set('display_errors', 0);
+ini_set('max_execution_time', 300);
+
+// Enable output buffering for better performance
+if (ob_get_level() == 0) ob_start();
+
+// Error logging function for debugging
+function debugLog($message) {
+    error_log(date('[Y-m-d H:i:s] ') . "PDF Generation: " . $message);
+}
+
+debugLog("PDF generation started");
 
 $conn = getDBConnection();
+debugLog("Database connection established");
 
 // Get all the same parameters as the original
 $batch_id = $_GET['batch_id'] ?? null;
@@ -238,68 +250,69 @@ class CompletePDF extends TCPDF {
     }
 }
 
-// Create PDF with proper header/footer
-$pdf = new CompletePDF($pdfTitle, $slotLegend, $dispLegend);
-$pdf->SetCreator('Calling Sheet Generator');
-$pdf->SetTitle($pdfTitle);
-$pdf->SetMargins(4, 35, 4); // More space for header
-$pdf->SetAutoPageBreak(true, 15);
-
-$pdf->AddPage();
-
-// Set up exact column structure matching sample
+// Set up optimized column structure with proper widths FIRST
 $columnData = [];
-$totalWidth = 287; // A4 landscape minus margins
+$totalWidth = 275; // A4 landscape minus margins for centering
 
 foreach ($finalHeaders as $header) {
     switch ($header) {
         case 'id':
-            $columnData[] = ['header' => 'Id', 'width' => 22];
+            $columnData[] = ['header' => 'Id', 'width' => 20];
             break;
         case 'slot':
-            $columnData[] = ['header' => 'Slot', 'width' => 12];
+            $columnData[] = ['header' => 'Slot', 'width' => 10];
             break;
         case 'connectivity':
-            $columnData[] = ['header' => 'Connectivity', 'width' => 20];
+            $columnData[] = ['header' => 'Connectivity', 'width' => 18];
             break;
         case 'disposition':
-            $columnData[] = ['header' => 'Disposition', 'width' => 45]; // Increased for less congestion
+            $columnData[] = ['header' => 'Disposition', 'width' => 42];
             break;
         case 'mobile_no':
-            $columnData[] = ['header' => 'Mobile', 'width' => 24];
+            $columnData[] = ['header' => 'Mobile', 'width' => 25];
             break;
         case 'title':
             $columnData[] = ['header' => 'Title', 'width' => 12];
             break;
         case 'name':
-            $columnData[] = ['header' => 'Name', 'width' => 28];
+            $columnData[] = ['header' => 'Name', 'width' => 35]; // Increased to prevent overlap
             break;
         case 'pan':
             $columnData[] = ['header' => 'Pan', 'width' => 18];
             break;
         case 'dob':
-            $columnData[] = ['header' => 'Dob', 'width' => 18];
+            $columnData[] = ['header' => 'Dob', 'width' => 22]; // Increased for better spacing
             break;
         case 'age':
-            $columnData[] = ['header' => 'Age', 'width' => 10];
+            $columnData[] = ['header' => 'Age', 'width' => 8];
             break;
         case 'address':
-            $columnData[] = ['header' => 'Address', 'width' => 35];
+            $columnData[] = ['header' => 'Address', 'width' => 45]; // Increased for less truncation
             break;
         case 'city':
-            $columnData[] = ['header' => 'City', 'width' => 20];
+            $columnData[] = ['header' => 'City', 'width' => 18];
             break;
         case 'state':
-            $columnData[] = ['header' => 'State', 'width' => 20];
+            $columnData[] = ['header' => 'State', 'width' => 18];
             break;
         case 'pincode':
-            $columnData[] = ['header' => 'Pincode', 'width' => 18];
+            $columnData[] = ['header' => 'Pincode', 'width' => 16];
             break;
         default:
-            $columnData[] = ['header' => ucwords(str_replace('_', ' ', $header)), 'width' => 18];
+            $columnData[] = ['header' => ucwords(str_replace('_', ' ', $header)), 'width' => 16];
             break;
     }
 }
+
+debugLog("Creating PDF with title: $pdfTitle");
+debugLog("Column data prepared with " . count($columnData) . " columns");
+
+// Create PDF with proper header/footer AFTER column data is ready
+$pdf = new CompletePDF($pdfTitle, $slotLegend, $dispLegend);
+$pdf->SetCreator('Calling Sheet Generator');
+$pdf->SetTitle($pdfTitle);
+
+debugLog("PDF object created successfully");
 
 // Scale to fit if necessary
 $currentTotal = array_sum(array_column($columnData, 'width'));
@@ -308,29 +321,62 @@ if ($currentTotal > $totalWidth) {
     foreach ($columnData as &$col) {
         $col['width'] *= $scale;
     }
+    // Recalculate centering after scaling
+    $currentTotal = array_sum(array_column($columnData, 'width'));
 }
 
-// Draw header row exactly like sample
-$pdf->SetFont('helvetica', 'B', 7);
+// Calculate centering margins now that we have proper column data
+$pageWidth = 297; // A4 landscape width
+$leftMargin = ($pageWidth - $currentTotal) / 2;
+$pdf->SetMargins($leftMargin, 35, $leftMargin); // Centered margins
+$pdf->SetAutoPageBreak(true, 15);
+
+$pdf->AddPage();
+
+// Draw header row with proper styling
+$pdf->SetFont('helvetica', 'B', 8); // Larger font for headers
 $pdf->SetFillColor(240, 240, 240);
+$headerHeight = 7;
 foreach ($columnData as $col) {
-    $pdf->Cell($col['width'], 6, $col['header'], 1, 0, 'C', true);
+    $pdf->Cell($col['width'], $headerHeight, $col['header'], 1, 0, 'C', true);
 }
 $pdf->Ln();
 
-// Calculate cutline position (after Mobile column)
-$cutlineX = 5; // Start from left margin
+// Calculate cutline positions (before and after Mobile column)
 $mobileIndex = array_search('mobile_no', $finalHeaders);
-for ($i = 0; $i <= $mobileIndex; $i++) {
-    $cutlineX += $columnData[$i]['width'];
-}
-
-// Draw cutline (dashed vertical line like sample)
-$pdf->SetDrawColor(0, 0, 0);
-$pdf->SetLineWidth(0.2);
-$startY = $pdf->GetY();
-for ($y = $startY; $y < 200; $y += 2) {
-    $pdf->Line($cutlineX, $y, $cutlineX, $y + 1);
+if ($mobileIndex !== false) {
+    // Calculate X position before Mobile column
+    $cutlineBefore = $leftMargin;
+    for ($i = 0; $i < $mobileIndex; $i++) {
+        $cutlineBefore += $columnData[$i]['width'];
+    }
+    
+    // Calculate X position after Mobile column  
+    $cutlineAfter = $cutlineBefore + $columnData[$mobileIndex]['width'];
+    
+    // Draw cutlines (dashed vertical lines)
+    $pdf->SetDrawColor(0, 0, 0);
+    $pdf->SetLineWidth(0.3);
+    $startY = $pdf->GetY();
+    
+    // Store cutline positions for use in page breaks
+    $GLOBALS['cutlineBefore'] = $cutlineBefore;
+    $GLOBALS['cutlineAfter'] = $cutlineAfter;
+    
+    // Function to draw cutlines
+    function drawCutlines($pdf, $startY, $endY) {
+        $cutlineBefore = $GLOBALS['cutlineBefore'];
+        $cutlineAfter = $GLOBALS['cutlineAfter'];
+        
+        // Draw dashed lines with 2mm dash pattern
+        for ($y = $startY; $y < $endY; $y += 4) {
+            $pdf->Line($cutlineBefore, $y, $cutlineBefore, min($y + 2, $endY));
+            $pdf->Line($cutlineAfter, $y, $cutlineAfter, min($y + 2, $endY));
+        }
+    }
+    
+    // Draw initial cutlines
+    drawCutlines($pdf, $startY, 200);
 }
 
 // Create better spaced disposition grid
@@ -369,22 +415,28 @@ function formatDateForPDF($dateValue) {
     return $dateValue;
 }
 
-// Fetch and display data with exact sample formatting
+debugLog("Found $totalRecords total records");
+
+// Implement chunked processing for large datasets
 $finalHeadersWithAlias = array_map(function($header) {
     return 'fcl.`' . $header . '`';
 }, $finalHeaders);
 $columnsToSelectWithAlias = implode(', ', $finalHeadersWithAlias);
 
-$sql = "SELECT {$columnsToSelectWithAlias} " . $fullBaseSql . " ORDER BY fcl.id"; // Removed LIMIT to get ALL data
-$stmt = $conn->prepare($sql);
-if ($types) {
-    $stmt->bind_param($types, ...$params);
+// Process data in chunks to prevent memory issues
+$chunkSize = 1000; // Process 1000 records at a time
+$offset = 0;
+$processedRows = 0;
+$maxRows = min($totalRecords, 10000); // Limit to 10K records for performance
+
+if ($totalRecords > $maxRows) {
+    debugLog("Warning: Large dataset ($totalRecords records). Processing first $maxRows records.");
 }
-$stmt->execute();
-$result = $stmt->get_result();
+
+debugLog("Column headers: " . implode(', ', $finalHeaders));
 
 // Function to redraw headers on new page
-function redrawHeaders($pdf, $columnData, $cutlineX) {
+function redrawHeaders($pdf, $columnData) {
     $pdf->SetFont('helvetica', 'B', 8);
     $pdf->SetFillColor(240, 240, 240);
     foreach ($columnData as $col) {
@@ -392,22 +444,56 @@ function redrawHeaders($pdf, $columnData, $cutlineX) {
     }
     $pdf->Ln();
     
-    // Redraw cutline
-    $startY = $pdf->GetY();
-    for ($y = $startY; $y < 200; $y += 2) {
-        $pdf->Line($cutlineX, $y, $cutlineX, $y + 1);
+    // Redraw cutlines if mobile column exists
+    if (isset($GLOBALS['cutlineBefore']) && isset($GLOBALS['cutlineAfter'])) {
+        $startY = $pdf->GetY();
+        drawCutlines($pdf, $startY, 200);
     }
 }
 
-$rowHeight = 10; // Increased row height to prevent overlapping
+$rowHeight = 12; // Increased row height to prevent overlapping
+$memoryCheckInterval = 100; // Check memory every 100 rows
 
-while ($row = $result->fetch_assoc()) {
-    if ($pdf->GetY() + $rowHeight > 190) {
-        $pdf->AddPage();
-        redrawHeaders($pdf, $columnData, $cutlineX);
+// Process data in chunks to prevent timeout and memory issues
+while ($offset < $totalRecords && $processedRows < $maxRows) {
+    $currentChunkSize = min($chunkSize, $totalRecords - $offset, $maxRows - $processedRows);
+    
+    $sql = "SELECT {$columnsToSelectWithAlias} " . $fullBaseSql . " ORDER BY fcl.id LIMIT ?, ?";
+    $stmt = $conn->prepare($sql);
+    
+    $chunkParams = array_merge($params, [$offset, $currentChunkSize]);
+    $chunkTypes = $types . 'ii';
+    
+    if ($chunkTypes) {
+        $stmt->bind_param($chunkTypes, ...$chunkParams);
     }
     
-    $startY = $pdf->GetY();
+    $stmt->execute();
+    $result = $stmt->get_result();
+    
+    if ($result->num_rows === 0) {
+        $stmt->close();
+        break;
+    }
+    
+    // Process current chunk
+    $chunkRowCount = 0;
+    while ($row = $result->fetch_assoc()) {
+        // Memory and time management
+        if ($chunkRowCount % $memoryCheckInterval === 0) {
+            $memUsage = memory_get_usage(true) / 1024 / 1024; // MB
+            if ($memUsage > 800) { // If using more than 800MB
+                debugLog("High memory usage: {$memUsage}MB. Stopping processing.");
+                break 2; // Break both while loops
+            }
+        }
+        
+        if ($pdf->GetY() + $rowHeight > 190) {
+            $pdf->AddPage();
+            redrawHeaders($pdf, $columnData);
+        }
+        
+        $startY = $pdf->GetY();
     
     foreach ($finalHeaders as $i => $header) {
         $cellContent = '';
@@ -438,8 +524,19 @@ while ($row = $result->fetch_assoc()) {
                 break;
             case 'address':
                 $addr = $row[$header] ?? '';
-                if (strlen($addr) > 25) {
-                    $cellContent = substr($addr, 0, 25) . '..';
+                // Use intelligent wrapping instead of truncation
+                if (strlen($addr) > 35) {
+                    // Break at natural word boundaries when possible
+                    $words = explode(' ', $addr);
+                    $line1 = '';
+                    foreach ($words as $word) {
+                        if (strlen($line1 . ' ' . $word) <= 35) {
+                            $line1 .= ($line1 ? ' ' : '') . $word;
+                        } else {
+                            break;
+                        }
+                    }
+                    $cellContent = $line1 . (strlen($addr) > strlen($line1) ? '..' : '');
                 } else {
                     $cellContent = $addr;
                 }
@@ -455,30 +552,98 @@ while ($row = $result->fetch_assoc()) {
         
         $pdf->SetFont('helvetica', $isBold ? 'B' : '', $fontSize);
         
-        // Proper cell alignment to prevent overlapping
+        // Proper cell alignment with padding to prevent overlapping
         if ($header === 'disposition') {
             $currentX = $pdf->GetX();
             $pdf->MultiCell($columnData[$i]['width'], $rowHeight, $cellContent, 1, 'C', false);
             $pdf->SetXY($currentX + $columnData[$i]['width'], $startY);
         } else {
             $pdf->SetXY($pdf->GetX(), $startY);
-            $pdf->Cell($columnData[$i]['width'], $rowHeight, $cellContent, 1, 0, 'L');
+            // Add proper alignment based on content type
+            $alignment = ($header === 'id' || $header === 'age' || $header === 'mobile_no') ? 'C' : 'L';
+            $pdf->Cell($columnData[$i]['width'], $rowHeight, $cellContent, 1, 0, $alignment);
         }
     }
+        
+        $pdf->SetXY($leftMargin, $startY + $rowHeight);
+        $chunkRowCount++;
+        $processedRows++;
+    }
     
-    $pdf->SetXY(4, $startY + $rowHeight);
+    $stmt->close();
+    $offset += $currentChunkSize;
+    
+    // Optional progress indication (can be removed for production)
+    if ($processedRows % 500 === 0) {
+        debugLog("Processed $processedRows / $totalRecords records");
+    }
+    
+    // Force garbage collection periodically
+    if ($processedRows % 1000 === 0) {
+        gc_collect_cycles();
+    }
 }
 
-// Output PDF
-while (ob_get_level()) {
-    ob_end_clean();
+// Add completion statistics
+debugLog("PDF generation completed. Processed $processedRows records.");
+
+if ($processedRows === 0) {
+    debugLog("ERROR: No records were processed!");
+} else {
+    debugLog("SUCCESS: PDF ready for output");
 }
 
-header('Content-Type: application/pdf');
-header('Content-Disposition: attachment; filename="' . $pdfFileName . '"');
+// Error handling and safe PDF output
+try {
+    // Clear any output buffers
+    while (ob_get_level()) {
+        ob_end_clean();
+    }
+    
+    // Check if PDF has content
+    if ($processedRows === 0) {
+        // Generate error PDF if no data was processed
+        $pdf = new CompletePDF("No Data Found", "", "No records found matching your criteria.");
+        $pdf->AddPage();
+        $pdf->SetFont('helvetica', 'B', 16);
+        $pdf->Cell(0, 20, 'No Data Found', 0, 1, 'C');
+        $pdf->SetFont('helvetica', '', 12);
+        $pdf->Cell(0, 10, 'No records found matching your selection criteria.', 0, 1, 'C');
+        $pdf->Cell(0, 10, 'Please adjust your filters and try again.', 0, 1, 'C');
+    }
+    
+    // Set proper headers for PDF download
+    header('Content-Type: application/pdf', true);
+    header('Content-Disposition: attachment; filename="' . $pdfFileName . '"', true);
+    header('Cache-Control: private, max-age=0, must-revalidate', true);
+    header('Pragma: public', true);
+    
+    // Output the PDF
+    $pdf->Output($pdfFileName, 'D');
+    
+} catch (Exception $e) {
+    // Handle any PDF output errors
+    debugLog("Error during PDF output: " . $e->getMessage());
+    
+    // Clear any partial output
+    while (ob_get_level()) {
+        ob_end_clean();
+    }
+    
+    // Send error response
+    header('Content-Type: text/html', true, 500);
+    echo '<!DOCTYPE html><html><head><title>PDF Generation Error</title></head><body>';
+    echo '<h2>PDF Generation Error</h2>';
+    echo '<p>An error occurred while generating the PDF. Please try again.</p>';
+    echo '<p>If the problem persists, try selecting a smaller date range or fewer records.</p>';
+    echo '<button onclick="history.back()">Go Back</button>';
+    echo '</body></html>';
+} finally {
+    // Always close database connection
+    if (isset($conn)) {
+        $conn->close();
+    }
+}
 
-$pdf->Output($pdfFileName, 'D');
-
-$conn->close();
 exit;
 ?>

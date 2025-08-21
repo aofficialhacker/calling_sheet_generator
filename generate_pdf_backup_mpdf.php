@@ -368,27 +368,30 @@ while ($gridCols < $maxCols) {
 }
 $dispoGridHtml .= '</tr></table>';
 
-// CSS and HTML Head with optimizations
+// CSS and HTML Head with optimized layout and cutlines
 $html_head = '<html><head><style>
     body { font-family: sans-serif; font-size: 7pt; }
-    table.data-table { width: 100%; border-collapse: collapse; table-layout: fixed; page-break-inside: auto; }
+    table.data-table { width: 95%; margin: 0 auto; border-collapse: collapse; table-layout: fixed; page-break-inside: auto; }
     thead { display: table-header-group; }
-    tr { page-break-inside: avoid; page-break-after: auto; }
-    th, td { border: 1px solid #333; padding: 2px 3px; text-align: left; vertical-align: middle; word-wrap: break-word; overflow: hidden; }
-    thead th, .legend-cell { text-align: center; font-weight: bold; background-color: #f2f2f2; font-size: 7pt; }
-    .id-col { font-size: 6pt; font-family: monospace; }
-    .mobile-col { font-weight: bold; font-family: monospace; }
-    .connectivity-col, .slot-cell { text-align: center; }
-    .disposition-cell { font-size: 6.5pt; padding: 1px !important; }
+    tr { page-break-inside: avoid; page-break-after: auto; height: 12mm; }
+    th, td { border: 1px solid #333; padding: 2mm; text-align: left; vertical-align: middle; word-wrap: break-word; overflow: hidden; }
+    thead th, .legend-cell { text-align: center; font-weight: bold; background-color: #f2f2f2; font-size: 8pt; }
+    .id-col { font-size: 7pt; font-family: monospace; text-align: center; width: 7%; }
+    .mobile-col { font-weight: bold; font-family: monospace; text-align: center; width: 9%; border-left: 2px dashed #000 !important; border-right: 2px dashed #000 !important; }
+    .name-col { width: 12%; font-size: 7pt; }
+    .dob-col { width: 8%; font-size: 7pt; }
+    .address-col { width: 15%; font-size: 6pt; }
+    .connectivity-col, .slot-cell { text-align: center; width: 6%; }
+    .disposition-cell { font-size: 6.5pt; padding: 1px !important; width: 15%; }
     .dispo-grid { border: none !important; width: 100%; table-layout: fixed; }
-    .dispo-grid td { border: none !important; padding: 0px 1px; text-align: left; font-size: 6.5pt; white-space: nowrap; }
+    .dispo-grid td { border: none !important; padding: 0px 2px; text-align: left; font-size: 6.5pt; white-space: nowrap; }
     @media print { 
         tr { page-break-inside: avoid; }
         thead { display: table-header-group; }
     }
 </style></head><body>';
 
-// Create Table Header Row
+// Create Table Header Row with proper column classes
 $tableHeaderHtml = '<thead>
     <tr><th class="legend-cell" colspan="' . $colCount . '">' . $pdfTitle . '</th></tr>
     <tr><th class="legend-cell" colspan="' . $colCount . '">' . $slotLegend . '</th></tr>';
@@ -400,10 +403,28 @@ if (!empty($dispLegend)) {
 $tableHeaderHtml .= '<tr>';
 foreach ($finalHeaders as $header) {
     $headerClass = '';
-    if ($header === 'id') {
-        $headerClass = 'id-col';
-    } elseif ($header === 'mobile_no') {
-        $headerClass = 'mobile-col';
+    switch($header) {
+        case 'id':
+            $headerClass = 'id-col';
+            break;
+        case 'mobile_no':
+            $headerClass = 'mobile-col';
+            break;
+        case 'name':
+            $headerClass = 'name-col';
+            break;
+        case 'dob':
+            $headerClass = 'dob-col';
+            break;
+        case 'address':
+            $headerClass = 'address-col';
+            break;
+        case 'connectivity':
+            $headerClass = 'connectivity-col';
+            break;
+        case 'disposition':
+            $headerClass = 'disposition-cell';
+            break;
     }
     $displayHeader = str_replace('_', ' ', ucwords($header));
     if ($header === 'mobile_no') $displayHeader = 'Mobile';
@@ -435,13 +456,21 @@ function formatDateForPDF($dateValue) {
 $mpdf->WriteHTML('<table class="data-table">' . $tableHeaderHtml . '<tbody>');
 
 $rowsProcessed = 0;
-while ($rowsProcessed < $totalRecords) {
+$maxRows = min($totalRecords, 10000); // Limit to 10K records
+set_time_limit(300); // 5 minute timeout
+
+if ($totalRecords > $maxRows) {
+    debugLog("Warning: Large dataset ($totalRecords records). Processing first $maxRows records.");
+}
+
+while ($rowsProcessed < $totalRecords && $rowsProcessed < $maxRows) {
     // Properly build column selection with table alias
     $finalHeadersWithAlias = array_map(function($header) {
         return 'fcl.`' . $header . '`';
     }, $finalHeaders);
     $columnsToSelectWithAlias = implode(', ', $finalHeadersWithAlias);
     
+    $currentChunkSize = min($chunkSize, $totalRecords - $offset, $maxRows - $rowsProcessed);
     $sql = "SELECT {$columnsToSelectWithAlias} " . $fullBaseSql . " ORDER BY fcl.id LIMIT ?, ?";
     $stmt = $conn->prepare($sql);
     
@@ -449,7 +478,7 @@ while ($rowsProcessed < $totalRecords) {
         die("Error preparing statement (data fetch): " . $conn->error);
     }
 
-    $chunkParams = array_merge($params, [$offset, $chunkSize]);
+    $chunkParams = array_merge($params, [$offset, $currentChunkSize]);
     $chunkTypes = $types . 'ii';
     if($chunkTypes) $stmt->bind_param($chunkTypes, ...$chunkParams);
     
@@ -491,9 +520,33 @@ while ($rowsProcessed < $totalRecords) {
                     $cellContent = htmlspecialchars($row[$header] ?? '');
                     $class = 'id-col';
                     break;
+                case 'name':
+                    $cellContent = htmlspecialchars($row[$header] ?? '');
+                    $class = 'name-col';
+                    break;
                 case 'dob':
                 case 'expiry':
                     $cellContent = htmlspecialchars(formatDateForPDF($row[$header] ?? ''));
+                    $class = 'dob-col';
+                    break;
+                case 'address':
+                    $addr = $row[$header] ?? '';
+                    // Intelligent address formatting instead of truncation
+                    if (strlen($addr) > 40) {
+                        $words = explode(' ', $addr);
+                        $line1 = '';
+                        foreach ($words as $word) {
+                            if (strlen($line1 . ' ' . $word) <= 40) {
+                                $line1 .= ($line1 ? ' ' : '') . $word;
+                            } else {
+                                break;
+                            }
+                        }
+                        $cellContent = htmlspecialchars($line1 . (strlen($addr) > strlen($line1) ? '..' : ''));
+                    } else {
+                        $cellContent = htmlspecialchars($addr);
+                    }
+                    $class = 'address-col';
                     break;
                 default:
                     $cellContent = htmlspecialchars($row[$header] ?? '');
@@ -513,6 +566,17 @@ while ($rowsProcessed < $totalRecords) {
     
     $stmt->close();
     $offset += $chunkSize;
+    
+    // Memory management
+    if ($rowsProcessed % 1000 === 0) {
+        $memUsage = memory_get_usage(true) / 1024 / 1024; // MB
+        debugLog("Processed $rowsProcessed records, Memory: {$memUsage}MB");
+        if ($memUsage > 800) {
+            debugLog("High memory usage. Stopping processing.");
+            break;
+        }
+        gc_collect_cycles();
+    }
     
     // Clear memory
     unset($chunkHtml);
