@@ -183,3 +183,125 @@ function generateBatchId($productCode, $vendorId, $adminId, $conn) {
 function generateLogRowId($batchId, $rowNumber) {
     return $batchId . str_pad($rowNumber, 5, '0', STR_PAD_LEFT);
 }
+
+/**
+ * Generates a 6-character alphanumeric access code for team leaders
+ * @return string 6-character uppercase code
+ */
+function generateTeamLeaderAccessCode() {
+    $characters = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    $code = '';
+    for ($i = 0; $i < 6; $i++) {
+        $code .= $characters[mt_rand(0, strlen($characters) - 1)];
+    }
+    return $code;
+}
+
+/**
+ * Checks if a team leader's access code needs to be refreshed (older than 4 hours)
+ * and generates a new one if needed
+ * @param string $leaderId The team leader ID
+ * @param mysqli $conn Database connection
+ * @param bool $forceRefresh Force generation of new code regardless of age
+ * @return array Contains 'code' and 'expires_at'
+ */
+function refreshTeamLeaderCode($leaderId, $conn, $forceRefresh = false) {
+    $stmt = $conn->prepare("SELECT access_code, code_generated_at FROM team_leaders WHERE leader_id = ?");
+    $stmt->bind_param("s", $leaderId);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    
+    if ($result->num_rows > 0) {
+        $row = $result->fetch_assoc();
+        $codeAge = time() - strtotime($row['code_generated_at']);
+        
+        // If code is older than 4 hours (14400 seconds), doesn't exist, or force refresh is requested
+        if (!$row['access_code'] || $codeAge >= 14400 || $forceRefresh) {
+            $newCode = generateTeamLeaderAccessCode();
+            $stmt = $conn->prepare("UPDATE team_leaders SET access_code = ?, code_generated_at = NOW() WHERE leader_id = ?");
+            $stmt->bind_param("ss", $newCode, $leaderId);
+            $stmt->execute();
+            
+            return [
+                'code' => $newCode,
+                'expires_at' => date('Y-m-d H:i:s', time() + 14400)
+            ];
+        } else {
+            return [
+                'code' => $row['access_code'],
+                'expires_at' => date('Y-m-d H:i:s', strtotime($row['code_generated_at']) + 14400)
+            ];
+        }
+    }
+    
+    $stmt->close();
+    return ['code' => null, 'expires_at' => null];
+}
+
+/**
+ * Validates a team leader's access code
+ * @param string $leaderId The team leader ID
+ * @param string $inputCode The code provided by user
+ * @param mysqli $conn Database connection
+ * @return boolean True if code is valid and not expired
+ */
+function validateTeamLeaderAccessCode($leaderId, $inputCode, $conn) {
+    $stmt = $conn->prepare("SELECT access_code, code_generated_at FROM team_leaders WHERE leader_id = ? AND is_active = 1");
+    $stmt->bind_param("s", $leaderId);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    
+    if ($result->num_rows > 0) {
+        $row = $result->fetch_assoc();
+        $codeAge = time() - strtotime($row['code_generated_at']);
+        
+        // Check if code matches and is not expired (less than 4 hours old)
+        if ($row['access_code'] === strtoupper($inputCode) && $codeAge < 14400) {
+            $stmt->close();
+            return true;
+        }
+    }
+    
+    $stmt->close();
+    return false;
+}
+
+/**
+ * Get the real client IP address, handling proxies and load balancers
+ * @return string The client's IP address
+ */
+function getRealIpAddress() {
+    // Check for various proxy headers in order of preference
+    $ipKeys = [
+        'HTTP_CF_CONNECTING_IP',     // Cloudflare
+        'HTTP_X_FORWARDED_FOR',      // Standard proxy header
+        'HTTP_X_FORWARDED',          // Alternative proxy header
+        'HTTP_X_CLUSTER_CLIENT_IP',  // Cluster/load balancer
+        'HTTP_FORWARDED_FOR',        // Another proxy header
+        'HTTP_FORWARDED',            // RFC 7239
+        'HTTP_CLIENT_IP',            // Some proxies
+        'REMOTE_ADDR'                // Direct connection
+    ];
+    
+    foreach ($ipKeys as $key) {
+        if (isset($_SERVER[$key]) && !empty($_SERVER[$key])) {
+            $ips = explode(',', $_SERVER[$key]);
+            $ip = trim($ips[0]); // Get the first IP if comma-separated
+            
+            // Validate IP address
+            if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
+                return $ip;
+            }
+        }
+    }
+    
+    // If no valid public IP found, return the REMOTE_ADDR (which might be local)
+    $fallbackIp = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+    
+    // For localhost development, return a placeholder
+    if (in_array($fallbackIp, ['127.0.0.1', '::1', 'localhost'])) {
+        return 'localhost-dev';
+    }
+    
+    return $fallbackIp;
+}

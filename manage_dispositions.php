@@ -58,6 +58,34 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
                 $stmt->close();
             }
             break;
+            
+        case 'delete':
+            $dispositionId = $_POST['disposition_id'] ?? 0;
+            
+            if ($dispositionId) {
+                // Check if disposition is being used
+                $stmt = $conn->prepare("SELECT COUNT(*) as usage_count FROM final_call_logs WHERE disposition = (SELECT description FROM disposition_codes WHERE id = ?)");
+                $stmt->bind_param("i", $dispositionId);
+                $stmt->execute();
+                $result = $stmt->get_result();
+                $usage = $result->fetch_assoc();
+                $stmt->close();
+                
+                if ($usage['usage_count'] > 0) {
+                    $error = "Cannot delete disposition: it is being used in " . $usage['usage_count'] . " call logs.";
+                } else {
+                    $stmt = $conn->prepare("DELETE FROM disposition_codes WHERE id = ?");
+                    $stmt->bind_param("i", $dispositionId);
+                    
+                    if ($stmt->execute()) {
+                        $message = "Disposition deleted successfully.";
+                    } else {
+                        $error = "Failed to delete disposition.";
+                    }
+                    $stmt->close();
+                }
+            }
+            break;
     }
 }
 
@@ -110,54 +138,7 @@ $conn->close();
 <body>
     <div class="container-fluid">
         <div class="row">
-            <!-- Sidebar -->
-            <nav class="col-md-3 col-lg-2 d-md-block sidebar">
-                <div class="position-sticky">
-                    <div class="text-center py-3 mb-4 border-bottom">
-                        <i class="bi bi-shield-fill-check fs-2"></i>
-                        <h5 class="mt-2">Superadmin Panel</h5>
-                        <small><?= htmlspecialchars($_SESSION['superadmin_name']) ?></small>
-                    </div>
-                    
-                    <ul class="nav flex-column">
-                        <li class="nav-item">
-                            <a class="nav-link" href="superadmin_panel.php">
-                                <i class="bi bi-speedometer2 me-2"></i>Dashboard
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="manage_admins.php">
-                                <i class="bi bi-people-fill me-2"></i>Manage Admins
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="manage_products.php">
-                                <i class="bi bi-box-seam me-2"></i>Products
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link active" href="manage_dispositions.php">
-                                <i class="bi bi-list-check me-2"></i>Dispositions
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="vendor_requests.php">
-                                <i class="bi bi-bell-fill me-2"></i>Unit Requests
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="global_performance.php">
-                                <i class="bi bi-graph-up me-2"></i>Performance
-                            </a>
-                        </li>
-                        <li class="nav-item mt-4">
-                            <a class="nav-link text-danger" href="logout.php?type=superadmin">
-                                <i class="bi bi-box-arrow-right me-2"></i>Logout
-                            </a>
-                        </li>
-                    </ul>
-                </div>
-            </nav>
+            <?php include 'superadmin_sidebar.php'; ?>
 
             <!-- Main content -->
             <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
@@ -220,7 +201,7 @@ $conn->close();
                                                     </form>
                                                 </td>
                                                 <td>
-                                                    <button class="btn btn-sm btn-info text-white" 
+                                                    <button class="btn btn-sm btn-info text-white me-1" 
                                                             data-bs-toggle="modal" 
                                                             data-bs-target="#editDispositionModal"
                                                             data-id="<?= $disposition['id'] ?>"
@@ -228,6 +209,16 @@ $conn->close();
                                                             data-description="<?= htmlspecialchars($disposition['description']) ?>"
                                                             data-category="<?= $disposition['category'] ?>">
                                                         <i class="bi bi-pencil"></i>
+                                                    </button>
+                                                    
+                                                    <button class="btn btn-sm btn-danger" 
+                                                            data-bs-toggle="modal" 
+                                                            data-bs-target="#deleteDispositionModal"
+                                                            data-id="<?= $disposition['id'] ?>"
+                                                            data-code="<?= htmlspecialchars($disposition['code']) ?>"
+                                                            data-description="<?= htmlspecialchars($disposition['description']) ?>"
+                                                            data-usage="<?= $disposition['usage_count'] ?>">
+                                                        <i class="bi bi-trash"></i>
                                                     </button>
                                                 </td>
                                             </tr>
@@ -330,6 +321,47 @@ $conn->close();
         </div>
     </div>
 
+    <!-- Delete Disposition Modal -->
+    <div class="modal fade" id="deleteDispositionModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title">Delete Disposition Code</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <form method="POST">
+                    <div class="modal-body">
+                        <input type="hidden" name="action" value="delete">
+                        <input type="hidden" name="disposition_id" id="delete_disposition_id">
+                        
+                        <div class="alert alert-warning">
+                            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                            <strong>Warning!</strong> This action cannot be undone.
+                        </div>
+                        
+                        <p>Are you sure you want to delete this disposition code?</p>
+                        
+                        <div class="bg-light p-3 rounded">
+                            <strong>Code:</strong> <span id="delete_code_display"></span><br>
+                            <strong>Description:</strong> <span id="delete_description_display"></span><br>
+                            <strong>Current Usage:</strong> <span id="delete_usage_display" class="badge bg-info"></span> call logs
+                        </div>
+                        
+                        <div id="delete_usage_warning" class="alert alert-danger mt-3" style="display: none;">
+                            <i class="bi bi-x-circle-fill me-2"></i>
+                            <strong>Cannot Delete:</strong> This disposition is currently being used in call logs. 
+                            Please ensure it's not in use before deleting.
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" id="delete_confirm_btn" class="btn btn-danger">Delete Disposition</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         // Handle edit modal data
@@ -344,6 +376,34 @@ $conn->close();
             document.getElementById('edit_code').value = code;
             document.getElementById('edit_description').value = description;
             document.getElementById('edit_category').value = category;
+        });
+
+        // Handle delete modal data
+        document.getElementById('deleteDispositionModal').addEventListener('show.bs.modal', function (event) {
+            const button = event.relatedTarget;
+            const dispositionId = button.getAttribute('data-id');
+            const code = button.getAttribute('data-code');
+            const description = button.getAttribute('data-description');
+            const usage = parseInt(button.getAttribute('data-usage'));
+            
+            document.getElementById('delete_disposition_id').value = dispositionId;
+            document.getElementById('delete_code_display').textContent = code;
+            document.getElementById('delete_description_display').textContent = description;
+            document.getElementById('delete_usage_display').textContent = usage;
+            
+            // Show warning if disposition is in use
+            const warningDiv = document.getElementById('delete_usage_warning');
+            const deleteBtn = document.getElementById('delete_confirm_btn');
+            
+            if (usage > 0) {
+                warningDiv.style.display = 'block';
+                deleteBtn.disabled = true;
+                deleteBtn.textContent = 'Cannot Delete';
+            } else {
+                warningDiv.style.display = 'none';
+                deleteBtn.disabled = false;
+                deleteBtn.textContent = 'Delete Disposition';
+            }
         });
     </script>
 </body>

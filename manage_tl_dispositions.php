@@ -24,7 +24,8 @@ if ($_POST) {
         } else {
             // Create new disposition
             $stmt = $conn->prepare("INSERT INTO team_leader_dispositions (disposition_name, description, created_by) VALUES (?, ?, ?)");
-            $stmt->bind_param("sss", $dispositionName, $description, $superadminId);
+            $createdBy = 'SUPER'; // Use 'SUPER' for superadmin created dispositions
+            $stmt->bind_param("sss", $dispositionName, $description, $createdBy);
             
             if ($stmt->execute()) {
                 $message = "Team Leader disposition created successfully!";
@@ -71,6 +72,35 @@ if ($_POST) {
         }
         $stmt->close();
     }
+    
+    if (isset($_POST['delete_disposition'])) {
+        $dispositionId = $_POST['disposition_id'];
+        
+        // Check if disposition is being used
+        $stmt = $conn->prepare("SELECT COUNT(*) as usage_count FROM team_leader_actions WHERE new_disposition = (SELECT disposition_name FROM team_leader_dispositions WHERE id = ?)");
+        $stmt->bind_param("i", $dispositionId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $usage = $result->fetch_assoc();
+        $stmt->close();
+        
+        if ($usage['usage_count'] > 0) {
+            $message = "Cannot delete disposition: it is being used in " . $usage['usage_count'] . " team leader actions.";
+            $messageType = "danger";
+        } else {
+            $stmt = $conn->prepare("DELETE FROM team_leader_dispositions WHERE id = ?");
+            $stmt->bind_param("i", $dispositionId);
+            
+            if ($stmt->execute()) {
+                $message = "Team Leader disposition deleted successfully!";
+                $messageType = "success";
+            } else {
+                $message = "Error deleting disposition: " . $stmt->error;
+                $messageType = "danger";
+            }
+            $stmt->close();
+        }
+    }
 }
 
 // Get all dispositions
@@ -95,6 +125,7 @@ $stmt = $conn->prepare("
         COUNT(*) as total_dispositions,
         SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END) as active_dispositions,
         (SELECT COUNT(*) FROM team_leader_actions) as total_actions_taken
+    FROM team_leader_dispositions
 ");
 $stmt->execute();
 $stats = $stmt->get_result()->fetch_assoc();
@@ -111,10 +142,7 @@ $conn->close();
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <style>
-        body { background-color: #f4f7f6; }
-        .sidebar { min-height: 100vh; background: linear-gradient(180deg, #dc3545 0%, #c82333 100%); color: white; }
-        .sidebar .nav-link { color: rgba(255,255,255,0.8); padding: 0.75rem 1rem; margin: 0.25rem 0; border-radius: 0.5rem; transition: all 0.3s; }
-        .sidebar .nav-link:hover, .sidebar .nav-link.active { color: white; background-color: rgba(255,255,255,0.1); }
+        body { background-color: #f8f9fa; }
         .stat-card {
             border: none;
             border-radius: 12px;
@@ -279,6 +307,16 @@ $conn->close();
                                                                     <?= $disposition['is_active'] ? 'Deactivate' : 'Activate' ?>
                                                                 </button>
                                                             </form>
+                                                            
+                                                            <button type="button" class="btn btn-sm btn-danger" 
+                                                                    data-bs-toggle="modal" 
+                                                                    data-bs-target="#deleteTLDispositionModal"
+                                                                    data-id="<?= $disposition['id'] ?>"
+                                                                    data-name="<?= htmlspecialchars($disposition['disposition_name']) ?>"
+                                                                    data-description="<?= htmlspecialchars($disposition['description']) ?>"
+                                                                    data-usage="<?= $disposition['usage_count'] ?>">
+                                                                <i class="bi bi-trash"></i> Delete
+                                                            </button>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -327,6 +365,48 @@ $conn->close();
         </div>
     </div>
 
+    <!-- Delete Disposition Modal -->
+    <div class="modal fade" id="deleteTLDispositionModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title"><i class="bi bi-trash-fill me-2"></i>Delete Team Leader Disposition</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <form method="POST">
+                    <div class="modal-body">
+                        <input type="hidden" name="disposition_id" id="deleteTLDispositionId">
+                        
+                        <div class="alert alert-warning">
+                            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                            <strong>Warning!</strong> This action cannot be undone.
+                        </div>
+                        
+                        <p>Are you sure you want to delete this Team Leader disposition?</p>
+                        
+                        <div class="bg-light p-3 rounded">
+                            <strong>Name:</strong> <span id="deleteTLNameDisplay"></span><br>
+                            <strong>Description:</strong> <span id="deleteTLDescriptionDisplay"></span><br>
+                            <strong>Current Usage:</strong> <span id="deleteTLUsageDisplay" class="badge bg-info"></span> team leader actions
+                        </div>
+                        
+                        <div id="deleteTLUsageWarning" class="alert alert-danger mt-3" style="display: none;">
+                            <i class="bi bi-x-circle-fill me-2"></i>
+                            <strong>Cannot Delete:</strong> This disposition is currently being used in team leader actions. 
+                            Please ensure it's not in use before deleting.
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" name="delete_disposition" id="deleteTLConfirmBtn" class="btn btn-danger">
+                            <i class="bi bi-trash-fill me-2"></i>Delete Disposition
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <script>
         function editDisposition(id, name, description) {
             document.getElementById('editDispositionId').value = id;
@@ -336,6 +416,34 @@ $conn->close();
             const modal = new bootstrap.Modal(document.getElementById('editModal'));
             modal.show();
         }
+
+        // Handle delete modal data
+        document.getElementById('deleteTLDispositionModal').addEventListener('show.bs.modal', function (event) {
+            const button = event.relatedTarget;
+            const dispositionId = button.getAttribute('data-id');
+            const name = button.getAttribute('data-name');
+            const description = button.getAttribute('data-description');
+            const usage = parseInt(button.getAttribute('data-usage'));
+            
+            document.getElementById('deleteTLDispositionId').value = dispositionId;
+            document.getElementById('deleteTLNameDisplay').textContent = name;
+            document.getElementById('deleteTLDescriptionDisplay').textContent = description || 'No description';
+            document.getElementById('deleteTLUsageDisplay').textContent = usage;
+            
+            // Show warning if disposition is in use
+            const warningDiv = document.getElementById('deleteTLUsageWarning');
+            const deleteBtn = document.getElementById('deleteTLConfirmBtn');
+            
+            if (usage > 0) {
+                warningDiv.style.display = 'block';
+                deleteBtn.disabled = true;
+                deleteBtn.innerHTML = '<i class="bi bi-x-circle-fill me-2"></i>Cannot Delete';
+            } else {
+                warningDiv.style.display = 'none';
+                deleteBtn.disabled = false;
+                deleteBtn.innerHTML = '<i class="bi bi-trash-fill me-2"></i>Delete Disposition';
+            }
+        });
     </script>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>

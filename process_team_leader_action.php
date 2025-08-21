@@ -4,7 +4,9 @@ requireTeamLeader();
 
 $conn = getDBConnection();
 $leaderId = $_SESSION['leader_id'];
-$ipAddress = $_SERVER['REMOTE_ADDR'];
+$ipAddress = getRealIpAddress();
+$userAgent = $_SERVER['HTTP_USER_AGENT'] ?? 'Unknown';
+$sessionId = session_id();
 
 $message = '';
 $messageType = '';
@@ -43,10 +45,10 @@ if ($_POST) {
             // Insert team leader action
             $stmt = $conn->prepare("
                 INSERT INTO team_leader_actions 
-                (action_id, leader_id, lead_id, original_disposition, new_disposition, remarks, ip_address) 
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                (action_id, leader_id, lead_id, original_disposition, new_disposition, remarks, ip_address, user_agent, session_id) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ");
-            $stmt->bind_param("sssssss", $actionId, $leaderId, $leadId, $leadData['original_disposition'], $newDisposition, $remarks, $ipAddress);
+            $stmt->bind_param("sssssssss", $actionId, $leaderId, $leadId, $leadData['original_disposition'], $newDisposition, $remarks, $ipAddress, $userAgent, $sessionId);
             
             if ($stmt->execute()) {
                 $_SESSION['message'] = "Action recorded successfully!";

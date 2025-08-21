@@ -68,6 +68,16 @@ $active_page = basename($_SERVER['PHP_SELF']);
                     <i class="bi bi-people-fill me-2"></i>Team Leaders
                 </a>
             </li>
+            <li class="nav-item">
+                <a class="nav-link <?= $active_page == 'admin_team_leader_codes.php' ? 'active' : '' ?>" href="admin_team_leader_codes.php">
+                    <i class="bi bi-key-fill me-2"></i>Access Codes
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link <?= $active_page == 'admin_team_leader_activity.php' ? 'active' : '' ?>" href="admin_team_leader_activity.php">
+                    <i class="bi bi-activity me-2"></i>TL Activity Monitor
+                </a>
+            </li>
             <li class="nav-item mt-4">
                 <a class="nav-link text-danger" href="logout.php?type=admin">
                     <i class="bi bi-box-arrow-right me-2"></i>Logout

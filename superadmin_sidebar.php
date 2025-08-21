@@ -74,6 +74,11 @@ $active_page = basename($_SERVER['PHP_SELF']);
                     <i class="bi bi-graph-up me-2"></i>Performance
                 </a>
             </li>
+            <li class="nav-item">
+                <a class="nav-link <?= $active_page == 'system_settings.php' ? 'active' : '' ?>" href="system_settings.php">
+                    <i class="bi bi-gear-fill me-2"></i>Settings
+                </a>
+            </li>
             <li class="nav-item mt-4">
                 <a class="nav-link text-danger" href="logout.php?type=superadmin">
                     <i class="bi bi-box-arrow-right me-2"></i>Logout
@@ -86,7 +91,7 @@ $active_page = basename($_SERVER['PHP_SELF']);
 <style>
 .sidebar {
     min-height: 100vh;
-    background: linear-gradient(180deg, #dc3545 0%, #c82333 100%);
+    background: linear-gradient(180deg, #1e3c72 0%, #2a5298 100%);
     color: white;
     padding-top: 1rem;
 }

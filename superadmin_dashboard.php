@@ -322,16 +322,13 @@ $conn->close();
     </style>
 </head>
 <body>
-    <div class="container-fluid mt-4">
+    <div class="container-fluid">
         <div class="row">
-            <div class="col-12">
-                <div class="d-flex justify-content-between align-items-center mb-4">
-                    <h1><i class="bi bi-graph-up-arrow me-2"></i>Super Admin Dashboard</h1>
-                    <div>
-                        <a href="superadmin_panel.php" class="btn btn-outline-primary">
-                            <i class="bi bi-house-door me-1"></i>Back to Panel
-                        </a>
-                    </div>
+            <?php include 'superadmin_sidebar.php'; ?>
+
+            <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
+                <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+                    <h1 class="h2"><i class="bi bi-graph-up-arrow me-2"></i>Analytics Dashboard</h1>
                 </div>
 
                 <!-- Filters -->
@@ -615,7 +612,7 @@ $conn->close();
                         </div>
                     </div>
                 </div>
-            </div>
+            </main>
         </div>
     </div>
 

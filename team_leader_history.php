@@ -293,6 +293,71 @@ $conn->close();
         </div>
     </div>
 
+    <script src="js/security-protection.js"></script>
+    <script>
+        // Check if security is disabled for this session
+        <?php if (!isset($_SESSION['security_disabled'])): ?>
+        // Initialize security protection for history page with relaxed settings
+        const securityProtection = new SecurityProtection({
+            watermarkText: 'CONFIDENTIAL - TEAM LEADER HISTORY',
+            userId: '<?= htmlspecialchars($leaderId) ?>',
+            sessionId: '<?= session_id() ?>',
+            logEndpoint: 'security_log.php',
+            maxViolations: 8,
+            enableBlurOnFocus: false, // Disable blur for better usability
+            enableTabSwitchDetection: false, // Reduce false positives
+            enableScreenRecordingDetection: false, // Reduce false positives
+            violationCallback: function(violation) {
+                if (violation.violationCount >= 8) {
+                    alert('Multiple security violations detected. Please contact your administrator.');
+                    setTimeout(() => {
+                        window.location.href = 'logout.php?type=team_leader&reason=security_violation';
+                    }, 3000);
+                }
+            }
+        });
+        <?php else: ?>
+        console.log('Security protection disabled for this session.');
+        <?php endif; ?>
+        
+        // Enhanced session monitoring
+        let sessionActive = true;
+        let lastActivity = Date.now();
+        
+        // Track user activity
+        ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart'].forEach(event => {
+            document.addEventListener(event, () => {
+                lastActivity = Date.now();
+            }, { capture: true, passive: true });
+        });
+        
+        // Check for inactivity
+        setInterval(() => {
+            const inactiveTime = Date.now() - lastActivity;
+            if (inactiveTime > 1800000) { // 30 minutes
+                alert('Session expired due to inactivity');
+                window.location.href = 'logout.php?type=team_leader&reason=inactivity';
+            }
+        }, 60000); // Check every minute
+        
+        // Auto-refresh every 10 minutes
+        setTimeout(() => location.reload(), 600000);
+        
+        // Prevent page unload without proper logout
+        window.addEventListener('beforeunload', (e) => {
+            if (sessionActive) {
+                e.preventDefault();
+                e.returnValue = 'Are you sure you want to leave? Always use the logout button for security.';
+                return e.returnValue;
+            }
+        });
+        
+        // Mark session as properly ending when using logout link
+        document.querySelector('a[href*="logout.php"]')?.addEventListener('click', () => {
+            sessionActive = false;
+        });
+    </script>
+    
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
