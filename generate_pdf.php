@@ -220,9 +220,6 @@ public function drawPageCutlines() {
     $this->SetLineStyle(['width'=>0.2,'dash'=>0,'color'=>[0,0,0]]);
     $this->SetXY($curX, $curY);
 }
-
-
-
 }
 
 // --- Column widths & centering -----------------------------------------
