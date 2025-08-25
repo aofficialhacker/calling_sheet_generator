@@ -5,6 +5,9 @@
       "Bash(python:*)"
     ],
     "deny": [],
-    "ask": []
+    "ask": [],
+    "additionalDirectories": [
+      "C:\\c\\xampp\\htdocs"
+    ]
   }
 }

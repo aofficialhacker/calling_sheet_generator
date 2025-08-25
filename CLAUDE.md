@@ -11,13 +11,14 @@ This is a **Calling Sheet Generator** system - a comprehensive telecalling manag
 ### Core User Roles & Access Levels
 - **Superadmin**: System-wide management, creates admins and manages dispositions
 - **Admin**: Manages batches, callers, and team leaders for their organization  
-- **Team Leader**: Reviews "Interested" leads with advanced 2FA authentication
+- **Team Leader**: Reviews "Interested" leads with advanced 2FA authentication and secure data masking
 - **Telecaller**: Processes call data and marks dispositions
 
 ### Database Structure
 - Uses MySQL database `caller_sheet3` with complex multi-table relationships
-- Key tables: `admin_users`, `callers`, `file_batches`, `final_call_logs`, `team_leaders`, `team_leader_actions`
+- Key tables: `admin_users`, `callers`, `file_batches`, `final_call_logs`, `team_leaders`, `team_leader_actions`, `team_leader_view_logs`
 - All database access goes through `db_config.php` with centralized connection management
+- Database connection: localhost, user: root, password: 123456, database: caller_sheet3
 
 ### Data Processing Pipeline
 1. **Excel Upload**: Admins upload Excel files via `upload_batch.php`
@@ -27,7 +28,9 @@ This is a **Calling Sheet Generator** system - a comprehensive telecalling manag
 
 ### Authentication & Security
 - Role-based access control with session management
-- Team Leader 2FA system with time-based authentication codes (5-minute windows)
+- Team Leader 2FA system with time-based authentication codes (4-hour refresh cycles)
+- Advanced security features including console detection, screen recording prevention
+- Customer data masking/unmasking system for Team Leaders with time-limited access
 - IP logging for all login attempts and account lockout after failed attempts
 - Secure session handling across all user types
 
@@ -50,6 +53,9 @@ mysql -u root -p123456 caller_sheet3 < setup_team_leader.sql
 
 # Database optimization
 mysql -u root -p123456 caller_sheet3 < optimize_database.sql
+
+# Test database connectivity
+php -r "require 'db_config.php'; $conn = getDBConnection(); echo 'Connection successful';"
 ```
 
 ### Python Scripts
@@ -62,12 +68,23 @@ python gemini_excel_parser.py [file_path]
 python ocr_processor.py [image_path]
 ```
 
+### Composer Dependencies
+```bash
+# Install PHP packages (defined in composer.json)
+composer install
+composer update
+
+# Key packages: phpspreadsheet, mpdf, tcpdf, fpdf, tesseract_ocr
+```
+
 ## Key File Locations
 
 ### Authentication & Access Control
-- `db_config.php` - Database connection and role-based access functions
+- `db_config.php` - Database connection, role-based access functions, and timezone-aware access code management
 - `*_login.php` - Login pages for each user type
 - `*_dashboard.php` - Role-specific dashboards
+- `masking_utils.php` - Customer data masking/unmasking utilities for Team Leaders
+- `team_leader_auth_view.php` - Authentication endpoint for secure data viewing
 
 ### Data Processing
 - `upload_batch.php` - Excel file upload handler
@@ -123,6 +140,13 @@ python ocr_processor.py [image_path]
 
 ## Testing & Debugging
 
+### Test Files Available
+- `test_pdf_no_auth.php` - Test PDF generation without authentication
+- `test_auth_simple.php` - Test team leader authentication without AJAX
+- `test_view_ajax.php` - Test AJAX authentication for view functionality
+- `check_timezone.php` - Debug timezone differences between PHP and MySQL
+- `debug_*.php` - Various debugging utilities
+
 ### Common Test Commands
 ```bash
 # Test database connectivity
@@ -131,8 +155,11 @@ php -r "require 'db_config.php'; $conn = getDBConnection(); echo 'Connection suc
 # Verify PDF generation
 php test_pdf_no_auth.php
 
-# Check batch processing
-php debug_batch.php
+# Test team leader authentication
+php test_auth_simple.php
+
+# Debug timezone issues
+php check_timezone.php
 ```
 
 ### Log Files
@@ -155,5 +182,31 @@ php debug_batch.php
 
 - Database queries optimized for large datasets
 - File processing handled asynchronously where possible
-- PDF generation includes multiple fallback methods
+- PDF generation includes multiple fallback methods (mPDF → TCPDF → FPDF)
 - Image preprocessing optimizes OCR accuracy while maintaining performance
+- Timezone calculations use database timestamps to avoid PHP/MySQL timezone mismatches
+- Error handling includes automatic fallback methods for SQL query failures
+
+## Team Leader Security Features
+
+### Data Masking System
+- Customer names and mobile numbers are masked by default in Team Leader interfaces
+- Format: "ANTHONY DSOUZA" → "A*****Y D****A", "9876543210" → "98XXXXXX10"
+- Unmasking requires re-authentication with team leader access codes
+- Time-limited visibility (1-minute timeout) with countdown timer
+- Only one entry can be unmasked at a time
+- Complete audit trail of all view actions in `team_leader_view_logs` table
+
+### Access Code Management
+- 6-character alphanumeric codes refreshed every 4 hours
+- Admin interface for monitoring code expiry and team leader activity
+- Database-driven time calculations prevent timezone-related issues
+- Rate limiting and failed attempt logging for security
+
+## Development Notes
+
+- Always use prepared statements for database queries to prevent SQL injection
+- File uploads should be validated for type, size, and content
+- When working with time-sensitive features, use database timestamps for consistency
+- Test authentication flows with dedicated test pages before implementing in production
+- Error handling should include both logging and graceful fallback methods

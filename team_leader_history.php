@@ -1,5 +1,6 @@
 <?php
 require_once 'db_config.php';
+require_once 'masking_utils.php';
 requireTeamLeader();
 
 $conn = getDBConnection();
@@ -241,7 +242,7 @@ $conn->close();
                                                 <div class="row align-items-center">
                                                     <div class="col-md-8">
                                                         <h6 class="card-title mb-2">
-                                                            <i class="bi bi-person me-1"></i><?= htmlspecialchars($action['name']) ?>
+                                                            <i class="bi bi-person me-1"></i><?= htmlspecialchars(maskName($action['name'])) ?>
                                                         </h6>
                                                         <div class="mb-2">
                                                             <span class="badge disposition-badge <?= $action['new_disposition'] == 'Interested - Proceed to Payment' ? 'bg-success' : 'bg-secondary' ?>">
@@ -249,7 +250,7 @@ $conn->close();
                                                             </span>
                                                         </div>
                                                         <div class="small text-muted">
-                                                            <i class="bi bi-telephone me-1"></i><?= htmlspecialchars($action['mobile_no']) ?><br>
+                                                            <i class="bi bi-telephone me-1"></i><?= htmlspecialchars(maskMobile($action['mobile_no'])) ?><br>
                                                             <i class="bi bi-box me-1"></i><?= htmlspecialchars($action['product_name']) ?><br>
                                                             <i class="bi bi-person-badge me-1"></i>Original caller: <?= htmlspecialchars($action['original_caller']) ?>
                                                         </div>
@@ -268,8 +269,6 @@ $conn->close();
                                                             <code><?= htmlspecialchars($action['action_id']) ?></code><br>
                                                             <strong>Date:</strong><br>
                                                             <?= date('d-M-Y H:i', strtotime($action['action_date'])) ?><br>
-                                                            <strong>IP:</strong><br>
-                                                            <code><?= htmlspecialchars($action['ip_address']) ?></code>
                                                         </div>
                                                         <?php if ($action['new_disposition'] == 'Interested - Proceed to Payment'): ?>
                                                             <div class="mt-2">
@@ -307,6 +306,7 @@ $conn->close();
             enableBlurOnFocus: false, // Disable blur for better usability
             enableTabSwitchDetection: false, // Reduce false positives
             enableScreenRecordingDetection: false, // Reduce false positives
+            enableDevToolsBlocking: false, // Disable console detection to prevent false positives
             violationCallback: function(violation) {
                 if (violation.violationCount >= 8) {
                     alert('Multiple security violations detected. Please contact your administrator.');
@@ -316,8 +316,6 @@ $conn->close();
                 }
             }
         });
-        <?php else: ?>
-        console.log('Security protection disabled for this session.');
         <?php endif; ?>
         
         // Enhanced session monitoring

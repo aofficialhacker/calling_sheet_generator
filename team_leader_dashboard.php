@@ -1,5 +1,6 @@
 <?php
 require_once 'db_config.php';
+require_once 'masking_utils.php';
 requireTeamLeader();
 
 $conn = getDBConnection();
@@ -111,6 +112,35 @@ $conn->close();
         }
         .action-btn {
             min-width: 120px;
+        }
+        .view-btn {
+            min-width: 120px;
+            position: relative;
+        }
+        .view-btn.unmasked {
+            background-color: #28a745 !important;
+            border-color: #28a745 !important;
+        }
+        .view-btn.unmasked:hover {
+            background-color: #218838 !important;
+            border-color: #1e7e34 !important;
+        }
+        .timer-display {
+            font-size: 0.8rem;
+            font-weight: bold;
+        }
+        .customer-name, .customer-mobile {
+            font-family: monospace;
+            font-weight: 600;
+        }
+        .customer-name.unmasked, .customer-mobile.unmasked {
+            color: #28a745;
+            animation: pulse-green 2s infinite;
+        }
+        @keyframes pulse-green {
+            0% { opacity: 1; }
+            50% { opacity: 0.7; }
+            100% { opacity: 1; }
         }
     </style>
 </head>
@@ -246,7 +276,10 @@ $conn->close();
                                                 <div class="row align-items-center">
                                                     <div class="col-md-6">
                                                         <h6 class="card-title mb-2">
-                                                            <?= htmlspecialchars($lead['name']) ?>
+                                                            <span class="customer-name" data-lead-id="<?= $lead['id'] ?>"
+                                                                  data-original="<?= htmlspecialchars($lead['name']) ?>">
+                                                                <?= htmlspecialchars(getDisplayName($lead['name'], $lead['id'])) ?>
+                                                            </span>
                                                             <?php if ($lead['action_id']): ?>
                                                                 <span class="badge bg-success ms-2">Processed</span>
                                                             <?php else: ?>
@@ -254,7 +287,11 @@ $conn->close();
                                                             <?php endif; ?>
                                                         </h6>
                                                         <div class="small text-muted">
-                                                            <i class="bi bi-telephone me-1"></i><?= htmlspecialchars($lead['mobile_no']) ?><br>
+                                                            <i class="bi bi-telephone me-1"></i>
+                                                            <span class="customer-mobile" data-lead-id="<?= $lead['id'] ?>"
+                                                                  data-original="<?= htmlspecialchars($lead['mobile_no']) ?>">
+                                                                <?= htmlspecialchars(getDisplayMobile($lead['mobile_no'], $lead['id'])) ?>
+                                                            </span><br>
                                                             <i class="bi bi-box me-1"></i><?= htmlspecialchars($lead['product_name']) ?><br>
                                                             <i class="bi bi-person me-1"></i>Called by: <?= htmlspecialchars($lead['original_caller_name']) ?>
                                                         </div>
@@ -273,10 +310,18 @@ $conn->close();
                                                     </div>
                                                     <div class="col-md-3 text-end">
                                                         <?php if (!$lead['action_id']): ?>
-                                                            <button type="button" class="btn btn-primary action-btn" 
-                                                                    onclick="openActionModal('<?= $lead['id'] ?>', '<?= addslashes($lead['name']) ?>', '<?= $lead['mobile_no'] ?>')">
-                                                                <i class="bi bi-telephone-fill me-1"></i>Take Action
-                                                            </button>
+                                                            <div class="btn-group-vertical d-grid gap-2">
+                                                                <button type="button" class="btn btn-info btn-sm view-btn" 
+                                                                        data-lead-id="<?= $lead['id'] ?>" 
+                                                                        data-bs-toggle="tooltip" title="Authenticate to view customer details">
+                                                                    <i class="bi bi-eye-fill me-1"></i>View
+                                                                    <span class="timer-display" style="display: none;"></span>
+                                                                </button>
+                                                                <button type="button" class="btn btn-primary action-btn" 
+                                                                        onclick="openActionModal('<?= $lead['id'] ?>')">
+                                                                    <i class="bi bi-telephone-fill me-1"></i>Take Action
+                                                                </button>
+                                                            </div>
                                                         <?php elseif ($lead['new_disposition'] === 'Interested - Proceed to Payment'): ?>
                                                             <a href="payment_request.php?lead_id=<?= $lead['id'] ?>" class="btn btn-success action-btn">
                                                                 <i class="bi bi-credit-card-fill me-1"></i>Payment
@@ -297,6 +342,45 @@ $conn->close();
                     </div>
                 </div>
             </main>
+        </div>
+    </div>
+
+    <!-- View Authentication Modal -->
+    <div class="modal fade" id="viewAuthModal" tabindex="-1">
+        <div class="modal-dialog modal-sm">
+            <div class="modal-content">
+                <div class="modal-header bg-info text-white">
+                    <h5 class="modal-title"><i class="bi bi-shield-lock-fill me-2"></i>Authenticate to View</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="viewAuthAlert" class="alert alert-danger" style="display: none;"></div>
+                    
+                    <div class="text-center mb-3">
+                        <i class="bi bi-eye-fill text-info" style="font-size: 2rem;"></i>
+                        <p class="mt-2 mb-0">Enter your access code to view customer details</p>
+                        <small class="text-muted">Data will be visible for 1 minute only</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="viewAccessCode" class="form-label">
+                            <i class="bi bi-key-fill me-1"></i>Access Code
+                        </label>
+                        <input type="text" id="viewAccessCode" class="form-control form-control-lg text-center" 
+                               maxlength="6" pattern="[0-9A-Za-z]{6}" 
+                               placeholder="6-digit code" style="text-transform: uppercase;">
+                        <small class="form-text text-muted">
+                            Same code used for login authentication
+                        </small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" id="submitViewAuth" class="btn btn-info">
+                        <i class="bi bi-unlock-fill me-1"></i>View Details
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -351,18 +435,269 @@ $conn->close();
 
     <script src="js/security-protection.js"></script>
     <script>
-        function openActionModal(leadId, customerName, phone) {
+        let currentViewTimer = null;
+        let currentUnmaskedLeadId = null;
+        
+        function openActionModal(leadId) {
+            // Get current display values (masked or unmasked) from the DOM
+            const nameElement = document.querySelector(`.customer-name[data-lead-id="${leadId}"]`);
+            const mobileElement = document.querySelector(`.customer-mobile[data-lead-id="${leadId}"]`);
+            
+            const displayName = nameElement ? nameElement.textContent : 'Unknown';
+            const displayMobile = mobileElement ? mobileElement.textContent : 'Unknown';
+            
             document.getElementById('modalLeadId').value = leadId;
-            document.getElementById('modalCustomerName').textContent = customerName;
-            document.getElementById('modalPhone').textContent = phone;
+            document.getElementById('modalCustomerName').textContent = displayName;
+            document.getElementById('modalPhone').textContent = displayMobile;
             
             const modal = new bootstrap.Modal(document.getElementById('actionModal'));
             modal.show();
         }
         
+        // View button functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize tooltips
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+                return new bootstrap.Tooltip(tooltipTriggerEl);
+            });
+            
+            // Handle view button clicks
+            document.querySelectorAll('.view-btn').forEach(button => {
+                button.addEventListener('click', function() {
+                    const leadId = this.getAttribute('data-lead-id');
+                    
+                    // If this lead is already unmasked, just refresh the timer
+                    if (currentUnmaskedLeadId === leadId) {
+                        showMessage('Data is already visible. Timer refreshed.', 'info');
+                        return;
+                    }
+                    
+                    // Open authentication modal
+                    openViewAuthModal(leadId);
+                });
+            });
+            
+            // Handle view authentication
+            document.getElementById('submitViewAuth').addEventListener('click', function() {
+                const accessCode = document.getElementById('viewAccessCode').value.trim();
+                const leadId = document.getElementById('viewAuthModal').getAttribute('data-lead-id');
+                
+                if (!accessCode) {
+                    showViewAuthError('Please enter your access code');
+                    return;
+                }
+                
+                authenticateAndView(leadId, accessCode);
+            });
+            
+            // Handle Enter key in access code field
+            document.getElementById('viewAccessCode').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    document.getElementById('submitViewAuth').click();
+                }
+            });
+        });
+        
+        function openViewAuthModal(leadId) {
+            const modal = document.getElementById('viewAuthModal');
+            modal.setAttribute('data-lead-id', leadId);
+            
+            // Clear previous values
+            document.getElementById('viewAccessCode').value = '';
+            document.getElementById('viewAuthAlert').style.display = 'none';
+            
+            const viewModal = new bootstrap.Modal(modal);
+            viewModal.show();
+            
+            // Focus on access code field after modal is shown
+            modal.addEventListener('shown.bs.modal', function() {
+                document.getElementById('viewAccessCode').focus();
+            }, { once: true });
+        }
+        
+        function authenticateAndView(leadId, accessCode) {
+            const submitBtn = document.getElementById('submitViewAuth');
+            const originalText = submitBtn.innerHTML;
+            
+            // Show loading state
+            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Verifying...';
+            submitBtn.disabled = true;
+            
+            fetch('team_leader_auth_view.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    lead_id: leadId,
+                    access_code: accessCode
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Close modal
+                    bootstrap.Modal.getInstance(document.getElementById('viewAuthModal')).hide();
+                    
+                    // Unmask the data
+                    unmaskLeadData(leadId, data.data.name, data.data.mobile);
+                    
+                    // Start timer
+                    startUnmaskTimer(leadId, data.data.remaining_time);
+                    
+                    showMessage('Customer details visible for 1 minute', 'success');
+                } else {
+                    showViewAuthError(data.message);
+                }
+            })
+            .catch(error => {
+                showViewAuthError('An error occurred. Please try again.');
+            })
+            .finally(() => {
+                // Restore button state
+                submitBtn.innerHTML = originalText;
+                submitBtn.disabled = false;
+            });
+        }
+        
+        function unmaskLeadData(leadId, name, mobile) {
+            // Clear any existing unmasked data
+            maskAllData();
+            
+            // Set current unmasked lead
+            currentUnmaskedLeadId = leadId;
+            
+            // Update display elements
+            const nameElement = document.querySelector(`.customer-name[data-lead-id="${leadId}"]`);
+            const mobileElement = document.querySelector(`.customer-mobile[data-lead-id="${leadId}"]`);
+            const viewButton = document.querySelector(`.view-btn[data-lead-id="${leadId}"]`);
+            
+            if (nameElement) {
+                nameElement.textContent = name;
+                nameElement.classList.add('unmasked');
+            }
+            
+            if (mobileElement) {
+                mobileElement.textContent = mobile;
+                mobileElement.classList.add('unmasked');
+            }
+            
+            if (viewButton) {
+                viewButton.classList.add('unmasked');
+                viewButton.innerHTML = '<i class="bi bi-eye-slash-fill me-1"></i>Viewing<span class="timer-display ms-2"></span>';
+            }
+        }
+        
+        function maskAllData() {
+            // Remove unmasked styling and restore masked data
+            document.querySelectorAll('.customer-name.unmasked, .customer-mobile.unmasked').forEach(element => {
+                const original = element.getAttribute('data-original');
+                const leadId = element.getAttribute('data-lead-id');
+                
+                if (element.classList.contains('customer-name')) {
+                    element.textContent = maskName(original);
+                } else if (element.classList.contains('customer-mobile')) {
+                    element.textContent = maskMobile(original);
+                }
+                
+                element.classList.remove('unmasked');
+            });
+            
+            // Reset view buttons
+            document.querySelectorAll('.view-btn.unmasked').forEach(button => {
+                button.classList.remove('unmasked');
+                button.innerHTML = '<i class="bi bi-eye-fill me-1"></i>View<span class="timer-display" style="display: none;"></span>';
+            });
+            
+            currentUnmaskedLeadId = null;
+        }
+        
+        function startUnmaskTimer(leadId, duration) {
+            // Clear any existing timer
+            if (currentViewTimer) {
+                clearInterval(currentViewTimer);
+            }
+            
+            let remaining = duration;
+            const viewButton = document.querySelector(`.view-btn[data-lead-id="${leadId}"]`);
+            const timerDisplay = viewButton?.querySelector('.timer-display');
+            
+            if (timerDisplay) {
+                timerDisplay.style.display = 'inline';
+            }
+            
+            currentViewTimer = setInterval(() => {
+                remaining--;
+                
+                if (timerDisplay) {
+                    timerDisplay.textContent = `(${remaining}s)`;
+                }
+                
+                if (remaining <= 0) {
+                    clearInterval(currentViewTimer);
+                    maskAllData();
+                    showMessage('View timer expired. Data is now masked.', 'warning');
+                }
+            }, 1000);
+        }
+        
+        function showViewAuthError(message) {
+            const alert = document.getElementById('viewAuthAlert');
+            alert.textContent = message;
+            alert.style.display = 'block';
+        }
+        
+        function showMessage(message, type) {
+            // Create and show a toast message
+            const toast = document.createElement('div');
+            toast.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
+            toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+            toast.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            
+            document.body.appendChild(toast);
+            
+            // Auto remove after 5 seconds
+            setTimeout(() => {
+                if (toast.parentNode) {
+                    toast.remove();
+                }
+            }, 5000);
+        }
+        
+        // Client-side masking functions (matching PHP)
+        function maskName(name) {
+            if (!name) return name;
+            
+            const words = name.trim().split(' ');
+            return words.map(word => {
+                if (word.length <= 2) return word;
+                return word[0] + '*'.repeat(word.length - 2) + word.slice(-1);
+            }).join(' ');
+        }
+        
+        function maskMobile(mobile) {
+            if (!mobile) return mobile;
+            
+            const digits = mobile.replace(/[^0-9]/g, '');
+            if (digits.length < 4) return mobile;
+            
+            if (digits.length === 10) {
+                return digits.substring(0, 2) + 'X'.repeat(6) + digits.substring(8);
+            } else if (digits.length > 10) {
+                const maskLength = digits.length - 4;
+                return digits.substring(0, 2) + 'X'.repeat(maskLength) + digits.substring(digits.length - 2);
+            } else {
+                return digits[0] + 'X'.repeat(digits.length - 2) + digits.slice(-1);
+            }
+        }
+        
         // Check if security is disabled for this session
         <?php if (!isset($_SESSION['security_disabled'])): ?>
-        // Initialize security protection with relaxed settings
+        // Initialize security protection with relaxed settings for View functionality
         const securityProtection = new SecurityProtection({
             watermarkText: 'CONFIDENTIAL - TEAM LEADER PORTAL',
             userId: '<?= htmlspecialchars($leaderId) ?>',
@@ -372,6 +707,7 @@ $conn->close();
             enableBlurOnFocus: false, // Disable blur for better usability
             enableTabSwitchDetection: false, // Reduce false positives
             enableScreenRecordingDetection: false, // Reduce false positives
+            enableDevToolsBlocking: false, // Disable to prevent View functionality issues
             violationCallback: function(violation) {
                 if (violation.violationCount >= 8) {
                     alert('Multiple security violations detected. Please contact your administrator.');
@@ -382,7 +718,7 @@ $conn->close();
             }
         });
         <?php else: ?>
-        console.log('Security protection disabled for this session.');
+        // Security protection disabled for this session
         <?php endif; ?>
         
         // Enhanced session monitoring
@@ -420,6 +756,13 @@ $conn->close();
         // Mark session as properly ending when using logout link
         document.querySelector('a[href*="logout.php"]')?.addEventListener('click', () => {
             sessionActive = false;
+        });
+        
+        // Clear timers and mask data on page unload
+        window.addEventListener('beforeunload', () => {
+            if (currentViewTimer) {
+                clearInterval(currentViewTimer);
+            }
         });
     </script>
 

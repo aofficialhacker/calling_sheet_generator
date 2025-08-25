@@ -13,8 +13,8 @@ $to_date = $_GET['to_date'] ?? date('Y-m-d');
 
 // Build WHERE clauses based on filters
 $where_conditions = [
-    // Only include records that have been processed by callers (have disposition or connectivity marked)
-    "((fcl.disposition IS NOT NULL AND fcl.disposition != '') OR (fcl.connectivity IS NOT NULL AND fcl.connectivity != ''))"
+    // Removed overly restrictive filtering to match working dashboard behavior
+    "1=1"
 ];
 $params = [];
 $types = '';
@@ -189,7 +189,7 @@ $unit_query = "
     FROM vendors v
     LEFT JOIN file_batches fb ON v.vendor_id = fb.vendor_id
     LEFT JOIN final_call_logs fcl ON fb.id = fcl.batch_id
-    WHERE ((fcl.disposition IS NOT NULL AND fcl.disposition != '') OR (fcl.connectivity IS NOT NULL AND fcl.connectivity != ''))
+    WHERE fcl.id IS NOT NULL
     GROUP BY v.vendor_id, v.vendor_name
     HAVING leads_provided > 0
     ORDER BY conversion_rate DESC
@@ -210,7 +210,7 @@ $admin_query = "
     FROM admin_users au
     JOIN file_batches fb ON au.admin_id = fb.admin_id
     JOIN final_call_logs fcl ON fb.id = fcl.batch_id
-    WHERE ((fcl.disposition IS NOT NULL AND fcl.disposition != '') OR (fcl.connectivity IS NOT NULL AND fcl.connectivity != ''))
+    WHERE fcl.id IS NOT NULL
     GROUP BY au.admin_id, au.name
     ORDER BY conversion_rate DESC
 ";
@@ -233,7 +233,7 @@ $caller_performance_query = "
     JOIN admin_users au ON acm.admin_id = au.admin_id
     JOIN final_call_logs fcl ON c.finqy_id = fcl.finqy_id
     JOIN file_batches fb ON fcl.batch_id = fb.id
-    WHERE ((fcl.disposition IS NOT NULL AND fcl.disposition != '') OR (fcl.connectivity IS NOT NULL AND fcl.connectivity != ''))
+    WHERE fcl.id IS NOT NULL
     GROUP BY c.finqy_id, c.caller_name, au.name
     HAVING calls_made >= 10
     ORDER BY conversion_rate DESC

@@ -56,8 +56,7 @@ class SecurityProtection {
         this.preventTextSelection();
         this.blockPrintScreen();
         
-        console.log('%c🔐 Security Protection Active', 'color: red; font-weight: bold; font-size: 16px;');
-        console.log('%cScreenshot and recording protection is enabled. Any attempt to capture this page will be logged.', 'color: orange;');
+        // Security Protection Active - logging disabled to prevent console access detection
     }
 
     setupWatermark() {
@@ -458,7 +457,7 @@ class SecurityProtection {
             violationCount: this.violationCount
         };
         
-        console.warn('🚨 Security Violation:', violation);
+        // Security violation logged - console output disabled to prevent detection loops
         
         // Send to server if endpoint provided
         if (this.options.logEndpoint) {
@@ -468,7 +467,7 @@ class SecurityProtection {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify(violation)
-            }).catch(err => console.error('Failed to log violation:', err));
+            }).catch(err => {/* Failed to log violation - silent to prevent console access */});
         }
         
         // Call violation callback
@@ -535,7 +534,7 @@ class SecurityProtection {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify(heartbeat)
-        }).catch(err => console.error('Heartbeat failed:', err));
+        }).catch(err => {/* Heartbeat failed - silent to prevent console access */});
     }
 
     disable() {
@@ -550,7 +549,7 @@ class SecurityProtection {
         // Remove blur class
         document.body.classList.remove('page-blurred');
         
-        console.log('🔓 Security protection disabled');
+        // Security protection disabled - logging removed to prevent console access detection
     }
 }
 

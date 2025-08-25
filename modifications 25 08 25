@@ -1,0 +1,3 @@
+Now i need a "View" button in Tl Interested Leads Dashboard . It should be before "Take Action" button , firstly the Customer Name and its mobile number should be masked i.e "Mr. A**Y D********E" and Mobile number like "9XXXXXXX75" etc and when Team Leader clicks on "View" button , he again needs to enter that code which he uses for Login into portal and then the customer information should be unmasked for 1 minute and after that it should again gets masked. and by default all Interested Leads entry will be Masked and at a time he can unmask only one entry.
+
+and also Mask Name and Numbers on Action History panel of Team Leader and also remove IP from this Action History Panel.

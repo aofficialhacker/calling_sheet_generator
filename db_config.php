@@ -1,4 +1,7 @@
 <?php
+// Set timezone to UTC to ensure consistency
+date_default_timezone_set('UTC');
+
 // Centralized database configuration
 define('DB_HOST', 'localhost');
 define('DB_USER', 'root');
@@ -12,6 +15,7 @@ function getDBConnection() {
         die("Connection failed: " . $conn->connect_error);
     }
     $conn->set_charset("utf8mb4");
+    $conn->query("SET time_zone = '+00:00'");
     return $conn;
 }
 
@@ -206,14 +210,32 @@ function generateTeamLeaderAccessCode() {
  * @return array Contains 'code' and 'expires_at'
  */
 function refreshTeamLeaderCode($leaderId, $conn, $forceRefresh = false) {
-    $stmt = $conn->prepare("SELECT access_code, code_generated_at FROM team_leaders WHERE leader_id = ?");
+    // Get current database time to ensure consistency
+    $dbTimeStmt = $conn->prepare("SELECT NOW() as current_time, UNIX_TIMESTAMP(NOW()) as current_timestamp");
+    if ($dbTimeStmt === false) {
+        error_log("Database time query failed: " . $conn->error);
+        // Fallback to original method if database query fails
+        return refreshTeamLeaderCodeFallback($leaderId, $conn, $forceRefresh);
+    }
+    $dbTimeStmt->execute();
+    $dbTimeResult = $dbTimeStmt->get_result();
+    $dbTime = $dbTimeResult->fetch_assoc();
+    $dbTimeStmt->close();
+    
+    $stmt = $conn->prepare("SELECT access_code, code_generated_at, UNIX_TIMESTAMP(code_generated_at) as generated_timestamp FROM team_leaders WHERE leader_id = ?");
+    if ($stmt === false) {
+        error_log("Team leader query failed: " . $conn->error);
+        return refreshTeamLeaderCodeFallback($leaderId, $conn, $forceRefresh);
+    }
     $stmt->bind_param("s", $leaderId);
     $stmt->execute();
     $result = $stmt->get_result();
     
     if ($result->num_rows > 0) {
         $row = $result->fetch_assoc();
-        $codeAge = time() - strtotime($row['code_generated_at']);
+        
+        // Use database timestamps for consistent calculation
+        $codeAge = $dbTime['current_timestamp'] - $row['generated_timestamp'];
         
         // If code is older than 4 hours (14400 seconds), doesn't exist, or force refresh is requested
         if (!$row['access_code'] || $codeAge >= 14400 || $forceRefresh) {
@@ -222,14 +244,29 @@ function refreshTeamLeaderCode($leaderId, $conn, $forceRefresh = false) {
             $stmt->bind_param("ss", $newCode, $leaderId);
             $stmt->execute();
             
+            // Calculate expiry time using database time + 4 hours
+            $expiryStmt = $conn->prepare("SELECT DATE_ADD(NOW(), INTERVAL 4 HOUR) as expires_at");
+            $expiryStmt->execute();
+            $expiryResult = $expiryStmt->get_result();
+            $expiryTime = $expiryResult->fetch_assoc()['expires_at'];
+            $expiryStmt->close();
+            
             return [
                 'code' => $newCode,
-                'expires_at' => date('Y-m-d H:i:s', time() + 14400)
+                'expires_at' => $expiryTime
             ];
         } else {
+            // For existing codes, calculate expiry using database time
+            $expiryStmt = $conn->prepare("SELECT DATE_ADD(code_generated_at, INTERVAL 4 HOUR) as expires_at FROM team_leaders WHERE leader_id = ?");
+            $expiryStmt->bind_param("s", $leaderId);
+            $expiryStmt->execute();
+            $expiryResult = $expiryStmt->get_result();
+            $expiryTime = $expiryResult->fetch_assoc()['expires_at'];
+            $expiryStmt->close();
+            
             return [
                 'code' => $row['access_code'],
-                'expires_at' => date('Y-m-d H:i:s', strtotime($row['code_generated_at']) + 14400)
+                'expires_at' => $expiryTime
             ];
         }
     }
@@ -264,6 +301,43 @@ function validateTeamLeaderAccessCode($leaderId, $inputCode, $conn) {
     
     $stmt->close();
     return false;
+}
+
+/**
+ * Fallback function for refreshTeamLeaderCode using original PHP time methods
+ * Used when database timestamp queries fail
+ */
+function refreshTeamLeaderCodeFallback($leaderId, $conn, $forceRefresh = false) {
+    $stmt = $conn->prepare("SELECT access_code, code_generated_at FROM team_leaders WHERE leader_id = ?");
+    $stmt->bind_param("s", $leaderId);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    
+    if ($result->num_rows > 0) {
+        $row = $result->fetch_assoc();
+        $codeAge = time() - strtotime($row['code_generated_at']);
+        
+        // If code is older than 4 hours (14400 seconds), doesn't exist, or force refresh is requested
+        if (!$row['access_code'] || $codeAge >= 14400 || $forceRefresh) {
+            $newCode = generateTeamLeaderAccessCode();
+            $stmt = $conn->prepare("UPDATE team_leaders SET access_code = ?, code_generated_at = NOW() WHERE leader_id = ?");
+            $stmt->bind_param("ss", $newCode, $leaderId);
+            $stmt->execute();
+            
+            return [
+                'code' => $newCode,
+                'expires_at' => date('Y-m-d H:i:s', time() + 14400)
+            ];
+        } else {
+            return [
+                'code' => $row['access_code'],
+                'expires_at' => date('Y-m-d H:i:s', strtotime($row['code_generated_at']) + 14400)
+            ];
+        }
+    }
+    
+    $stmt->close();
+    return ['code' => null, 'expires_at' => null];
 }
 
 /**

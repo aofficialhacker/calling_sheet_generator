@@ -12,9 +12,8 @@ $to_date = $_GET['to_date'] ?? date('Y-m-d');
 
 // Build WHERE clauses based on filters
 $where_conditions = [
-    "fb.admin_id = ?",
-    // Only include records that have been processed by callers (have disposition or connectivity marked)
-    "((fcl.disposition IS NOT NULL AND fcl.disposition != '') OR (fcl.connectivity IS NOT NULL AND fcl.connectivity != ''))"
+    "fb.admin_id = ?"
+    // Removed overly restrictive filtering to match working dashboard behavior
 ];
 $params = [$adminId];
 $types = 's';
@@ -62,7 +61,7 @@ $total_count_query = "
     SELECT COUNT(*) as total_count
     FROM final_call_logs fcl 
     JOIN file_batches fb ON fcl.batch_id = fb.id 
-    $where_clause AND fcl.processed_at IS NOT NULL
+    $where_clause
 ";
 
 $stmt = $conn->prepare($total_count_query);
@@ -81,7 +80,7 @@ $disposition_query = "
         COUNT(*) as count
     FROM final_call_logs fcl 
     JOIN file_batches fb ON fcl.batch_id = fb.id 
-    $where_clause AND fcl.processed_at IS NOT NULL AND disposition IS NOT NULL AND disposition != ''
+    $where_clause AND disposition IS NOT NULL AND disposition != ''
     GROUP BY disposition 
     ORDER BY count DESC
 ";
@@ -234,7 +233,7 @@ $unit_query = "
     FROM vendors v
     JOIN file_batches fb ON v.vendor_id = fb.vendor_id
     JOIN final_call_logs fcl ON fb.id = fcl.batch_id
-    WHERE fb.admin_id = ? AND fcl.processed_at IS NOT NULL
+    WHERE fb.admin_id = ?
     GROUP BY v.vendor_id, v.vendor_name
     HAVING leads_provided > 0
     ORDER BY conversion_rate DESC

@@ -69,16 +69,6 @@ $active_page = basename($_SERVER['PHP_SELF']);
                     <?php endif; ?>
                 </a>
             </li>
-            <li class="nav-item">
-                <a class="nav-link <?= $active_page == 'global_performance.php' ? 'active' : '' ?>" href="global_performance.php">
-                    <i class="bi bi-graph-up me-2"></i>Performance
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link <?= $active_page == 'system_settings.php' ? 'active' : '' ?>" href="system_settings.php">
-                    <i class="bi bi-gear-fill me-2"></i>Settings
-                </a>
-            </li>
             <li class="nav-item mt-4">
                 <a class="nav-link text-danger" href="logout.php?type=superadmin">
                     <i class="bi bi-box-arrow-right me-2"></i>Logout
