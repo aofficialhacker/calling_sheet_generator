@@ -82,14 +82,14 @@ class SecurityProtection {
                 height: 100vh;
                 pointer-events: none;
                 z-index: 9999;
-                opacity: 0.1;
+                opacity: 0.12;
                 user-select: none;
                 background-image: repeating-linear-gradient(
                     45deg,
                     transparent,
-                    transparent 100px,
-                    rgba(255, 0, 0, 0.05) 100px,
-                    rgba(255, 0, 0, 0.05) 200px
+                    transparent 150px,
+                    rgba(0, 0, 0, 0.03) 150px,
+                    rgba(0, 0, 0, 0.03) 300px
                 );
             }
             
@@ -97,13 +97,13 @@ class SecurityProtection {
                 position: absolute;
                 top: 50%;
                 left: 50%;
-                transform: translate(-50%, -50%) rotate(-45deg);
-                font-size: 24px;
-                font-weight: bold;
-                color: #ff0000;
+                transform: translate(-50%, -50%) rotate(-35deg);
+                font-size: 28px;
+                font-weight: 600;
+                color: #000;
                 text-align: center;
                 white-space: nowrap;
-                font-family: 'Courier New', monospace;
+                font-family: 'Arial', sans-serif;
             }
             
             body.page-blurred #security-watermark {

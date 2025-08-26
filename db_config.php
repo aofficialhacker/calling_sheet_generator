@@ -62,9 +62,36 @@ function requireTeamLeader() {
         session_start();
     }
     if (!isTeamLeader()) {
-        header("Location: team_leader_login.php");
+        header("Location: team_leader_login.php?reason=not_logged_in");
         exit();
     }
+
+    // Multi-device login check
+    $conn = getDBConnection();
+    $stmt = $conn->prepare("SELECT active_session_id FROM team_leaders WHERE leader_id = ?");
+    $stmt->bind_param("s", $_SESSION['leader_id']);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    if ($result->num_rows > 0) {
+        $row = $result->fetch_assoc();
+        if ($row['active_session_id'] !== session_id()) {
+            // Current session ID does not match the active one in the DB.
+            // This means another device has logged in.
+            session_unset();
+            session_destroy();
+            header("Location: team_leader_login.php?reason=multi_device");
+            exit();
+        }
+    } else {
+        // Leader not found, something is wrong.
+        session_unset();
+        session_destroy();
+        header("Location: team_leader_login.php?reason=invalid_user");
+        exit();
+    }
+    $stmt->close();
+    // Do not close the connection here if other queries need it on the same page.
+    // $conn->close(); 
 }
 
 // Function to generate unique admin ID (No changes needed, logic is sound)

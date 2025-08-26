@@ -704,10 +704,10 @@ $conn->close();
             sessionId: '<?= session_id() ?>',
             logEndpoint: 'security_log.php',
             maxViolations: 8,
-            enableBlurOnFocus: false, // Disable blur for better usability
-            enableTabSwitchDetection: false, // Reduce false positives
-            enableScreenRecordingDetection: false, // Reduce false positives
-            enableDevToolsBlocking: false, // Disable to prevent View functionality issues
+            enableBlurOnFocus: true,
+            enableTabSwitchDetection: true,
+            enableScreenRecordingDetection: true,
+            enableDevToolsBlocking: true,
             violationCallback: function(violation) {
                 if (violation.violationCount >= 8) {
                     alert('Multiple security violations detected. Please contact your administrator.');

@@ -49,11 +49,12 @@ if ($_POST) {
                     // Verify admin access code
                     if (validateTeamLeaderAccessCode($leader['leader_id'], $accessCode, $conn)) {
                         // Direct login - no additional security code needed
+                        session_regenerate_id(true);
                         $sessionId = session_id();
                         
-                        // Update login info
-                        $stmt = $conn->prepare("UPDATE team_leaders SET last_login = NOW(), login_attempts = 0 WHERE leader_id = ?");
-                        $stmt->bind_param("s", $leader['leader_id']);
+                        // Update login info and set active session ID
+                        $stmt = $conn->prepare("UPDATE team_leaders SET last_login = NOW(), active_session_id = ?, login_attempts = 0 WHERE leader_id = ?");
+                        $stmt->bind_param("ss", $sessionId, $leader['leader_id']);
                         $stmt->execute();
                         
                         // Log successful login
@@ -67,6 +68,7 @@ if ($_POST) {
                         $_SESSION['leader_name'] = $leader['leader_name'];
                         $_SESSION['finqy_id'] = $leader['finqy_id'];
                         $_SESSION['admin_id'] = $leader['admin_id'];
+                        $_SESSION['active_session_id'] = $sessionId;
                         
                         header("Location: team_leader_dashboard.php");
                         exit();

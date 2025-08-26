@@ -32,12 +32,25 @@ $batch_id     = $_GET['batch_id'] ?? null;
 $dispositions = null;
 $scope        = $_GET['scope'] ?? '';
 $product_code = $_GET['product_code'] ?? '';
+$caller_id    = $_GET['caller_id'] ?? null;
+$excluded_batches = isset($_GET['excluded_batches']) ? explode(',', $_GET['excluded_batches']) : [];
 
 if (!$batch_id && !isset($_GET['disposition'])) {
     die("Error: No valid batch ID or disposition provided.");
 }
 
 $adminId = $_SESSION['admin_id'];
+
+// Get caller name for PDF title if caller filter is applied
+$callerName = null;
+if ($caller_id) {
+    $callerStmt = $conn->prepare("SELECT name FROM callers WHERE caller_id = ?");
+    $callerStmt->bind_param("s", $caller_id);
+    $callerStmt->execute();
+    $callerResult = $callerStmt->get_result()->fetch_assoc();
+    $callerName = $callerResult ? $callerResult['name'] : $caller_id;
+    $callerStmt->close();
+}
 
 // --- File name / Title --------------------------------------------------
 $pdfFileName = 'Calling_Sheet.pdf';
@@ -46,32 +59,37 @@ $pdfTitle    = 'Calling Sheet';
 if (isset($_GET['disposition'])) {
     $dispositions = is_array($_GET['disposition']) ? $_GET['disposition'] : [$_GET['disposition']];
     $dispNames = array_map(fn($d)=>preg_replace("/[^a-zA-Z0-9]/","",$d), $dispositions);
+    
+    $callerSuffix = $caller_id ? ('_' . preg_replace("/[^a-zA-Z0-9]/", "", $callerName)) : '';
+    $callerTitleSuffix = $callerName ? " - Caller: " . htmlspecialchars($callerName) : "";
 
     switch ($scope) {
         case 'batch-wise':
-            $pdfFileName = 'Batch_' . $batch_id . '_' . implode('_', $dispNames) . '.pdf';
-            $pdfTitle    = "Calling Sheet for Batch $batch_id - Status: " . implode(', ', $dispositions);
+            $pdfFileName = 'Batch_' . $batch_id . '_' . implode('_', $dispNames) . $callerSuffix . '.pdf';
+            $pdfTitle    = "Calling Sheet for Batch $batch_id - Status: " . implode(', ', $dispositions) . $callerTitleSuffix;
             break;
         case 'all-batch':
-            $pdfFileName = 'AllBatches_' . implode('_', $dispNames) . '.pdf';
-            $pdfTitle    = "Calling Sheet for All Batches - Status: " . implode(', ', $dispositions);
+            $pdfFileName = 'AllBatches_' . implode('_', $dispNames) . $callerSuffix . '.pdf';
+            $pdfTitle    = "Calling Sheet for All Batches - Status: " . implode(', ', $dispositions) . $callerTitleSuffix;
             break;
         case 'product-wise':
-            $pdfFileName = 'Product_' . $product_code . '_' . implode('_', $dispNames) . '.pdf';
-            $pdfTitle    = "Calling Sheet for Product $product_code - Status: " . implode(', ', $dispositions);
+            $pdfFileName = 'Product_' . $product_code . '_' . implode('_', $dispNames) . $callerSuffix . '.pdf';
+            $pdfTitle    = "Calling Sheet for Product $product_code - Status: " . implode(', ', $dispositions) . $callerTitleSuffix;
             break;
         case 'all-product':
-            $pdfFileName = 'AllProducts_' . implode('_', $dispNames) . '.pdf';
-            $pdfTitle    = "Calling Sheet for All Products - Status: " . implode(', ', $dispositions);
+            $pdfFileName = 'AllProducts_' . implode('_', $dispNames) . $callerSuffix . '.pdf';
+            $pdfTitle    = "Calling Sheet for All Products - Status: " . implode(', ', $dispositions) . $callerTitleSuffix;
             break;
         default:
             $safeDispositionName = preg_replace("/[^a-zA-Z0-9]/", "", $dispositions[0]);
-            $pdfFileName = ucwords($safeDispositionName) . '_Sheet.pdf';
-            $pdfTitle    = "Calling Sheet for Status: " . implode(', ', $dispositions);
+            $pdfFileName = ucwords($safeDispositionName) . '_Sheet' . $callerSuffix . '.pdf';
+            $pdfTitle    = "Calling Sheet for Status: " . implode(', ', $dispositions) . $callerTitleSuffix;
     }
 } elseif ($batch_id) {
-    $pdfFileName = 'Batch_' . $batch_id . '_Sheet.pdf';
-    $pdfTitle    = "Calling Sheet for Batch " . htmlspecialchars($batch_id);
+    $callerSuffix = $caller_id ? ('_' . preg_replace("/[^a-zA-Z0-9]/", "", $callerName)) : '';
+    $callerTitleSuffix = $callerName ? " - Caller: " . htmlspecialchars($callerName) : "";
+    $pdfFileName = 'Batch_' . $batch_id . '_Sheet' . $callerSuffix . '.pdf';
+    $pdfTitle    = "Calling Sheet for Batch " . htmlspecialchars($batch_id) . $callerTitleSuffix;
 }
 
 // --- Disposition Codes & Legends ---------------------------------------
@@ -106,11 +124,30 @@ switch ($scope) {
     default:
         if ($batch_id) { $whereClauses[] = "fcl.batch_id = ?"; $params[] = $batch_id; $types .= 's'; }
 }
+
+// Add caller filter
+if ($caller_id) {
+    $whereClauses[] = "fcl.caller_id = ?";
+    $params[] = $caller_id;
+    $types .= 's';
+}
+
+// Add disposition filter
 if ($dispositions && !empty($dispositions)) {
     $placeholders = implode(',', array_fill(0, count($dispositions), '?'));
     $whereClauses[] = "fcl.disposition IN ($placeholders)";
     $params = array_merge($params, $dispositions);
     $types .= str_repeat('s', count($dispositions));
+}
+
+// Exclude batches that have reached download limits
+if (!empty($excluded_batches)) {
+    $excludePlaceholders = implode(',', array_fill(0, count($excluded_batches), '?'));
+    $whereClauses[] = "fcl.batch_id NOT IN ($excludePlaceholders)";
+    $params = array_merge($params, $excluded_batches);
+    $types .= str_repeat('s', count($excluded_batches));
+    
+    debugLog("Excluding " . count($excluded_batches) . " batches from download: " . implode(', ', $excluded_batches));
 }
 if (count($whereClauses) <= 1 && !$batch_id && !$dispositions) {
     die("Error: No criteria selected for PDF generation.");

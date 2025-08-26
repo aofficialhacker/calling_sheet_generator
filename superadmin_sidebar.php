@@ -62,6 +62,11 @@ $active_page = basename($_SERVER['PHP_SELF']);
                 </a>
             </li>
             <li class="nav-item">
+                <a class="nav-link <?= $active_page == 'simple_download_limits.php' ? 'active' : '' ?>" href="simple_download_limits.php">
+                    <i class="bi bi-download me-2"></i>Download Limits
+                </a>
+            </li>
+            <li class="nav-item">
                 <a class="nav-link <?= $active_page == 'vendor_requests.php' ? 'active' : '' ?>" href="vendor_requests.php">
                     <i class="bi bi-bell-fill me-2"></i>Unit Requests
                     <?php if ($pending_requests_count > 0): ?>
