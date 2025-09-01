@@ -35,6 +35,11 @@ class DownloadCounter {
      */
     public function recordDownload($adminId, $disposition, $batchId = null, $productCode = null, $callerId = null) {
         try {
+            // Normalize empty strings to NULL for consistent storage and unique constraint
+            $batchId = empty($batchId) ? null : $batchId;
+            $productCode = empty($productCode) ? null : $productCode;
+            $callerId = empty($callerId) ? null : $callerId;
+            
             $stmt = $this->conn->prepare("
                 INSERT INTO download_tracking 
                 (admin_id, disposition, batch_id, product_code, caller_id, download_count, first_download_at, last_download_at)
@@ -58,6 +63,22 @@ class DownloadCounter {
      */
     public function getAdminDownloadLimit($adminId) {
         try {
+            // First check superadmin-set limits in admin_download_limits table
+            $stmt = $this->conn->prepare("
+                SELECT download_limit 
+                FROM admin_download_limits 
+                WHERE admin_id = ?
+            ");
+            
+            $stmt->bind_param("s", $adminId);
+            $stmt->execute();
+            $result = $stmt->get_result()->fetch_assoc();
+            
+            if ($result) {
+                return $result['download_limit'];
+            }
+            
+            // Fallback to admin_users table for backward compatibility
             $stmt = $this->conn->prepare("
                 SELECT download_limit 
                 FROM admin_users 
@@ -81,8 +102,13 @@ class DownloadCounter {
      */
     public function getCurrentUsage($adminId, $disposition, $batchId = null, $productCode = null, $callerId = null) {
         try {
+            // Normalize empty strings to NULL for consistent comparison
+            $batchId = empty($batchId) ? null : $batchId;
+            $productCode = empty($productCode) ? null : $productCode;
+            $callerId = empty($callerId) ? null : $callerId;
+            
             $stmt = $this->conn->prepare("
-                SELECT download_count 
+                SELECT SUM(download_count) as total_downloads
                 FROM download_tracking 
                 WHERE admin_id = ? AND disposition = ? 
                 AND (batch_id = ? OR (batch_id IS NULL AND ? IS NULL))
@@ -100,7 +126,7 @@ class DownloadCounter {
             $stmt->execute();
             $result = $stmt->get_result()->fetch_assoc();
             
-            return $result ? $result['download_count'] : 0;
+            return $result ? (int)$result['total_downloads'] : 0;
             
         } catch (Exception $e) {
             error_log("DownloadCounter::getCurrentUsage error: " . $e->getMessage());

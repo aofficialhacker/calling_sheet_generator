@@ -3,18 +3,18 @@
 if (!defined('DB_HOST')) {
     require_once 'db_config.php';
 }
-$conn = getDBConnection();
+$sidebar_conn = getDBConnection();
 
 // Get pending vendor requests count
 $pending_requests_count = 0;
-$stmt = $conn->prepare("SELECT COUNT(*) as count FROM vendor_requests WHERE status = 'pending'");
+$stmt = $sidebar_conn->prepare("SELECT COUNT(*) as count FROM vendor_requests WHERE status = 'pending'");
 $stmt->execute();
 $result = $stmt->get_result();
 if ($result) {
     $pending_requests_count = $result->fetch_assoc()['count'];
 }
 $stmt->close();
-$conn->close();
+$sidebar_conn->close();
 
 // Determine active page
 $active_page = basename($_SERVER['PHP_SELF']);
@@ -62,7 +62,7 @@ $active_page = basename($_SERVER['PHP_SELF']);
                 </a>
             </li>
             <li class="nav-item">
-                <a class="nav-link <?= $active_page == 'simple_download_limits.php' ? 'active' : '' ?>" href="simple_download_limits.php">
+                <a class="nav-link <?= $active_page == 'superadmin_download_limits.php' ? 'active' : '' ?>" href="superadmin_download_limits.php">
                     <i class="bi bi-download me-2"></i>Download Limits
                 </a>
             </li>

@@ -44,11 +44,11 @@ $adminId = $_SESSION['admin_id'];
 // Get caller name for PDF title if caller filter is applied
 $callerName = null;
 if ($caller_id) {
-    $callerStmt = $conn->prepare("SELECT name FROM callers WHERE caller_id = ?");
+    $callerStmt = $conn->prepare("SELECT caller_name FROM callers WHERE finqy_id = ?");
     $callerStmt->bind_param("s", $caller_id);
     $callerStmt->execute();
     $callerResult = $callerStmt->get_result()->fetch_assoc();
-    $callerName = $callerResult ? $callerResult['name'] : $caller_id;
+    $callerName = $callerResult ? $callerResult['caller_name'] : $caller_id;
     $callerStmt->close();
 }
 
@@ -127,7 +127,7 @@ switch ($scope) {
 
 // Add caller filter
 if ($caller_id) {
-    $whereClauses[] = "fcl.caller_id = ?";
+    $whereClauses[] = "fcl.finqy_id = ?";
     $params[] = $caller_id;
     $types .= 's';
 }

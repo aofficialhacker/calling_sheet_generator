@@ -86,11 +86,12 @@ try {
     $ipAddress = getRealIpAddress();
     $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? 'unknown';
     $pageUrl = $input['url'] ?? 'unknown';
+    $sessionId = $input['sessionId'] ?? session_id();
     
     $stmt->bind_param(
         'ssssssss',
         $input['userId'],
-        $input['sessionId'] ?? session_id(),
+        $sessionId,
         $input['type'],
         $details,
         $ipAddress,

@@ -78,13 +78,24 @@ try {
     error_log("Error fetching dispositions: " . $e->getMessage());
 }
 
-// Get callers (optional - may not exist)
+// Get callers (through admin_caller_mapping)
 $callers = [];
 try {
-    // Check if callers table exists first
-    $table_check = $conn->query("SHOW TABLES LIKE 'callers'");
-    if ($table_check && $table_check->num_rows > 0) {
-        $callers_stmt = $conn->prepare("SELECT caller_id, name FROM callers WHERE admin_id = ? AND is_active = 1 ORDER BY name");
+    // Check if both tables exist
+    $callers_table_check = $conn->query("SHOW TABLES LIKE 'callers'");
+    $mapping_table_check = $conn->query("SHOW TABLES LIKE 'admin_caller_mapping'");
+    
+    if ($callers_table_check && $callers_table_check->num_rows > 0 && 
+        $mapping_table_check && $mapping_table_check->num_rows > 0) {
+        
+        $callers_stmt = $conn->prepare("
+            SELECT c.finqy_id as caller_id, c.caller_name as name 
+            FROM callers c 
+            JOIN admin_caller_mapping acm ON c.finqy_id = acm.finqy_id 
+            WHERE acm.admin_id = ? AND c.is_active = 1 
+            ORDER BY c.caller_name
+        ");
+        
         if ($callers_stmt) {
             $callers_stmt->bind_param("s", $adminId);
             $callers_stmt->execute();
@@ -115,22 +126,16 @@ try {
         .sidebar .nav-link:hover, .sidebar .nav-link.active { color: white; background-color: rgba(255,255,255,0.1); }
         #loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.7); z-index: 1050; display: none; justify-content: center; align-items: center; flex-direction: column; }
         .spinner { width: 50px; height: 50px; border: 8px solid #f3f3f3; border-top: 8px solid #3498db; border-radius: 50%; animation: spin 1.5s linear infinite; }
-        .loading-text { color: white; margin-top: 20px; font-size: 1.2rem; font-weight: bold; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        #dynamic-selections { min-height: 0; }
-        .card { margin-bottom: 1rem; }
-        main { overflow-y: auto; max-height: 100vh; }
-        .container-fluid { overflow-x: hidden; }
-        .table-responsive { overflow-x: auto; }
     </style>
 </head>
 <body>
-    <div id="loading-overlay"><div class="spinner"></div><p class="loading-text" id="loading-message">Generating PDF, please wait...</p></div>
+    <div id="loading-overlay"><div class="spinner"></div><p class="text-white mt-3">Generating PDF, please wait...</p></div>
     <div class="container-fluid">
         <div class="row">
             <?php include 'admin_sidebar.php'; ?>
 
-            <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4" style="min-height: 100vh; padding-bottom: 50px;">
+            <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
                 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
                     <h1 class="h2"><i class="bi bi-stack me-2"></i>View Batches</h1>
                 </div>
@@ -151,36 +156,28 @@ try {
                                         <div class="border rounded p-2" style="max-height: 150px; overflow-y: auto;">
                                             <div class="form-check">
                                                 <input class="form-check-input" type="checkbox" id="select-all-status" value="">
-                                                <label class="form-check-label fw-bold" for="select-all-status">
-                                                    Select All
-                                                </label>
+                                                <label class="form-check-label fw-bold" for="select-all-status">Select All</label>
                                             </div>
                                             <hr class="my-1">
-                                            <?php if ($dispositions && $dispositions->num_rows > 0): ?>
-                                                <?php $dispositions->data_seek(0); ?>
-                                                <?php while($dispo = $dispositions->fetch_assoc()): ?>
-                                                    <div class="form-check">
-                                                        <input class="form-check-input status-checkbox" type="checkbox" 
-                                                               id="status-<?= $dispo['code'] ?>" 
-                                                               value="<?= htmlspecialchars($dispo['description']) ?>">
-                                                        <label class="form-check-label" for="status-<?= $dispo['code'] ?>">
-                                                            <?= htmlspecialchars($dispo['code']) ?> - <?= htmlspecialchars($dispo['description']) ?>
-                                                        </label>
-                                                    </div>
-                                                <?php endwhile; ?>
-                                            <?php endif; ?>
+                                            <?php foreach($dispositions as $dispo): ?>
+                                                <div class="form-check">
+                                                    <input class="form-check-input status-checkbox" type="checkbox" 
+                                                           id="status-<?= $dispo['code'] ?>" 
+                                                           value="<?= htmlspecialchars($dispo['description']) ?>">
+                                                    <label class="form-check-label" for="status-<?= $dispo['code'] ?>">
+                                                        <?= htmlspecialchars($dispo['code']) ?> - <?= htmlspecialchars($dispo['description']) ?>
+                                                    </label>
+                                                </div>
+                                            <?php endforeach; ?>
                                         </div>
                                     <?php else: ?>
                                         <select class="form-select" id="single-status-select">
                                             <option value="">-- Select Status --</option>
-                                            <?php if ($dispositions && $dispositions->num_rows > 0): ?>
-                                                <?php $dispositions->data_seek(0); ?>
-                                                <?php while($dispo = $dispositions->fetch_assoc()): ?>
-                                                    <option value="<?= htmlspecialchars($dispo['description']) ?>">
-                                                        <?= htmlspecialchars($dispo['code']) ?> - <?= htmlspecialchars($dispo['description']) ?>
-                                                    </option>
-                                                <?php endwhile; ?>
-                                            <?php endif; ?>
+                                            <?php foreach($dispositions as $dispo): ?>
+                                                <option value="<?= htmlspecialchars($dispo['description']) ?>">
+                                                    <?= htmlspecialchars($dispo['code']) ?> - <?= htmlspecialchars($dispo['description']) ?>
+                                                </option>
+                                            <?php endforeach; ?>
                                         </select>
                                     <?php endif; ?>
                                 </div>
@@ -190,94 +187,56 @@ try {
                                     <label class="form-label"><strong>Caller Filter</strong></label>
                                     <select class="form-select" id="caller-filter">
                                         <option value="">All Callers</option>
-                                        <?php 
-                                        // Fetch callers mapped to this admin
-                                        $callers_stmt = $conn->prepare("SELECT caller_id, name FROM callers WHERE admin_id = ? AND is_active = 1 ORDER BY name");
-                                        $callers_stmt->bind_param("s", $adminId);
-                                        $callers_stmt->execute();
-                                        $callers_result = $callers_stmt->get_result();
-                                        while($caller = $callers_result->fetch_assoc()): ?>
-                                            <option value="<?= htmlspecialchars($caller['caller_id']) ?>">
-                                                <?= htmlspecialchars($caller['name']) ?>
-                                            </option>
-                                        <?php endwhile; 
-                                        $callers_stmt->close(); ?>
+                                        <?php if (!empty($callers)): ?>
+                                            <?php foreach($callers as $caller): ?>
+                                                <option value="<?= htmlspecialchars($caller['caller_id']) ?>">
+                                                    <?= htmlspecialchars($caller['name']) ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        <?php else: ?>
+                                            <option disabled>No callers assigned</option>
+                                        <?php endif; ?>
                                     </select>
                                 </div>
                             </div>
                             
-                            <!-- TESTING: Force visible second row -->
-                            <div class="alert alert-success mt-3">
-                                <strong>TEST:</strong> If you can see this green box, the second row should be visible below.
-                            </div>
-                            
-                            <!-- Second Row - Always Visible Product and Batch Selection -->
-                            <div class="row g-3 mt-3 border border-primary p-3" style="background-color: #f8f9fa; min-height: 150px;">
+                            <!-- Second Row - Product and Batch Selection (SIMPLIFIED) -->
+                            <div class="row g-3 mt-3" style="background-color: #e3f2fd; padding: 15px; border-radius: 8px; border-left: 4px solid #2196f3;">
                                 <div class="col-12">
-                                    <h5 class="text-primary">Product and Batch Selection</h5>
+                                    <h6 class="text-primary mb-3"><i class="bi bi-filter-circle me-2"></i>Product and Batch Selection</h6>
                                 </div>
                                 
                                 <!-- Product Selection -->
-                                <div class="col-md-4">
+                                <div class="col-md-6">
                                     <label class="form-label"><strong>Select Product</strong></label>
                                     <select class="form-select" id="product-select">
                                         <option value="">All Products</option>
-                                        <!-- Simple static options for testing -->
-                                        <option value="test1">Test Product 1</option>
-                                        <option value="test2">Test Product 2</option>
                                         <?php 
-                                        // Add dynamic products if available
-                                        if (isset($batches_data) && is_array($batches_data)) {
-                                            $unique_products = [];
-                                            foreach($batches_data as $batch) {
-                                                if (isset($batch['product_code']) && isset($batch['product_name'])) {
-                                                    $unique_products[$batch['product_code']] = $batch['product_name'];
-                                                }
-                                            }
-                                            foreach($unique_products as $code => $name) {
-                                                echo '<option value="' . htmlspecialchars($code) . '">' . htmlspecialchars($name) . '</option>';
-                                            }
+                                        $unique_products = [];
+                                        foreach($batches_data as $batch) {
+                                            $unique_products[$batch['product_code']] = $batch['product_name'];
                                         }
-                                        ?>
+                                        foreach($unique_products as $code => $name): ?>
+                                            <option value="<?= htmlspecialchars($code) ?>">
+                                                <?= htmlspecialchars($name) ?>
+                                            </option>
+                                        <?php endforeach; ?>
                                     </select>
-                                    <small class="text-muted">Products from your batches</small>
+                                    <small class="text-muted">Choose "All Products" or specific product</small>
                                 </div>
                                 
                                 <!-- Batch Selection -->
-                                <div class="col-md-4">
+                                <div class="col-md-6">
                                     <label class="form-label"><strong>Select Batch</strong></label>
                                     <select class="form-select" id="batch-select">
                                         <option value="">All Batches</option>
-                                        <!-- Simple static options for testing -->
-                                        <option value="batch1">Batch 001 - Test</option>
-                                        <option value="batch2">Batch 002 - Test</option>
-                                        <?php 
-                                        // Add dynamic batches if available
-                                        if (isset($batches_data) && is_array($batches_data)) {
-                                            foreach($batches_data as $batch) {
-                                                if (isset($batch['id']) && isset($batch['product_name'])) {
-                                                    echo '<option value="' . htmlspecialchars($batch['id']) . '" data-product="' . htmlspecialchars($batch['product_code'] ?? '') . '">';
-                                                    echo htmlspecialchars($batch['id']) . ' - ' . htmlspecialchars($batch['product_name']);
-                                                    echo '</option>';
-                                                }
-                                            }
-                                        }
-                                        ?>
+                                        <?php foreach($batches_data as $batch): ?>
+                                            <option value="<?= htmlspecialchars($batch['id']) ?>" data-product="<?= htmlspecialchars($batch['product_code']) ?>">
+                                                <?= htmlspecialchars($batch['id']) ?> - <?= htmlspecialchars($batch['product_name']) ?>
+                                            </option>
+                                        <?php endforeach; ?>
                                     </select>
-                                    <small class="text-muted">Your uploaded batches</small>
-                                </div>
-                                
-                                <!-- Download Scope -->
-                                <div class="col-md-4">
-                                    <label class="form-label"><strong>Download Scope</strong></label>
-                                    <select class="form-select" id="download-scope" required>
-                                        <option value="">-- Select Scope --</option>
-                                        <option value="batch-wise">Selected Batch Only</option>
-                                        <option value="all-batch">All Batches</option>
-                                        <option value="product-wise">Selected Product Only</option>
-                                        <option value="all-product">All Products</option>
-                                    </select>
-                                    <small class="text-muted">Choose download scope</small>
+                                    <small class="text-muted">Choose "All Batches" or specific batch</small>
                                 </div>
                             </div>
                             
@@ -293,19 +252,8 @@ try {
                     </div>
                 </div>
 
-                <!-- Debug Info (remove after testing) -->
-                <div class="alert alert-info mt-4">
-                    <strong>Debug Info:</strong> 
-                    Admin ID: <?= htmlspecialchars($adminId) ?> | 
-                    Batches Found: <?= count($batches_data) ?> | 
-                    PHP Error Display: <?= ini_get('display_errors') ? 'ON' : 'OFF' ?>
-                    <?php if (!empty($batches_data)): ?>
-                        | Sample Batch: <?= htmlspecialchars($batches_data[0]['id'] ?? 'N/A') ?>
-                    <?php endif; ?>
-                </div>
-
                 <!-- Batches Table -->
-                <div class="card shadow-sm mt-4">
+                <div class="card shadow-sm">
                     <div class="card-header bg-info text-white">
                         <h5 class="mb-0"><i class="bi bi-table me-2"></i>Your Uploaded Batches (<?= count($batches_data) ?> total)</h5>
                     </div>
@@ -313,24 +261,23 @@ try {
                         <?php if (count($batches_data) > 0): ?>
                             <div class="table-responsive">
                                 <table class="table table-hover table-striped">
-                                <thead>
-                                    <tr>
-                                        <th>Batch No</th>
-                                        <th>Product</th>
-                                        <th>Original Filename</th>
-                                        <th>Records</th>
-                                        <th>Uploaded On</th>
-                                        <th>Action</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php if (count($batches_data) > 0): ?>
+                                    <thead class="table-dark">
+                                        <tr>
+                                            <th>Batch No</th>
+                                            <th>Product</th>
+                                            <th>Original Filename</th>
+                                            <th>Records</th>
+                                            <th>Uploaded On</th>
+                                            <th>Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
                                         <?php foreach($batches_data as $row): ?>
                                         <tr>
                                             <td><span class="badge bg-primary fs-6"><?= htmlspecialchars($row['id']) ?></span></td>
-                                            <td><?= htmlspecialchars($row['product_name']) ?></td>
+                                            <td><span class="badge bg-secondary"><?= htmlspecialchars($row['product_name']) ?></span></td>
                                             <td title="<?= htmlspecialchars($row['original_filename']) ?>"><?= htmlspecialchars(substr($row['original_filename'], 0, 30)) . (strlen($row['original_filename']) > 30 ? '...' : '') ?></td>
-                                            <td><?= htmlspecialchars($row['record_count']) ?></td>
+                                            <td><span class="badge bg-success"><?= htmlspecialchars($row['record_count']) ?></span></td>
                                             <td><?= date('d-M-Y H:i', strtotime($row['upload_time'])) ?></td>
                                             <td>
                                                 <a href="pdf_download_handler.php?batch_id=<?= $row['id'] ?>" class="btn btn-danger btn-sm download-pdf-btn" title="Download PDF for this batch">
@@ -339,20 +286,13 @@ try {
                                             </td>
                                         </tr>
                                         <?php endforeach; ?>
-                                    <?php endif; ?>
-                                </tbody>
-                            </table>
+                                    </tbody>
+                                </table>
                             </div>
                         <?php else: ?>
                             <div class="alert alert-warning">
-                                <h5>No batches found</h5>
+                                <h5><i class="bi bi-exclamation-triangle me-2"></i>No batches found</h5>
                                 <p>No batches have been uploaded for your admin account yet.</p>
-                                <hr>
-                                <small><strong>Debug Info:</strong><br>
-                                Your Admin ID: <?= htmlspecialchars($adminId) ?><br>
-                                Batch Count: <?= $debug_count ?><br>
-                                Admin IDs in DB: <?= implode(', ', array_map('htmlspecialchars', $existing_admin_ids)) ?>
-                                </small>
                             </div>
                         <?php endif; ?>
                     </div>
@@ -360,12 +300,13 @@ try {
             </main>
         </div>
     </div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const multiStatusEnabled = <?= json_encode($multiStatusEnabled) ?>;
     const productSelect = document.getElementById('product-select');
     const batchSelect = document.getElementById('batch-select');
-    const downloadScope = document.getElementById('download-scope');
     const downloadForm = document.getElementById('download-filter-form');
     const resetButton = document.getElementById('reset-filters');
     
@@ -374,7 +315,6 @@ document.addEventListener('DOMContentLoaded', function() {
         const selectedProduct = this.value;
         const batchOptions = batchSelect.querySelectorAll('option[data-product]');
         
-        // Show/hide batches based on selected product
         batchOptions.forEach(option => {
             if (selectedProduct === '' || option.getAttribute('data-product') === selectedProduct) {
                 option.style.display = 'block';
@@ -383,7 +323,6 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
         
-        // Reset batch selection when product changes
         batchSelect.value = '';
     });
     
@@ -431,13 +370,6 @@ document.addEventListener('DOMContentLoaded', function() {
             selectedStatuses = [singleStatus];
         }
         
-        // Validate scope selection
-        const scope = downloadScope.value;
-        if (!scope) {
-            alert('Please select a download scope.');
-            return;
-        }
-        
         // Build URL parameters
         let url = 'pdf_download_handler.php?';
         const params = new URLSearchParams();
@@ -451,33 +383,21 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
         
-        // Add scope parameters
-        params.append('scope', scope);
-        
-        // Handle different scopes
+        // Determine scope automatically based on selections
         const selectedProduct = productSelect.value;
         const selectedBatch = batchSelect.value;
         
-        if (scope === 'batch-wise') {
-            if (!selectedBatch) {
-                alert('Please select a batch for batch-wise download.');
-                return;
-            }
-            params.append('batch_id', selectedBatch);
-        } else if (scope === 'product-wise') {
-            if (!selectedProduct) {
-                alert('Please select a product for product-wise download.');
-                return;
-            }
-            params.append('product_code', selectedProduct);
-        }
-        
-        // Always add product and batch if selected (for filtering)
-        if (selectedProduct) {
-            params.append('product_code', selectedProduct);
-        }
         if (selectedBatch) {
+            // Specific batch selected
+            params.append('scope', 'batch-wise');
             params.append('batch_id', selectedBatch);
+        } else if (selectedProduct) {
+            // Specific product, all batches
+            params.append('scope', 'product-wise');
+            params.append('product_code', selectedProduct);
+        } else {
+            // All products, all batches
+            params.append('scope', 'all-product');
         }
         
         // Add caller filter
@@ -498,7 +418,6 @@ document.addEventListener('DOMContentLoaded', function() {
     resetButton.addEventListener('click', function() {
         downloadForm.reset();
         
-        // Reset multi-status checkboxes
         if (multiStatusEnabled) {
             document.querySelectorAll('.status-checkbox').forEach(cb => cb.checked = false);
             document.getElementById('select-all-status').checked = false;
@@ -512,87 +431,27 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
-    // Enhanced PDF download function with proper timing
+    // PDF download function
     const startPdfDownload = function(url) {
         const loadingOverlay = document.getElementById('loading-overlay');
-        const loadingMessage = document.getElementById('loading-message');
-        
         loadingOverlay.style.display = 'flex';
-        loadingMessage.textContent = 'Generating PDF, please wait...';
         
-        let downloadDetected = false;
-        let startTime = Date.now();
+        // Create a temporary anchor element for download
+        const link = document.createElement('a');
+        link.href = url;
+        link.style.display = 'none';
+        document.body.appendChild(link);
         
-        // Create hidden iframe for download detection
-        const iframe = document.createElement('iframe');
-        iframe.style.display = 'none';
-        iframe.style.width = '1px';
-        iframe.style.height = '1px';
-        document.body.appendChild(iframe);
+        // Try direct navigation first
+        window.location.href = url;
         
-        // Monitor for download completion
-        const checkDownloadComplete = () => {
-            const elapsed = Math.floor((Date.now() - startTime) / 1000);
-            
-            if (!downloadDetected) {
-                // Update message with elapsed time
-                loadingMessage.textContent = `Generating PDF, please wait... (${elapsed}s)`;
-                
-                // Continue checking
-                setTimeout(checkDownloadComplete, 1000);
-                
-                // Auto-complete after 30 seconds
-                if (elapsed >= 30) {
-                    downloadDetected = true;
-                    loadingMessage.textContent = 'Download should have started. Please check your downloads folder.';
-                    setTimeout(() => {
-                        loadingOverlay.style.display = 'none';
-                        cleanup();
-                    }, 3000);
-                }
-            }
-        };
-        
-        // Cleanup function
-        const cleanup = () => {
-            if (iframe && iframe.parentNode) {
-                iframe.parentNode.removeChild(iframe);
-            }
-        };
-        
-        // Detect download via window focus events
-        let windowBlurred = false;
-        
-        const onBlur = () => {
-            windowBlurred = true;
-        };
-        
-        const onFocus = () => {
-            if (windowBlurred && !downloadDetected) {
-                downloadDetected = true;
-                loadingMessage.textContent = 'Download started! Check your downloads folder.';
-                setTimeout(() => {
-                    loadingOverlay.style.display = 'none';
-                    cleanup();
-                }, 2000);
-            }
-        };
-        
-        // Add event listeners
-        window.addEventListener('blur', onBlur);
-        window.addEventListener('focus', onFocus);
-        
-        // Start the download via iframe
-        iframe.src = url;
-        
-        // Start monitoring
-        setTimeout(checkDownloadComplete, 1000);
-        
-        // Cleanup listeners when done
+        // Hide loading overlay after a reasonable time
         setTimeout(() => {
-            window.removeEventListener('blur', onBlur);
-            window.removeEventListener('focus', onFocus);
-        }, 35000);
+            loadingOverlay.style.display = 'none';
+            if (link.parentNode) {
+                link.parentNode.removeChild(link);
+            }
+        }, 5000); // Increased timeout for larger PDFs
     };
 
     // Handle existing batch PDF downloads
@@ -604,16 +463,5 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 </script>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
-<?php 
-// Close the main connection at the very end
-if (isset($conn) && $conn instanceof mysqli) {
-    try {
-        $conn->close();
-    } catch (Error $e) {
-        // Connection already closed or invalid, ignore
-    }
-}
-?>

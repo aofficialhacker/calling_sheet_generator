@@ -35,41 +35,59 @@ if (isset($_GET['disposition'])) {
     }
 }
 
-$productFilter = $_GET['product_filter'] ?? '';
+// Parse parameters from the simplified interface
 $scope = $_GET['scope'] ?? '';
-$batchScope = $_GET['batch_scope'] ?? '';
-$batchId = $_GET['batch_id'] ?? null;
-$productCode = $_GET['product_code'] ?? null;
-$callerId = $_GET['caller_id'] ?? null;
+$batchId = !empty($_GET['batch_id']) ? $_GET['batch_id'] : null;
+$productCode = !empty($_GET['product_code']) ? $_GET['product_code'] : null;
+$callerId = !empty($_GET['caller_id']) ? $_GET['caller_id'] : null;
 
 // Validate required parameters
 if (!$disposition && !$batchId) {
     die("Error: No valid disposition or batch ID provided.");
 }
 
-// Build counter tracking parameters
+// Build counter tracking parameters based on the simplified scope logic
 $counterBatchId = null;
 $counterProductCode = null;
 $counterCallerId = $callerId;
 
-// Determine counter parameters based on scope and filters
-switch ($productFilter) {
-    case 'product-wise':
-        $counterProductCode = $productCode;
-        
-        if ($batchScope === 'batch-wise') {
-            $counterBatchId = $batchId;
-        }
-        // If 'all-batches', counterBatchId stays null (applies to all batches of the product)
+// Map the simplified scope to counter parameters
+switch ($scope) {
+    case 'batch-wise':
+        // Specific batch selected
+        $counterBatchId = $batchId;
+        // Don't set product code for counter - batch-specific tracking
         break;
         
-    case 'all-products':
-        // counterProductCode stays null (applies to all products)
+    case 'product-wise':
+        // Specific product, all batches
+        $counterProductCode = $productCode;
+        // counterBatchId stays null (applies to all batches of the product)
+        break;
         
-        if ($scope === 'batch-wise') {
-            $counterBatchId = $batchId;
-        }
-        // If 'all-batch', counterBatchId stays null (applies to all batches)
+    case 'all-product':
+    default:
+        // All products, all batches
+        // Both stay null (applies to everything)
+        break;
+}
+
+// Set legacy parameters for backward compatibility with generate_pdf.php
+$productFilter = '';
+$batchScope = '';
+
+switch ($scope) {
+    case 'batch-wise':
+        $productFilter = 'all-products';
+        $batchScope = 'batch-wise';
+        break;
+    case 'product-wise':
+        $productFilter = 'product-wise';
+        $batchScope = 'all-batches';
+        break;
+    case 'all-product':
+        $productFilter = 'all-products';
+        $batchScope = 'all-batch';
         break;
 }
 
@@ -79,7 +97,7 @@ if ($disposition) {
         $limit = $downloadCounter->getAdminDownloadLimit($adminId);
         $usage = $downloadCounter->getCurrentUsage($adminId, $disposition, $counterBatchId, $counterProductCode, $counterCallerId);
         
-        $scopeDescription = buildScopeDescription($productFilter, $scope, $batchScope, $batchId, $productCode, $callerId);
+        $scopeDescription = buildScopeDescription($scope, $batchId, $productCode, $callerId);
         
         http_response_code(429); // Too Many Requests
         die("Download limit reached! You have exceeded your limit of {$limit} downloads for disposition '{$disposition}' with the following scope: {$scopeDescription}. Current usage: {$usage}/{$limit}.");
@@ -88,8 +106,7 @@ if ($disposition) {
 
 // Handle "All Batches" exclusions for disposition-based downloads
 $excludedBatches = [];
-if ($disposition && (($productFilter === 'all-products' && $scope === 'all-batch') || 
-                    ($productFilter === 'product-wise' && $batchScope === 'all-batches'))) {
+if ($disposition && ($scope === 'all-product' || $scope === 'product-wise')) {
     $excludedBatches = $downloadCounter->getExcludedBatches($adminId, $disposition);
     
     if (!empty($excludedBatches)) {
@@ -106,23 +123,24 @@ if ($disposition) {
 // Forward to generate_pdf.php with modified parameters
 include 'generate_pdf.php';
 
-function buildScopeDescription($productFilter, $scope, $batchScope, $batchId, $productCode, $callerId) {
+function buildScopeDescription($scope, $batchId, $productCode, $callerId) {
     $parts = [];
     
-    if ($productFilter === 'product-wise') {
-        $parts[] = "Product: " . ($productCode ?: 'N/A');
-        if ($batchScope === 'batch-wise') {
+    switch ($scope) {
+        case 'batch-wise':
             $parts[] = "Batch: " . ($batchId ?: 'N/A');
-        } else {
+            break;
+            
+        case 'product-wise':
+            $parts[] = "Product: " . ($productCode ?: 'N/A');
             $parts[] = "All Batches for selected product";
-        }
-    } elseif ($productFilter === 'all-products') {
-        $parts[] = "All Products";
-        if ($scope === 'batch-wise') {
-            $parts[] = "Batch: " . ($batchId ?: 'N/A');
-        } else {
+            break;
+            
+        case 'all-product':
+        default:
+            $parts[] = "All Products";
             $parts[] = "All Batches";
-        }
+            break;
     }
     
     if ($callerId) {

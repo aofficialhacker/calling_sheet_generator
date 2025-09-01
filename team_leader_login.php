@@ -32,6 +32,23 @@ if ($_POST) {
         if ($result->num_rows > 0) {
             $leader = $result->fetch_assoc();
             
+            // Clean up stale sessions (older than 24 hours)
+            if (!empty($leader['active_session_id']) && !empty($leader['last_login'])) {
+                $lastLogin = new DateTime($leader['last_login']);
+                $now = new DateTime();
+                $hoursDiff = $now->diff($lastLogin)->h + ($now->diff($lastLogin)->days * 24);
+                
+                if ($hoursDiff > 24) {
+                    // Clear stale session
+                    $stmt = $conn->prepare("UPDATE team_leaders SET active_session_id = NULL WHERE leader_id = ?");
+                    if ($stmt) {
+                        $stmt->bind_param("s", $leader['leader_id']);
+                        $stmt->execute();
+                        $leader['active_session_id'] = null; // Update local copy
+                    }
+                }
+            }
+            
             // Check for too many failed attempts (max 5 attempts per hour)
             $stmt = $conn->prepare("SELECT COUNT(*) as failed_count FROM team_leader_logins 
                                    WHERE leader_id = ? AND login_status = 'failed' 
@@ -48,35 +65,54 @@ if ($_POST) {
                 if (password_verify($password, $leader['password'])) {
                     // Verify admin access code
                     if (validateTeamLeaderAccessCode($leader['leader_id'], $accessCode, $conn)) {
-                        // Direct login - no additional security code needed
-                        session_regenerate_id(true);
-                        $sessionId = session_id();
-                        
-                        // Update login info and set active session ID
-                        $stmt = $conn->prepare("UPDATE team_leaders SET last_login = NOW(), active_session_id = ?, login_attempts = 0 WHERE leader_id = ?");
-                        $stmt->bind_param("ss", $sessionId, $leader['leader_id']);
-                        $stmt->execute();
-                        
-                        // Log successful login
-                        $stmt = $conn->prepare("INSERT INTO team_leader_logins (leader_id, ip_address, user_agent, login_status, session_id) VALUES (?, ?, ?, 'success', ?)");
-                        $stmt->bind_param("ssss", $leader['leader_id'], $ipAddress, $userAgent, $sessionId);
-                        $stmt->execute();
-                        
-                        // Set session variables
-                        $_SESSION['is_team_leader'] = true;
-                        $_SESSION['leader_id'] = $leader['leader_id'];
-                        $_SESSION['leader_name'] = $leader['leader_name'];
-                        $_SESSION['finqy_id'] = $leader['finqy_id'];
-                        $_SESSION['admin_id'] = $leader['admin_id'];
-                        $_SESSION['active_session_id'] = $sessionId;
-                        
-                        header("Location: team_leader_dashboard.php");
-                        exit();
+                        // Check if already logged in from another device
+                        if (!empty($leader['active_session_id'])) {
+                            // Log failed login attempt due to multi-device
+                            $stmt = $conn->prepare("INSERT INTO team_leader_logins (leader_id, ip_address, user_agent, login_status) VALUES (?, ?, ?, 'failed - multi-device')");
+                            if ($stmt) {
+                                $stmt->bind_param("sss", $leader['leader_id'], $ipAddress, $userAgent);
+                                $stmt->execute();
+                            }
+                            
+                            $message = "You are already logged in from another device. Please logout from the other device first or wait for the session to expire.";
+                            $messageType = "warning";
+                        } else {
+                            // Direct login - no additional security code needed
+                            session_regenerate_id(true);
+                            $sessionId = session_id();
+                            
+                            // Update login info and set active session ID
+                            $stmt = $conn->prepare("UPDATE team_leaders SET last_login = NOW(), active_session_id = ?, login_attempts = 0 WHERE leader_id = ?");
+                            if ($stmt) {
+                                $stmt->bind_param("ss", $sessionId, $leader['leader_id']);
+                                $stmt->execute();
+                            }
+                            
+                            // Log successful login
+                            $stmt = $conn->prepare("INSERT INTO team_leader_logins (leader_id, ip_address, user_agent, login_status, session_id) VALUES (?, ?, ?, 'success', ?)");
+                            if ($stmt) {
+                                $stmt->bind_param("ssss", $leader['leader_id'], $ipAddress, $userAgent, $sessionId);
+                                $stmt->execute();
+                            }
+                            
+                            // Set session variables
+                            $_SESSION['is_team_leader'] = true;
+                            $_SESSION['leader_id'] = $leader['leader_id'];
+                            $_SESSION['leader_name'] = $leader['leader_name'];
+                            $_SESSION['finqy_id'] = $leader['finqy_id'];
+                            $_SESSION['admin_id'] = $leader['admin_id'];
+                            $_SESSION['active_session_id'] = $sessionId;
+                            
+                            header("Location: team_leader_dashboard.php");
+                            exit();
+                        }
                     } else {
                         // Log failed login attempt
                         $stmt = $conn->prepare("INSERT INTO team_leader_logins (leader_id, ip_address, user_agent, login_status) VALUES (?, ?, ?, 'failed')");
-                        $stmt->bind_param("sss", $leader['leader_id'], $ipAddress, $userAgent);
-                        $stmt->execute();
+                        if ($stmt) {
+                            $stmt->bind_param("sss", $leader['leader_id'], $ipAddress, $userAgent);
+                            $stmt->execute();
+                        }
                         
                         $message = "Invalid access code. Please contact your admin for the current code.";
                         $messageType = "danger";
@@ -84,8 +120,10 @@ if ($_POST) {
                 } else {
                     // Log failed login attempt
                     $stmt = $conn->prepare("INSERT INTO team_leader_logins (leader_id, ip_address, user_agent, login_status) VALUES (?, ?, ?, 'failed')");
-                    $stmt->bind_param("sss", $leader['leader_id'], $ipAddress, $userAgent);
-                    $stmt->execute();
+                    if ($stmt) {
+                        $stmt->bind_param("sss", $leader['leader_id'], $ipAddress, $userAgent);
+                        $stmt->execute();
+                    }
                     
                     $message = "Invalid username or password.";
                     $messageType = "danger";
