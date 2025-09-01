@@ -144,12 +144,22 @@ class SecurityProtection {
         if (!this.options.enableKeybindBlocking) return;
         
         const blockedKeys = [
-            // Only block critical screenshot shortcuts
+            // Screenshot shortcuts
             { key: 'PrintScreen' },
             { key: 's', ctrl: true, shift: true }, // Chrome screenshot
             { key: 's', meta: true, shift: true }, // Mac screenshot
             
-            // Only block F12 developer tools
+            // Windows Game Bar and screen recording
+            { key: 'g', meta: true }, // Win+G (Windows Game Bar)
+            { key: 'r', meta: true, alt: true }, // Win+Alt+R (Game Bar recording)
+            { key: 'PrintScreen', meta: true }, // Win+PrintScreen (Windows screenshot)
+            { key: 's', meta: true, shift: true }, // Win+Shift+S (Snipping Tool)
+            
+            // Additional Windows screen capture shortcuts  
+            { key: 'h', meta: true }, // Win+H (dictation/voice recording)
+            { key: 'k', meta: true }, // Win+K (Connect to wireless displays)
+            
+            // Developer tools
             { key: 'F12' },
             { key: 'I', ctrl: true, shift: true },
             
@@ -159,11 +169,12 @@ class SecurityProtection {
         document.addEventListener('keydown', (e) => {
             const blocked = blockedKeys.some(blocked => {
                 const keyMatch = blocked.key.toLowerCase() === e.key.toLowerCase();
-                const ctrlMatch = blocked.ctrl ? e.ctrlKey : !e.ctrlKey;
-                const metaMatch = blocked.meta ? e.metaKey : !e.metaKey;
-                const shiftMatch = blocked.shift ? e.shiftKey : !e.shiftKey;
+                const ctrlMatch = blocked.ctrl ? e.ctrlKey : (blocked.ctrl === undefined ? true : !e.ctrlKey);
+                const metaMatch = blocked.meta ? e.metaKey : (blocked.meta === undefined ? true : !e.metaKey);
+                const shiftMatch = blocked.shift ? e.shiftKey : (blocked.shift === undefined ? true : !e.shiftKey);
+                const altMatch = blocked.alt ? e.altKey : (blocked.alt === undefined ? true : !e.altKey);
                 
-                return keyMatch && ctrlMatch && metaMatch && shiftMatch;
+                return keyMatch && ctrlMatch && metaMatch && shiftMatch && altMatch;
             });
             
             if (blocked) {
@@ -174,7 +185,9 @@ class SecurityProtection {
                     key: e.key,
                     ctrl: e.ctrlKey,
                     meta: e.metaKey,
-                    shift: e.shiftKey
+                    shift: e.shiftKey,
+                    alt: e.altKey,
+                    combination: `${e.ctrlKey ? 'Ctrl+' : ''}${e.metaKey ? 'Win+' : ''}${e.altKey ? 'Alt+' : ''}${e.shiftKey ? 'Shift+' : ''}${e.key}`
                 });
                 return false;
             }
@@ -306,6 +319,9 @@ class SecurityProtection {
     detectScreenRecording() {
         if (!this.options.enableScreenRecordingDetection) return;
         
+        // Detect Windows Game Bar specifically
+        this.detectWindowsGameBar();
+        
         // Monitor frame rate drops which may indicate screen recording
         const monitorFrameRate = () => {
             const now = performance.now();
@@ -341,6 +357,65 @@ class SecurityProtection {
                 }
             }
         }, 5000);
+    }
+
+    detectWindowsGameBar() {
+        // Monitor for specific Game Bar indicators
+        const checkGameBarPresence = () => {
+            // Check for Game Bar overlay elements (common class names and IDs)
+            const gameBarSelectors = [
+                '[class*="gamebar"]',
+                '[class*="xbox"]', 
+                '[id*="gamebar"]',
+                '[class*="recording"]',
+                '[class*="broadcast"]'
+            ];
+            
+            gameBarSelectors.forEach(selector => {
+                if (document.querySelector(selector)) {
+                    this.logViolation('windows_gamebar_detected', { selector });
+                    this.handleSuspiciousActivity('Windows Game Bar overlay detected');
+                }
+            });
+            
+            // Check for Game Bar specific window focus changes
+            if (document.hasFocus() && document.hidden) {
+                this.logViolation('potential_gamebar_overlay');
+            }
+        };
+        
+        // Check periodically
+        setInterval(checkGameBarPresence, 2000);
+        
+        // Monitor for Game Bar specific events
+        document.addEventListener('keydown', (e) => {
+            if (e.metaKey && e.key.toLowerCase() === 'g') {
+                this.logViolation('gamebar_shortcut_attempt', {
+                    prevented: true,
+                    timestamp: new Date().toISOString()
+                });
+                this.handleSuspiciousActivity('Windows Game Bar shortcut blocked');
+            }
+        });
+        
+        // Monitor window resize/overlay patterns typical of Game Bar
+        let lastWindowSize = { width: window.innerWidth, height: window.innerHeight };
+        window.addEventListener('resize', () => {
+            const currentSize = { width: window.innerWidth, height: window.innerHeight };
+            const widthChange = Math.abs(currentSize.width - lastWindowSize.width);
+            const heightChange = Math.abs(currentSize.height - lastWindowSize.height);
+            
+            // Game Bar often creates small overlay changes
+            if (widthChange < 50 && heightChange < 200 && heightChange > 50) {
+                this.logViolation('potential_overlay_detected', {
+                    widthChange,
+                    heightChange,
+                    suspected: 'game_bar'
+                });
+            }
+            
+            lastWindowSize = currentSize;
+        });
     }
 
     preventTextSelection() {

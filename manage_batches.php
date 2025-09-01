@@ -65,10 +65,10 @@ try {
     error_log("Error fetching batches: " . $e->getMessage());
 }
 
-// Get dispositions (exclude Interested)
+// Get dispositions (exclude only 'Interested' case-insensitively, allow 'Not Interested')
 $dispositions = [];
 try {
-    $disp_result = $conn->query("SELECT DISTINCT code, description FROM disposition_codes WHERE is_active = 1 AND description NOT LIKE '%Interested%' ORDER BY code");
+    $disp_result = $conn->query("SELECT DISTINCT code, description FROM disposition_codes WHERE is_active = 1 AND LOWER(description) != 'interested' ORDER BY code");
     if ($disp_result) {
         while ($disp = $disp_result->fetch_assoc()) {
             $dispositions[] = $disp;
