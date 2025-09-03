@@ -34,6 +34,7 @@ $scope        = $_GET['scope'] ?? '';
 $product_code = $_GET['product_code'] ?? '';
 $caller_id    = $_GET['caller_id'] ?? null;
 $excluded_batches = isset($_GET['excluded_batches']) ? explode(',', $_GET['excluded_batches']) : [];
+$redistribute = isset($_GET['redistribute']) && $_GET['redistribute'] === '1';
 
 if (!$batch_id && !isset($_GET['disposition'])) {
     die("Error: No valid batch ID or disposition provided.");
@@ -65,31 +66,43 @@ if (isset($_GET['disposition'])) {
 
     switch ($scope) {
         case 'batch-wise':
-            $pdfFileName = 'Batch_' . $batch_id . '_' . implode('_', $dispNames) . $callerSuffix . '.pdf';
-            $pdfTitle    = "Calling Sheet for Batch $batch_id - Status: " . implode(', ', $dispositions) . $callerTitleSuffix;
+            $redistributePrefix = $redistribute ? 'REDISTRIBUTE_' : '';
+            $pdfFileName = $redistributePrefix . 'Batch_' . $batch_id . '_' . implode('_', $dispNames) . $callerSuffix . '.pdf';
+            $redistributeTitle = $redistribute ? ' [REDISTRIBUTION MODE - BLANK SLOTS]' : '';
+            $pdfTitle    = "Calling Sheet for Batch $batch_id - Status: " . implode(', ', $dispositions) . $callerTitleSuffix . $redistributeTitle;
             break;
         case 'all-batch':
-            $pdfFileName = 'AllBatches_' . implode('_', $dispNames) . $callerSuffix . '.pdf';
-            $pdfTitle    = "Calling Sheet for All Batches - Status: " . implode(', ', $dispositions) . $callerTitleSuffix;
+            $redistributePrefix = $redistribute ? 'REDISTRIBUTE_' : '';
+            $pdfFileName = $redistributePrefix . 'AllBatches_' . implode('_', $dispNames) . $callerSuffix . '.pdf';
+            $redistributeTitle = $redistribute ? ' [REDISTRIBUTION MODE - BLANK SLOTS]' : '';
+            $pdfTitle    = "Calling Sheet for All Batches - Status: " . implode(', ', $dispositions) . $callerTitleSuffix . $redistributeTitle;
             break;
         case 'product-wise':
-            $pdfFileName = 'Product_' . $product_code . '_' . implode('_', $dispNames) . $callerSuffix . '.pdf';
-            $pdfTitle    = "Calling Sheet for Product $product_code - Status: " . implode(', ', $dispositions) . $callerTitleSuffix;
+            $redistributePrefix = $redistribute ? 'REDISTRIBUTE_' : '';
+            $pdfFileName = $redistributePrefix . 'Product_' . $product_code . '_' . implode('_', $dispNames) . $callerSuffix . '.pdf';
+            $redistributeTitle = $redistribute ? ' [REDISTRIBUTION MODE - BLANK SLOTS]' : '';
+            $pdfTitle    = "Calling Sheet for Product $product_code - Status: " . implode(', ', $dispositions) . $callerTitleSuffix . $redistributeTitle;
             break;
         case 'all-product':
-            $pdfFileName = 'AllProducts_' . implode('_', $dispNames) . $callerSuffix . '.pdf';
-            $pdfTitle    = "Calling Sheet for All Products - Status: " . implode(', ', $dispositions) . $callerTitleSuffix;
+            $redistributePrefix = $redistribute ? 'REDISTRIBUTE_' : '';
+            $pdfFileName = $redistributePrefix . 'AllProducts_' . implode('_', $dispNames) . $callerSuffix . '.pdf';
+            $redistributeTitle = $redistribute ? ' [REDISTRIBUTION MODE - BLANK SLOTS]' : '';
+            $pdfTitle    = "Calling Sheet for All Products - Status: " . implode(', ', $dispositions) . $callerTitleSuffix . $redistributeTitle;
             break;
         default:
             $safeDispositionName = preg_replace("/[^a-zA-Z0-9]/", "", $dispositions[0]);
-            $pdfFileName = ucwords($safeDispositionName) . '_Sheet' . $callerSuffix . '.pdf';
-            $pdfTitle    = "Calling Sheet for Status: " . implode(', ', $dispositions) . $callerTitleSuffix;
+            $redistributePrefix = $redistribute ? 'REDISTRIBUTE_' : '';
+            $pdfFileName = $redistributePrefix . ucwords($safeDispositionName) . '_Sheet' . $callerSuffix . '.pdf';
+            $redistributeTitle = $redistribute ? ' [REDISTRIBUTION MODE - BLANK SLOTS]' : '';
+            $pdfTitle    = "Calling Sheet for Status: " . implode(', ', $dispositions) . $callerTitleSuffix . $redistributeTitle;
     }
 } elseif ($batch_id) {
     $callerSuffix = $caller_id ? ('_' . preg_replace("/[^a-zA-Z0-9]/", "", $callerName)) : '';
     $callerTitleSuffix = $callerName ? " - Caller: " . htmlspecialchars($callerName) : "";
-    $pdfFileName = 'Batch_' . $batch_id . '_Sheet' . $callerSuffix . '.pdf';
-    $pdfTitle    = "Calling Sheet for Batch " . htmlspecialchars($batch_id) . $callerTitleSuffix;
+    $redistributePrefix = $redistribute ? 'REDISTRIBUTE_' : '';
+    $pdfFileName = $redistributePrefix . 'Batch_' . $batch_id . '_Sheet' . $callerSuffix . '.pdf';
+    $redistributeTitle = $redistribute ? ' [REDISTRIBUTION MODE - BLANK SLOTS]' : '';
+    $pdfTitle    = "Calling Sheet for Batch " . htmlspecialchars($batch_id) . $callerTitleSuffix . $redistributeTitle;
 }
 
 // --- Disposition Codes & Legends ---------------------------------------
@@ -376,6 +389,11 @@ while ($offset < $totalRecords && $processed < $maxRows) {
             switch ($k) {
                 case 'disposition': $content = $dispGrid; $font=6; break;
                 case 'connectivity': $content = 'O Y / O N'; $font=7; break;
+                case 'slot': 
+                    // If redistribution mode is enabled, show blank slot for fresh calling
+                    $content = $redistribute ? '' : ($row[$k] ?? ''); 
+                    $font=7; 
+                    break;
                 case 'dob':
                 case 'expiry': $content = formatDateForPDF($row[$k] ?? ''); $font=7; break;
                 default: $content = $row[$k] ?? ''; $font = ($k==='address'?6:7);

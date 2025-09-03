@@ -210,3 +210,25 @@ php check_timezone.php
 - When working with time-sensitive features, use database timestamps for consistency
 - Test authentication flows with dedicated test pages before implementing in production
 - Error handling should include both logging and graceful fallback methods
+
+## Recent File Structure Updates
+
+### New Files Added to System
+- Multiple call analytics and performance tracking files (`admin_call_analytics.php`, `caller_performance.php`, `improved_caller_performance.php`)
+- Data preservation and backup systems (`emergency_data_backup.php`, `enhanced_data_preservation.php`, `implement_complete_preservation.php`)
+- Database migration and fixing utilities (`fix_collation_and_create_tables.php`, `migrate_call_history.php`)
+- System status monitoring (`system_status_summary.php`)
+- Complete preservation testing suite (`test_complete_preservation.php`, `test_complete_system.php`, `simple_preservation_test.php`)
+
+### Modified Core Files (Git Status)
+- `admin_sidebar.php` - Navigation updates
+- `caller_panel.php` - Panel modifications  
+- `generate_pdf.php` - PDF generation improvements
+- `manage_batches.php` - Batch management enhancements
+- `manage_dispositions.php` and `manage_tl_dispositions.php` - Disposition handling updates
+- `save_final_log.php` - Call logging modifications (multiple backup versions exist)
+
+### Call History System Enhancement
+- New SQL schema: `setup_call_history_system.sql`
+- Session management improvements with multi-device login blocking
+- Enhanced data preservation across the entire call tracking pipeline

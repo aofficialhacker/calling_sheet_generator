@@ -240,6 +240,27 @@ try {
                                 </div>
                             </div>
                             
+                            <!-- Redistribution Option -->
+                            <div class="row g-3 mt-3" style="background-color: #fff3cd; padding: 15px; border-radius: 8px; border-left: 4px solid #ffc107;">
+                                <div class="col-12">
+                                    <h6 class="text-warning mb-3"><i class="bi bi-arrow-repeat me-2"></i>Redistribution Options</h6>
+                                </div>
+                                <div class="col-12">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="redistribute-mode" name="redistribute" value="1">
+                                        <label class="form-check-label" for="redistribute-mode">
+                                            <strong>Enable Redistribution Mode</strong>
+                                        </label>
+                                    </div>
+                                    <small class="text-muted">
+                                        <i class="bi bi-info-circle me-1"></i>
+                                        <strong>When enabled:</strong> Slot column will be blank for fresh calling. Use this when redistributing follow-up leads to other callers.
+                                        <br>
+                                        <strong>When disabled:</strong> Shows existing slot values (regular download for reference).
+                                    </small>
+                                </div>
+                            </div>
+                            
                             <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4">
                                 <button type="button" class="btn btn-outline-secondary" id="reset-filters">
                                     <i class="bi bi-arrow-clockwise me-2"></i>Reset Filters
@@ -406,6 +427,12 @@ document.addEventListener('DOMContentLoaded', function() {
             params.append('caller_id', callerFilter);
         }
         
+        // Add redistribution mode parameter
+        const redistributeMode = document.getElementById('redistribute-mode').checked;
+        if (redistributeMode) {
+            params.append('redistribute', '1');
+        }
+        
         // Add download token and start download
         const downloadToken = new Date().getTime();
         params.append('download_token', downloadToken);
@@ -423,6 +450,9 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('select-all-status').checked = false;
             document.getElementById('select-all-status').indeterminate = false;
         }
+        
+        // Reset redistribution mode
+        document.getElementById('redistribute-mode').checked = false;
         
         // Show all batch options
         const batchOptions = batchSelect.querySelectorAll('option[data-product]');

@@ -38,24 +38,6 @@ if ($_POST) {
         $stmt->close();
     }
     
-    if (isset($_POST['update_disposition'])) {
-        $dispositionId = $_POST['disposition_id'];
-        $dispositionName = trim($_POST['disposition_name']);
-        $description = trim($_POST['description']);
-        
-        $stmt = $conn->prepare("UPDATE team_leader_dispositions SET disposition_name = ?, description = ? WHERE id = ?");
-        $stmt->bind_param("ssi", $dispositionName, $description, $dispositionId);
-        
-        if ($stmt->execute()) {
-            $message = "Disposition updated successfully!";
-            $messageType = "success";
-        } else {
-            $message = "Error updating disposition: " . $stmt->error;
-            $messageType = "danger";
-        }
-        $stmt->close();
-    }
-    
     if (isset($_POST['toggle_status'])) {
         $dispositionId = $_POST['disposition_id'];
         $newStatus = $_POST['new_status'];
@@ -73,34 +55,6 @@ if ($_POST) {
         $stmt->close();
     }
     
-    if (isset($_POST['delete_disposition'])) {
-        $dispositionId = $_POST['disposition_id'];
-        
-        // Check if disposition is being used
-        $stmt = $conn->prepare("SELECT COUNT(*) as usage_count FROM team_leader_actions WHERE new_disposition = (SELECT disposition_name FROM team_leader_dispositions WHERE id = ?)");
-        $stmt->bind_param("i", $dispositionId);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        $usage = $result->fetch_assoc();
-        $stmt->close();
-        
-        if ($usage['usage_count'] > 0) {
-            $message = "Cannot delete disposition: it is being used in " . $usage['usage_count'] . " team leader actions.";
-            $messageType = "danger";
-        } else {
-            $stmt = $conn->prepare("DELETE FROM team_leader_dispositions WHERE id = ?");
-            $stmt->bind_param("i", $dispositionId);
-            
-            if ($stmt->execute()) {
-                $message = "Team Leader disposition deleted successfully!";
-                $messageType = "success";
-            } else {
-                $message = "Error deleting disposition: " . $stmt->error;
-                $messageType = "danger";
-            }
-            $stmt->close();
-        }
-    }
 }
 
 // Get all dispositions
@@ -291,13 +245,8 @@ $conn->close();
                                                         </small>
                                                     </div>
                                                     <div class="col-md-6 text-end">
-                                                        <div class="btn-group">
-                                                            <button type="button" class="btn btn-sm btn-outline-primary" 
-                                                                    onclick="editDisposition(<?= $disposition['id'] ?>, '<?= addslashes($disposition['disposition_name']) ?>', '<?= addslashes($disposition['description']) ?>')">
-                                                                <i class="bi bi-pencil"></i> Edit
-                                                            </button>
-                                                            
-                                                            <form method="POST" style="display: inline;">
+                                                        <div class="d-flex flex-column align-items-end">
+                                                            <form method="POST" class="mb-2">
                                                                 <input type="hidden" name="disposition_id" value="<?= $disposition['id'] ?>">
                                                                 <input type="hidden" name="new_status" value="<?= $disposition['is_active'] ? 0 : 1 ?>">
                                                                 <button type="submit" name="toggle_status" 
@@ -307,16 +256,6 @@ $conn->close();
                                                                     <?= $disposition['is_active'] ? 'Deactivate' : 'Activate' ?>
                                                                 </button>
                                                             </form>
-                                                            
-                                                            <button type="button" class="btn btn-sm btn-danger" 
-                                                                    data-bs-toggle="modal" 
-                                                                    data-bs-target="#deleteTLDispositionModal"
-                                                                    data-id="<?= $disposition['id'] ?>"
-                                                                    data-name="<?= htmlspecialchars($disposition['disposition_name']) ?>"
-                                                                    data-description="<?= htmlspecialchars($disposition['description']) ?>"
-                                                                    data-usage="<?= $disposition['usage_count'] ?>">
-                                                                <i class="bi bi-trash"></i> Delete
-                                                            </button>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -332,118 +271,8 @@ $conn->close();
         </div>
     </div>
 
-    <!-- Edit Disposition Modal -->
-    <div class="modal fade" id="editModal" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title"><i class="bi bi-pencil-fill me-2"></i>Edit Disposition</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <form method="POST">
-                    <div class="modal-body">
-                        <input type="hidden" name="disposition_id" id="editDispositionId">
-                        
-                        <div class="mb-3">
-                            <label for="editDispositionName" class="form-label">Disposition Name</label>
-                            <input type="text" name="disposition_name" id="editDispositionName" class="form-control" required>
-                        </div>
-                        
-                        <div class="mb-3">
-                            <label for="editDescription" class="form-label">Description</label>
-                            <textarea name="description" id="editDescription" class="form-control" rows="3"></textarea>
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" name="update_disposition" class="btn btn-primary">
-                            <i class="bi bi-check-circle me-2"></i>Update Disposition
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-
-    <!-- Delete Disposition Modal -->
-    <div class="modal fade" id="deleteTLDispositionModal" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header bg-danger text-white">
-                    <h5 class="modal-title"><i class="bi bi-trash-fill me-2"></i>Delete Team Leader Disposition</h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                </div>
-                <form method="POST">
-                    <div class="modal-body">
-                        <input type="hidden" name="disposition_id" id="deleteTLDispositionId">
-                        
-                        <div class="alert alert-warning">
-                            <i class="bi bi-exclamation-triangle-fill me-2"></i>
-                            <strong>Warning!</strong> This action cannot be undone.
-                        </div>
-                        
-                        <p>Are you sure you want to delete this Team Leader disposition?</p>
-                        
-                        <div class="bg-light p-3 rounded">
-                            <strong>Name:</strong> <span id="deleteTLNameDisplay"></span><br>
-                            <strong>Description:</strong> <span id="deleteTLDescriptionDisplay"></span><br>
-                            <strong>Current Usage:</strong> <span id="deleteTLUsageDisplay" class="badge bg-info"></span> team leader actions
-                        </div>
-                        
-                        <div id="deleteTLUsageWarning" class="alert alert-danger mt-3" style="display: none;">
-                            <i class="bi bi-x-circle-fill me-2"></i>
-                            <strong>Cannot Delete:</strong> This disposition is currently being used in team leader actions. 
-                            Please ensure it's not in use before deleting.
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" name="delete_disposition" id="deleteTLConfirmBtn" class="btn btn-danger">
-                            <i class="bi bi-trash-fill me-2"></i>Delete Disposition
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
 
     <script>
-        function editDisposition(id, name, description) {
-            document.getElementById('editDispositionId').value = id;
-            document.getElementById('editDispositionName').value = name;
-            document.getElementById('editDescription').value = description;
-            
-            const modal = new bootstrap.Modal(document.getElementById('editModal'));
-            modal.show();
-        }
-
-        // Handle delete modal data
-        document.getElementById('deleteTLDispositionModal').addEventListener('show.bs.modal', function (event) {
-            const button = event.relatedTarget;
-            const dispositionId = button.getAttribute('data-id');
-            const name = button.getAttribute('data-name');
-            const description = button.getAttribute('data-description');
-            const usage = parseInt(button.getAttribute('data-usage'));
-            
-            document.getElementById('deleteTLDispositionId').value = dispositionId;
-            document.getElementById('deleteTLNameDisplay').textContent = name;
-            document.getElementById('deleteTLDescriptionDisplay').textContent = description || 'No description';
-            document.getElementById('deleteTLUsageDisplay').textContent = usage;
-            
-            // Show warning if disposition is in use
-            const warningDiv = document.getElementById('deleteTLUsageWarning');
-            const deleteBtn = document.getElementById('deleteTLConfirmBtn');
-            
-            if (usage > 0) {
-                warningDiv.style.display = 'block';
-                deleteBtn.disabled = true;
-                deleteBtn.innerHTML = '<i class="bi bi-x-circle-fill me-2"></i>Cannot Delete';
-            } else {
-                warningDiv.style.display = 'none';
-                deleteBtn.disabled = false;
-                deleteBtn.innerHTML = '<i class="bi bi-trash-fill me-2"></i>Delete Disposition';
-            }
-        });
     </script>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
