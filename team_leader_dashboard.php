@@ -34,9 +34,15 @@ while ($row = $result->fetch_assoc()) {
 }
 $stmt->close();
 
-// Get available dispositions for team leader
+// Get available dispositions for team leader with bucket information
 $dispositions = [];
-$stmt = $conn->prepare("SELECT * FROM team_leader_dispositions WHERE is_active = 1 ORDER BY disposition_name");
+$stmt = $conn->prepare("
+    SELECT tld.*, db.bucket_name, db.has_calendar_enabled 
+    FROM team_leader_dispositions tld 
+    LEFT JOIN disposition_buckets db ON tld.bucket_id = db.id 
+    WHERE tld.is_active = 1 
+    ORDER BY db.bucket_name, tld.disposition_name
+");
 $stmt->execute();
 $result = $stmt->get_result();
 while ($row = $result->fetch_assoc()) {
@@ -144,7 +150,7 @@ $conn->close();
         }
     </style>
 </head>
-<body>
+<body data-role="team-leader">
     <div class="container-fluid">
         <div class="row">
             <!-- Sidebar -->
@@ -166,6 +172,11 @@ $conn->close();
                         <li class="nav-item">
                             <a class="nav-link" href="team_leader_history.php">
                                 <i class="bi bi-clock-history me-2"></i>Action History
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="follow_up_calendar.php">
+                                <i class="bi bi-calendar-check me-2"></i>Follow-up Calendar
                             </a>
                         </li>
                         <li class="nav-item mt-4">
@@ -254,6 +265,33 @@ $conn->close();
                 </div>
 
                 <!-- Interested Leads -->
+                <!-- Notification Debug Panel (only visible if notifications exist) -->
+                <div id="notificationDebugPanel" class="card mb-3" style="display: none;">
+                    <div class="card-header bg-info text-white">
+                        <h6 class="mb-0">🔔 Notification System Debug</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6>Bell Status:</h6>
+                                <div id="bellStatus" class="alert alert-secondary">Checking...</div>
+                            </div>
+                            <div class="col-md-6">
+                                <h6>Latest API Response:</h6>
+                                <div id="apiStatus" class="alert alert-secondary">Waiting for data...</div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-12">
+                                <h6>Notifications Detected:</h6>
+                                <div id="notificationsFound" class="bg-light p-2 border rounded" style="font-family: monospace; font-size: 12px; max-height: 150px; overflow-y: auto;">
+                                    No notifications checked yet...
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="card stat-card">
                     <div class="card-header bg-white border-0">
                         <h5 class="mb-0">
@@ -403,17 +441,53 @@ $conn->close();
                         
                         <div class="mb-3">
                             <label for="new_disposition" class="form-label">Select Disposition</label>
-                            <select name="new_disposition" id="new_disposition" class="form-select" required>
+                            <select name="new_disposition" id="new_disposition" class="form-select" required onchange="handleDispositionChange(this)">
                                 <option value="">Choose disposition...</option>
-                                <?php foreach ($dispositions as $disp): ?>
-                                    <option value="<?= htmlspecialchars($disp['disposition_name']) ?>">
-                                        <?= htmlspecialchars($disp['disposition_name']) ?>
+                                <?php
+                                $currentBucket = '';
+                                foreach ($dispositions as $disp):
+                                    if ($disp['bucket_name'] !== $currentBucket) {
+                                        if ($currentBucket !== '') echo '</optgroup>';
+                                        $currentBucket = $disp['bucket_name'] ?: 'Unassigned';
+                                        echo '<optgroup label="' . htmlspecialchars($currentBucket) . '">';
+                                    }
+                                ?>
+                                    <option value="<?= htmlspecialchars($disp['disposition_name']) ?>" 
+                                            data-calendar-enabled="<?= $disp['has_calendar_enabled'] ? '1' : '0' ?>"
+                                            data-bucket-id="<?= $disp['bucket_id'] ?>">
+                                        <?= $disp['has_calendar_enabled'] ? '📅 ' : '' ?><?= htmlspecialchars($disp['disposition_name']) ?>
                                         <?php if ($disp['description']): ?>
                                             - <?= htmlspecialchars($disp['description']) ?>
                                         <?php endif; ?>
                                     </option>
-                                <?php endforeach; ?>
+                                <?php 
+                                endforeach; 
+                                if ($currentBucket !== '') echo '</optgroup>';
+                                ?>
                             </select>
+                        </div>
+                        
+                        <!-- Follow-up DateTime picker (hidden by default) -->
+                        <div id="followUpContainer" class="mb-3" style="display: none;">
+                            <div class="alert alert-info">
+                                <i class="bi bi-calendar-check me-2"></i>
+                                <strong>Schedule Follow-up:</strong> This disposition requires scheduling a follow-up date and time.
+                            </div>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <label for="follow_up_date" class="form-label">Follow-up Date</label>
+                                    <input type="date" name="follow_up_date" id="follow_up_date" class="form-control" 
+                                           min="<?= date('Y-m-d') ?>" value="<?= date('Y-m-d') ?>">
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="follow_up_time" class="form-label">Follow-up Time</label>
+                                    <input type="time" name="follow_up_time" id="follow_up_time" class="form-control" 
+                                           value="<?= date('H:i', strtotime('+2 minutes')) ?>">
+                                </div>
+                            </div>
+                            <small class="text-muted">
+                                You will receive notifications to follow up at the scheduled time. Minimum scheduling time is 2 minutes from now.
+                            </small>
                         </div>
                         
                         <div class="mb-3">
@@ -434,9 +508,160 @@ $conn->close();
     </div>
 
     <script src="js/security-protection.js"></script>
+    <script src="js/followup-notifications.js"></script>
+    <script>
+        // Initialize notification system
+        let followupNotifications = null;
+        let notificationSystemInitialized = false;
+        
+        // Debug functions for on-page debugging
+        function updateDebugPanel(data) {
+            const debugPanel = document.getElementById('notificationDebugPanel');
+            const bellStatus = document.getElementById('bellStatus');
+            const apiStatus = document.getElementById('apiStatus');
+            const notificationsFound = document.getElementById('notificationsFound');
+            
+            if (debugPanel && data) {
+                debugPanel.style.display = 'block';
+                
+                // Update API status
+                if (apiStatus) {
+                    if (data.success) {
+                        apiStatus.className = 'alert alert-success';
+                        apiStatus.innerHTML = `✅ Success: ${data.notifications?.length || 0} notifications returned`;
+                    } else {
+                        apiStatus.className = 'alert alert-danger';
+                        apiStatus.innerHTML = `❌ Error: ${data.message || 'Unknown error'}`;
+                    }
+                }
+                
+                // Update notifications list
+                if (notificationsFound && data.notifications) {
+                    if (data.notifications.length > 0) {
+                        let output = `Found ${data.notifications.length} notifications:\n\n`;
+                        data.notifications.forEach((notif, index) => {
+                            output += `${index + 1}. Customer: ${notif.customer_name}\n`;
+                            output += `   Urgency: ${notif.urgency}\n`;
+                            output += `   Due in: ${notif.minutes_until_due} minutes\n`;
+                            output += `   Scheduled: ${notif.follow_up_datetime}\n\n`;
+                        });
+                        notificationsFound.textContent = output;
+                    } else {
+                        notificationsFound.textContent = 'No notifications found in response.';
+                    }
+                }
+                
+                // Update bell status
+                if (bellStatus) {
+                    const bell = document.getElementById('notificationBell');
+                    if (bell) {
+                        const bellClasses = bell.className;
+                        let bellColor = 'Unknown';
+                        if (bellClasses.includes('btn-danger')) bellColor = '🔴 Critical (Red)';
+                        else if (bellClasses.includes('btn-warning')) bellColor = '🟠 High (Orange)';
+                        else if (bellClasses.includes('btn-info')) bellColor = '🔵 Medium (Blue)';
+                        else if (bellClasses.includes('btn-success')) bellColor = '🟢 Low (Green)';
+                        else if (bellClasses.includes('btn-outline')) bellColor = '⭕ Outline (No notifications)';
+                        
+                        bellStatus.className = 'alert alert-info';
+                        bellStatus.innerHTML = `Bell Color: ${bellColor}<br>Classes: ${bellClasses}`;
+                    } else {
+                        bellStatus.className = 'alert alert-warning';
+                        bellStatus.innerHTML = '⚠️ Notification bell not found';
+                    }
+                }
+            }
+        }
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            if (notificationSystemInitialized) return;
+            
+            try {
+                followupNotifications = new FollowupNotifications();
+                notificationSystemInitialized = true;
+                
+                // Override the original updateNotificationUI to show debug info
+                const originalUpdateUI = followupNotifications.updateNotificationUI;
+                followupNotifications.updateNotificationUI = function(notifications) {
+                    originalUpdateUI.call(this, notifications);
+                    
+                    // Show debug info after UI update
+                    setTimeout(() => {
+                        updateDebugPanel({
+                            success: true,
+                            notifications: notifications
+                        });
+                    }, 100);
+                };
+                
+                // Override checkNotifications to capture API responses
+                const originalCheck = followupNotifications.checkNotifications;
+                followupNotifications.checkNotifications = async function() {
+                    try {
+                        const response = await fetch('ajax_followup_notifications.php?action=check_notifications');
+                        const data = await response.json();
+                        
+                        // Update debug panel with API response
+                        updateDebugPanel(data);
+                        
+                        if (data.success) {
+                            this.processNotifications(data.notifications || []);
+                            this.updateNotificationUI(data.notifications || []);
+                        }
+                    } catch (error) {
+                        updateDebugPanel({
+                            success: false,
+                            message: error.message
+                        });
+                    }
+                };
+                
+            } catch (error) {
+                updateDebugPanel({
+                    success: false,
+                    message: 'Failed to initialize: ' + error.message
+                });
+            }
+        });
+        
+        // Notification system handled by followup-notifications.js
+    </script>
     <script>
         let currentViewTimer = null;
         let currentUnmaskedLeadId = null;
+        
+        // Handle disposition change to show/hide calendar fields
+        function handleDispositionChange(select) {
+            const selectedOption = select.options[select.selectedIndex];
+            const calendarEnabled = selectedOption.getAttribute('data-calendar-enabled') === '1';
+            const followUpContainer = document.getElementById('followUpContainer');
+            const followUpDate = document.getElementById('follow_up_date');
+            const followUpTime = document.getElementById('follow_up_time');
+            
+            if (calendarEnabled && selectedOption.value) {
+                followUpContainer.style.display = 'block';
+                followUpDate.required = true;
+                followUpTime.required = true;
+                
+                // Set minimum date to today
+                const today = new Date().toISOString().split('T')[0];
+                followUpDate.min = today;
+                
+                // If date is today, set minimum time to current time + 2 minutes
+                if (followUpDate.value === today) {
+                    const now = new Date();
+                    now.setMinutes(now.getMinutes() + 2);
+                    const minTime = now.toTimeString().slice(0, 5);
+                    followUpTime.min = minTime;
+                }
+            } else {
+                followUpContainer.style.display = 'none';
+                followUpDate.required = false;
+                followUpTime.required = false;
+                followUpDate.value = '';
+                followUpTime.value = '';
+            }
+        }
         
         function openActionModal(leadId) {
             // Get current display values (masked or unmasked) from the DOM
@@ -489,6 +714,26 @@ $conn->close();
                 }
                 
                 authenticateAndView(leadId, accessCode);
+            });
+            
+            // Handle follow-up date change for time validation
+            document.getElementById('follow_up_date').addEventListener('change', function() {
+                const followUpTime = document.getElementById('follow_up_time');
+                const today = new Date().toISOString().split('T')[0];
+                
+                if (this.value === today) {
+                    const now = new Date();
+                    now.setMinutes(now.getMinutes() + 2);
+                    const minTime = now.toTimeString().slice(0, 5);
+                    followUpTime.min = minTime;
+                    
+                    // If current time value is less than minimum, update it
+                    if (followUpTime.value && followUpTime.value < minTime) {
+                        followUpTime.value = minTime;
+                    }
+                } else {
+                    followUpTime.min = '';
+                }
             });
             
             // Handle Enter key in access code field

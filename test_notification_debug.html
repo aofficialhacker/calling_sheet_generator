@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Notification Debug Test</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        .debug-console {
+            background: #000;
+            color: #00ff00;
+            font-family: 'Courier New', monospace;
+            padding: 15px;
+            height: 300px;
+            overflow-y: auto;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .test-notification {
+            margin: 10px 0;
+            padding: 12px;
+            border-radius: 8px;
+            border-left: 4px solid;
+        }
+        .test-critical { 
+            background: linear-gradient(90deg, #dc3545 0%, rgba(220,53,69,0.1) 100%); 
+            color: #721c24; 
+            border-color: #dc3545;
+        }
+        .test-high { 
+            background: linear-gradient(90deg, #fd7e14 0%, rgba(253,126,20,0.1) 100%); 
+            color: #a55d2a; 
+            border-color: #fd7e14;
+        }
+        .test-medium { 
+            background: linear-gradient(90deg, #0dcaf0 0%, rgba(13,202,240,0.1) 100%); 
+            color: #067581; 
+            border-color: #0dcaf0;
+        }
+        .test-low { 
+            background: linear-gradient(90deg, #6c757d 0%, rgba(108,117,125,0.1) 100%); 
+            color: #495057; 
+            border-color: #6c757d;
+        }
+        
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); box-shadow: 0 0 20px rgba(220, 53, 69, 0.6); }
+            100% { transform: scale(1); }
+        }
+        .pulse-test { animation: pulse 1.5s infinite; }
+    </style>
+</head>
+<body>
+    <div class="container-fluid mt-4">
+        <div class="row">
+            <div class="col-12">
+                <h2><i class="bi bi-bug me-2"></i>Notification System Debug</h2>
+                
+                <!-- Test Toolbar (simulates team leader dashboard) -->
+                <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+                    <h3 class="h4">Test Dashboard</h3>
+                    <div class="btn-toolbar mb-2 mb-md-0" id="testToolbar">
+                        <div class="btn-group me-2">
+                            <button type="button" class="btn btn-outline-secondary">
+                                <i class="bi bi-arrow-clockwise"></i> Refresh
+                            </button>
+                        </div>
+                        <!-- Bell icon will be inserted here by JavaScript -->
+                    </div>
+                </div>
+                
+                <!-- Debug Console -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5><i class="bi bi-terminal me-2"></i>Debug Console</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="debugConsole" class="debug-console">
+                            Starting notification debug test...<br>
+                        </div>
+                        <button class="btn btn-success me-2" onclick="testAPIDirectly()">Test API</button>
+                        <button class="btn btn-warning me-2" onclick="testMarkAllRead()">Test Mark All Read</button>
+                        <button class="btn btn-info me-2" onclick="testNotificationStyles()">Test Colors</button>
+                        <button class="btn btn-secondary" onclick="clearDebug()">Clear</button>
+                    </div>
+                </div>
+                
+                <!-- Color Test Section -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5><i class="bi bi-palette me-2"></i>Color Test</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="test-notification test-critical">
+                            <strong>🔴 Critical:</strong> MR. TEST CUSTOMER - OVERDUE Follow-up <i class="bi bi-exclamation-triangle-fill text-danger"></i>
+                        </div>
+                        <div class="test-notification test-high">
+                            <strong>🟠 High:</strong> MR. TEST CUSTOMER - Due in 15 minutes <i class="bi bi-exclamation-circle-fill text-warning"></i>
+                        </div>
+                        <div class="test-notification test-medium">
+                            <strong>🔵 Medium:</strong> MR. TEST CUSTOMER - Due in 1 hour
+                        </div>
+                        <div class="test-notification test-low">
+                            <strong>⚪ Low:</strong> MR. TEST CUSTOMER - Due later today
+                        </div>
+                        
+                        <div class="mt-3">
+                            <button class="btn btn-danger pulse-test me-2">🔴 Critical Bell (Pulsing)</button>
+                            <button class="btn btn-warning me-2">🟠 High Bell</button>
+                            <button class="btn btn-info me-2">🔵 Medium Bell</button>
+                            <button class="btn btn-outline-primary">⚪ Low Bell</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let debugDiv = document.getElementById('debugConsole');
+        
+        function debugLog(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            debugDiv.innerHTML += `[${timestamp}] ${message}<br>`;
+            debugDiv.scrollTop = debugDiv.scrollHeight;
+        }
+        
+        function clearDebug() {
+            debugDiv.innerHTML = 'Debug console cleared...<br>';
+        }
+        
+        // Test API directly
+        function testAPIDirectly() {
+            debugLog('🔍 Testing notification API...');
+            fetch('ajax_followup_notifications.php?action=check_notifications')
+                .then(response => response.json())
+                .then(data => {
+                    debugLog(`✅ API Response: ${JSON.stringify(data)}`);
+                    debugLog(`📊 Notification count: ${data.count}`);
+                    if (data.notifications && data.notifications.length > 0) {
+                        data.notifications.forEach((notif, index) => {
+                            debugLog(`📋 ${index + 1}. ${notif.customer_name} - ${notif.urgency} - ${notif.display_time}`);
+                        });
+                    } else {
+                        debugLog('📋 No notifications returned');
+                    }
+                })
+                .catch(error => {
+                    debugLog(`❌ API Error: ${error.message}`);
+                });
+        }
+        
+        // Test mark all read
+        function testMarkAllRead() {
+            debugLog('🔄 Testing mark all read...');
+            fetch('ajax_followup_notifications.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'mark_all_read' })
+            })
+            .then(response => response.json())
+            .then(data => {
+                debugLog(`✅ Mark all read response: ${JSON.stringify(data)}`);
+                // Test API again to see if count changed
+                setTimeout(() => {
+                    debugLog('🔍 Checking count after mark all read...');
+                    testAPIDirectly();
+                }, 500);
+            })
+            .catch(error => {
+                debugLog(`❌ Mark all read error: ${error.message}`);
+            });
+        }
+        
+        // Test notification styles
+        function testNotificationStyles() {
+            debugLog('🎨 Testing notification UI...');
+            const bellContainer = document.getElementById('testToolbar');
+            if (!bellContainer) {
+                debugLog('❌ Toolbar container not found');
+                return;
+            }
+            
+            // Create test notification bell
+            const testBell = `
+                <div class="notification-container position-relative me-3">
+                    <button class="btn btn-danger position-relative pulse-test" id="testBell" type="button" 
+                            data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="bi bi-bell-fill text-white"></i>
+                        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-warning">8</span>
+                    </button>
+                    <div class="dropdown-menu dropdown-menu-end p-0" style="width: 350px;">
+                        <div class="dropdown-header">Test Notifications</div>
+                        <div style="background: linear-gradient(90deg, #dc3545 0%, rgba(220,53,69,0.1) 100%); color: #721c24; padding: 12px; border-left: 4px solid #dc3545;">
+                            <strong>🔴 CRITICAL:</strong> MR. TEST CUSTOMER<br>
+                            <small><i class="bi bi-clock-fill"></i> OVERDUE <i class="bi bi-exclamation-triangle-fill text-danger"></i></small>
+                        </div>
+                        <div style="background: linear-gradient(90deg, #fd7e14 0%, rgba(253,126,20,0.1) 100%); color: #a55d2a; padding: 12px; border-left: 4px solid #fd7e14;">
+                            <strong>🟠 HIGH:</strong> MR. TEST CUSTOMER<br>
+                            <small><i class="bi bi-clock-fill"></i> Due 17:08</small>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            bellContainer.insertAdjacentHTML('afterbegin', testBell);
+            debugLog('✅ Test notification bell created with colors');
+        }
+        
+        // Initialize
+        window.addEventListener('DOMContentLoaded', function() {
+            debugLog('🚀 Page loaded - starting notification debug');
+            debugLog('🔍 Checking if notification JavaScript exists...');
+            
+            // Check if followup-notifications.js is loaded
+            if (typeof FollowupNotifications !== 'undefined') {
+                debugLog('✅ FollowupNotifications class found');
+                try {
+                    window.testNotificationSystem = new FollowupNotifications();
+                    debugLog('✅ Notification system initialized');
+                } catch (error) {
+                    debugLog(`❌ Error initializing: ${error.message}`);
+                }
+            } else {
+                debugLog('⚠️ FollowupNotifications class not found - loading script...');
+                const script = document.createElement('script');
+                script.src = 'js/followup-notifications.js';
+                script.onload = function() {
+                    debugLog('✅ Notification script loaded');
+                    try {
+                        window.testNotificationSystem = new FollowupNotifications();
+                        debugLog('✅ Notification system initialized after load');
+                    } catch (error) {
+                        debugLog(`❌ Error initializing after load: ${error.message}`);
+                    }
+                };
+                script.onerror = function() {
+                    debugLog('❌ Failed to load notification script');
+                };
+                document.head.appendChild(script);
+            }
+            
+            // Test API automatically after 2 seconds
+            setTimeout(() => {
+                debugLog('🔄 Running automatic API test...');
+                testAPIDirectly();
+            }, 2000);
+        });
+    </script>
+</body>
+</html>

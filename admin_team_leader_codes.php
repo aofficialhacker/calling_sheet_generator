@@ -21,7 +21,7 @@ if ($_POST && isset($_POST['refresh_code'])) {
         $codeInfo = refreshTeamLeaderCode($leaderId, $conn, true);
         
         if ($codeInfo['code']) {
-            $message = "Access code refreshed successfully for Team Leader $leaderId";
+            $message = "Access code refreshed successfully for Team Leader $leaderId. The team leader will be automatically logged out and must re-login with the new code.";
             $messageType = "success";
         } else {
             $message = "Error refreshing access code";

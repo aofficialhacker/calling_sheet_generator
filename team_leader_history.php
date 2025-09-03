@@ -118,7 +118,7 @@ $conn->close();
         }
     </style>
 </head>
-<body>
+<body data-role="team-leader">
     <div class="container-fluid">
         <div class="row">
             <!-- Sidebar -->
@@ -140,6 +140,11 @@ $conn->close();
                         <li class="nav-item">
                             <a class="nav-link active" href="team_leader_history.php">
                                 <i class="bi bi-clock-history me-2"></i>Action History
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="follow_up_calendar.php">
+                                <i class="bi bi-calendar-check me-2"></i>Follow-up Calendar
                             </a>
                         </li>
                         <li class="nav-item mt-4">
@@ -357,5 +362,6 @@ $conn->close();
     </script>
     
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="js/followup-notifications.js"></script>
 </body>
 </html>

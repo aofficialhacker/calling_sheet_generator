@@ -76,10 +76,16 @@ function requireTeamLeader() {
         $row = $result->fetch_assoc();
         if ($row['active_session_id'] !== session_id()) {
             // Current session ID does not match the active one in the DB.
-            // This means another device has logged in.
+            // This could mean another device has logged in OR admin refreshed the access code
             session_unset();
             session_destroy();
-            header("Location: team_leader_login.php?reason=multi_device");
+            if ($row['active_session_id'] === null || $row['active_session_id'] === '') {
+                // If active_session_id is null, it likely means admin refreshed the code
+                header("Location: team_leader_login.php?reason=code_refreshed");
+            } else {
+                // Otherwise it's a multi-device login scenario
+                header("Location: team_leader_login.php?reason=multi_device");
+            }
             exit();
         }
     } else {
@@ -267,7 +273,13 @@ function refreshTeamLeaderCode($leaderId, $conn, $forceRefresh = false) {
         // If code is older than 4 hours (14400 seconds), doesn't exist, or force refresh is requested
         if (!$row['access_code'] || $codeAge >= 14400 || $forceRefresh) {
             $newCode = generateTeamLeaderAccessCode();
-            $stmt = $conn->prepare("UPDATE team_leaders SET access_code = ?, code_generated_at = NOW() WHERE leader_id = ?");
+            
+            // If this is a forced refresh, clear the active session to force logout
+            if ($forceRefresh) {
+                $stmt = $conn->prepare("UPDATE team_leaders SET access_code = ?, code_generated_at = NOW(), active_session_id = NULL WHERE leader_id = ?");
+            } else {
+                $stmt = $conn->prepare("UPDATE team_leaders SET access_code = ?, code_generated_at = NOW() WHERE leader_id = ?");
+            }
             $stmt->bind_param("ss", $newCode, $leaderId);
             $stmt->execute();
             
@@ -347,7 +359,13 @@ function refreshTeamLeaderCodeFallback($leaderId, $conn, $forceRefresh = false) 
         // If code is older than 4 hours (14400 seconds), doesn't exist, or force refresh is requested
         if (!$row['access_code'] || $codeAge >= 14400 || $forceRefresh) {
             $newCode = generateTeamLeaderAccessCode();
-            $stmt = $conn->prepare("UPDATE team_leaders SET access_code = ?, code_generated_at = NOW() WHERE leader_id = ?");
+            
+            // If this is a forced refresh, clear the active session to force logout
+            if ($forceRefresh) {
+                $stmt = $conn->prepare("UPDATE team_leaders SET access_code = ?, code_generated_at = NOW(), active_session_id = NULL WHERE leader_id = ?");
+            } else {
+                $stmt = $conn->prepare("UPDATE team_leaders SET access_code = ?, code_generated_at = NOW() WHERE leader_id = ?");
+            }
             $stmt->bind_param("ss", $newCode, $leaderId);
             $stmt->execute();
             

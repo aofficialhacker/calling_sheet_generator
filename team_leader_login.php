@@ -7,6 +7,28 @@ $messageType = '';
 $showAuthForm = false;
 $pendingLeaderId = '';
 
+// Handle logout reasons
+if (isset($_GET['reason'])) {
+    switch ($_GET['reason']) {
+        case 'code_refreshed':
+            $message = 'Your admin has refreshed your access code. Please enter the new 6-character code to log in again.';
+            $messageType = 'info';
+            break;
+        case 'multi_device':
+            $message = 'You are already logged in from another device. Please logout from the other device first or wait for the session to expire.';
+            $messageType = 'warning';
+            break;
+        case 'not_logged_in':
+            $message = 'Please log in to access the Team Leader portal.';
+            $messageType = 'info';
+            break;
+        case 'invalid_user':
+            $message = 'Invalid user session. Please log in again.';
+            $messageType = 'danger';
+            break;
+    }
+}
+
 // Check if already logged in
 if (isset($_SESSION['is_team_leader']) && $_SESSION['is_team_leader']) {
     header("Location: team_leader_dashboard.php");

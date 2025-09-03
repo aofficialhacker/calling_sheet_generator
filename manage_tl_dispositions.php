@@ -12,6 +12,7 @@ if ($_POST) {
     if (isset($_POST['create_disposition'])) {
         $dispositionName = trim($_POST['disposition_name']);
         $description = trim($_POST['description']);
+        $bucketId = $_POST['bucket_id'] ? $_POST['bucket_id'] : null;
         
         // Check if disposition already exists
         $stmt = $conn->prepare("SELECT id FROM team_leader_dispositions WHERE disposition_name = ?");
@@ -23,9 +24,9 @@ if ($_POST) {
             $messageType = "danger";
         } else {
             // Create new disposition
-            $stmt = $conn->prepare("INSERT INTO team_leader_dispositions (disposition_name, description, created_by) VALUES (?, ?, ?)");
+            $stmt = $conn->prepare("INSERT INTO team_leader_dispositions (disposition_name, description, bucket_id, created_by) VALUES (?, ?, ?, ?)");
             $createdBy = 'SUPER'; // Use 'SUPER' for superadmin created dispositions
-            $stmt->bind_param("sss", $dispositionName, $description, $createdBy);
+            $stmt->bind_param("ssis", $dispositionName, $description, $bucketId, $createdBy);
             
             if ($stmt->execute()) {
                 $message = "Team Leader disposition created successfully!";
@@ -57,18 +58,31 @@ if ($_POST) {
     
 }
 
-// Get all dispositions
+// Get all dispositions with bucket information
 $dispositions = [];
 $stmt = $conn->prepare("
     SELECT d.*, 
+           db.bucket_name, 
+           db.has_calendar_enabled,
            (SELECT COUNT(*) FROM team_leader_actions WHERE new_disposition = d.disposition_name) as usage_count
     FROM team_leader_dispositions d
+    LEFT JOIN disposition_buckets db ON d.bucket_id = db.id
     ORDER BY d.created_at DESC
 ");
 $stmt->execute();
 $result = $stmt->get_result();
 while ($row = $result->fetch_assoc()) {
     $dispositions[] = $row;
+}
+$stmt->close();
+
+// Get all active buckets for dropdown
+$buckets = [];
+$stmt = $conn->prepare("SELECT id, bucket_name, has_calendar_enabled FROM disposition_buckets WHERE is_active = 1 ORDER BY bucket_name");
+$stmt->execute();
+$result = $stmt->get_result();
+while ($row = $result->fetch_assoc()) {
+    $buckets[] = $row;
 }
 $stmt->close();
 
@@ -185,15 +199,27 @@ $conn->close();
                     </div>
                     <div class="card-body">
                         <form method="POST" class="row g-3">
-                            <div class="col-md-4">
+                            <div class="col-md-3">
                                 <label for="disposition_name" class="form-label">Disposition Name</label>
                                 <input type="text" name="disposition_name" id="disposition_name" class="form-control" required 
                                        placeholder="e.g., Follow Up Required">
                             </div>
-                            <div class="col-md-6">
+                            <div class="col-md-4">
                                 <label for="description" class="form-label">Description</label>
                                 <input type="text" name="description" id="description" class="form-control" 
                                        placeholder="Brief description of when to use this disposition">
+                            </div>
+                            <div class="col-md-3">
+                                <label for="bucket_id" class="form-label">Disposition Bucket</label>
+                                <select name="bucket_id" id="bucket_id" class="form-control">
+                                    <option value="">Select Bucket (Optional)</option>
+                                    <?php foreach ($buckets as $bucket): ?>
+                                        <option value="<?= $bucket['id'] ?>">
+                                            <?= htmlspecialchars($bucket['bucket_name']) ?>
+                                            <?= $bucket['has_calendar_enabled'] ? ' 📅' : '' ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
                             </div>
                             <div class="col-md-2 d-flex align-items-end">
                                 <button type="submit" name="create_disposition" class="btn btn-primary w-100">
@@ -232,6 +258,12 @@ $conn->close();
                                                                 <span class="badge bg-success ms-2">Active</span>
                                                             <?php else: ?>
                                                                 <span class="badge bg-secondary ms-2">Inactive</span>
+                                                            <?php endif; ?>
+                                                            <?php if ($disposition['bucket_name']): ?>
+                                                                <span class="badge bg-primary ms-1">
+                                                                    <?= htmlspecialchars($disposition['bucket_name']) ?>
+                                                                    <?= $disposition['has_calendar_enabled'] ? ' 📅' : '' ?>
+                                                                </span>
                                                             <?php endif; ?>
                                                             <span class="badge bg-info usage-badge ms-1">
                                                                 <?= $disposition['usage_count'] ?> uses

@@ -236,26 +236,8 @@ class SecurityProtection {
             }
         }, 500);
         
-        // Detect console usage
-        let devtools_console = {
-            open: false,
-            element: console.log
-        };
-        
-        Object.defineProperty(console, 'log', {
-            get: function() {
-                devtools_console.open = true;
-                return devtools_console.element;
-            }
-        });
-        
-        setInterval(() => {
-            if (devtools_console.open) {
-                this.logViolation('console_accessed');
-                this.handleSuspiciousActivity('Console access detected');
-                devtools_console.open = false;
-            }
-        }, 1000);
+        // Detect console usage - disabled to prevent alert loops
+        // Note: Console detection temporarily disabled to prevent recurring alerts
     }
 
     setupBlurOnFocusLoss() {

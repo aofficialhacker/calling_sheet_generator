@@ -57,6 +57,11 @@ $active_page = basename($_SERVER['PHP_SELF']);
                 </a>
             </li>
             <li class="nav-item">
+                <a class="nav-link <?= $active_page == 'manage_buckets.php' ? 'active' : '' ?>" href="manage_buckets.php">
+                    <i class="bi bi-collection-fill me-2"></i>Disposition Buckets
+                </a>
+            </li>
+            <li class="nav-item">
                 <a class="nav-link <?= $active_page == 'manage_tl_dispositions.php' ? 'active' : '' ?>" href="manage_tl_dispositions.php">
                     <i class="bi bi-tags-fill me-2"></i>Team Leader Dispositions
                 </a>
