@@ -1,5 +1,7 @@
 <?php
 require_once 'db_config.php';
+require_once 'blocklist_utils.php';
+require_once 'mobile_duplication_utils.php';
 requireAdmin();
 require 'vendor/autoload.php';
 
@@ -109,28 +111,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && (isset($_FILES['customerFile']) || i
         $productCode = $prodStmt->get_result()->fetch_assoc()['product_code'];
         $prodStmt->close();
         
-        $conn->begin_transaction();
-
-        // Generate new batch ID
-        $batch_id = generateBatchId($productCode, $vendorId, $adminId, $conn);
-
-        $batch_stmt = $conn->prepare("INSERT INTO file_batches (id, admin_id, vendor_id, product_code, original_filename) VALUES (?, ?, ?, ?, ?)");
-        $batch_stmt->bind_param("sssss", $batch_id, $adminId, $vendorId, $productCode, $originalFileName);
-        $batch_stmt->execute();
-        $batch_stmt->close();
-
-        $sql = "INSERT INTO final_call_logs (id, mobile_no, batch_id, status, title, name, policy_number, pan, dob, age, expiry, address, city, state, country, pincode, plan, premium, sum_insured, extra_data) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-        $stmt = $conn->prepare($sql);
-        if ($stmt === false) { throw new Exception("Prepare failed (INSERT): " . $conn->error); }
-
+        // Step 1: Pre-process all rows and extract mobile numbers
+        $allRowData = [];
+        $allMobileNumbers = [];
         $rowCounter = 1;
-        $processedCount = 0;
+        
         foreach ($dataRows as $dataRow) {
             if (empty(implode('', $dataRow))) continue;
             
             // Stop if we've processed 10,000 rows
-            if ($processedCount >= 10000) {
+            if (count($allRowData) >= 10000) {
                 break;
             }
             
@@ -140,10 +130,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && (isset($_FILES['customerFile']) || i
             $mobile_no = preg_replace('/\D/', '', $mobile_no_raw);
             if (strlen($mobile_no) < 10) continue;
             
+            // Extract all other fields
             $policy_number = ($columnMap['policy_number'] !== -1 && isset($dataRow[$columnMap['policy_number']])) ? (string)$dataRow[$columnMap['policy_number']] : null;
             $status = (!empty($policy_number)) ? 'old' : 'fresh';
-
-            $log_id = generateLogRowId($batch_id, $rowCounter);
 
             $title = ($columnMap['title'] !== -1) ? ($dataRow[$columnMap['title']] ?? null) : null;
             $name = ($columnMap['name'] !== -1) ? ($dataRow[$columnMap['name']] ?? null) : null;
@@ -163,15 +152,138 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && (isset($_FILES['customerFile']) || i
             $sum_insured = ($columnMap['sum_insured'] !== -1) ? ($dataRow[$columnMap['sum_insured']] ?? null) : null;
             $extraData = null;
 
-            $stmt->bind_param("sssssssssissssssssss", $log_id, $mobile_no, $batch_id, $status, $title, $name, $policy_number, $pan, $dob, $age, $expiry, $address, $city, $state, $country, $pincode, $plan, $premium, $sum_insured, $extraData);
-            $stmt->execute();
+            // Store all row data for processing
+            $allRowData[] = [
+                'mobile_no' => $mobile_no,
+                'status' => $status,
+                'title' => $title,
+                'name' => $name,
+                'policy_number' => $policy_number,
+                'pan' => $pan,
+                'dob' => $dob,
+                'age' => $age,
+                'expiry' => $expiry,
+                'address' => $address,
+                'city' => $city,
+                'state' => $state,
+                'country' => $country,
+                'pincode' => $pincode,
+                'plan' => $plan,
+                'premium' => $premium,
+                'sum_insured' => $sum_insured,
+                'extra_data' => $extraData,
+                'row_counter' => $rowCounter
+            ];
+            
+            $allMobileNumbers[] = $mobile_no;
             $rowCounter++;
-            $processedCount++;
+        }
+        
+        if (empty($allRowData)) {
+            throw new Exception("No valid mobile numbers found in the uploaded file.");
+        }
+        
+        // Step 2: Bulk check for blocked numbers (admin-specific)
+        $blockedNumbers = [];
+        if (!empty($allMobileNumbers)) {
+            $blockedNumbers = array_flip(getBulkBlockedMobileNumbers($adminId, $allMobileNumbers));
+        }
+        
+        // Step 3: Bulk check for duplicate numbers (system-wide) 
+        $duplicateNumbers = [];
+        if (!empty($allMobileNumbers)) {
+            $duplicateNumbers = array_flip(getBulkDuplicateMobileNumbers($allMobileNumbers));
+        }
+        
+        // Step 4: Filter valid records based on bulk checks
+        $validRecords = [];
+        $blockedCount = 0;
+        $duplicateCount = 0;
+        
+        foreach ($allRowData as $rowData) {
+            $mobile_no = $rowData['mobile_no'];
+            
+            // Check if blocked
+            if (isset($blockedNumbers[$mobile_no])) {
+                $blockedCount++;
+                continue;
+            }
+            
+            // Check if duplicate
+            if (isset($duplicateNumbers[$mobile_no])) {
+                $duplicateCount++;
+                continue;
+            }
+            
+            // This record is valid
+            $validRecords[] = $rowData;
+        }
+        
+        // Check if we have any valid records to create a batch
+        if (empty($validRecords)) {
+            $totalExcluded = $blockedCount + $duplicateCount;
+            throw new Exception("No valid records to create batch. All {$totalExcluded} records were excluded ({$blockedCount} blocked, {$duplicateCount} duplicates).");
+        }
+        
+        // Now create the batch and insert valid records
+        $conn->begin_transaction();
+
+        // Generate new batch ID
+        $batch_id = generateBatchId($productCode, $vendorId, $adminId, $conn);
+
+        // Create batch entry
+        $batch_stmt = $conn->prepare("INSERT INTO file_batches (id, admin_id, vendor_id, product_code, original_filename) VALUES (?, ?, ?, ?, ?)");
+        $batch_stmt->bind_param("sssss", $batch_id, $adminId, $vendorId, $productCode, $originalFileName);
+        $batch_stmt->execute();
+        $batch_stmt->close();
+
+        // Insert all valid records
+        $sql = "INSERT INTO final_call_logs (id, mobile_no, batch_id, status, title, name, policy_number, pan, dob, age, expiry, address, city, state, country, pincode, plan, premium, sum_insured, extra_data) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        $stmt = $conn->prepare($sql);
+        if ($stmt === false) { throw new Exception("Prepare failed (INSERT): " . $conn->error); }
+
+        foreach ($validRecords as $record) {
+            $log_id = generateLogRowId($batch_id, $record['row_counter']);
+            $stmt->bind_param("sssssssssissssssssss", 
+                $log_id, 
+                $record['mobile_no'], 
+                $batch_id, 
+                $record['status'], 
+                $record['title'], 
+                $record['name'], 
+                $record['policy_number'], 
+                $record['pan'], 
+                $record['dob'], 
+                $record['age'], 
+                $record['expiry'], 
+                $record['address'], 
+                $record['city'], 
+                $record['state'], 
+                $record['country'], 
+                $record['pincode'], 
+                $record['plan'], 
+                $record['premium'], 
+                $record['sum_insured'], 
+                $record['extra_data']
+            );
+            $stmt->execute();
         }
         $stmt->close();
         $conn->commit();
         
-        $_SESSION['flash_message'] = ['type' => 'success', 'text' => "Batch {$batch_id} created successfully with " . ($rowCounter - 1) . " records."];
+        $message = "Batch {$batch_id} created successfully with " . count($validRecords) . " records.";
+        $exclusions = [];
+        if ($blockedCount > 0) {
+            $exclusions[] = "{$blockedCount} numbers were blocked";
+        }
+        if ($duplicateCount > 0) {
+            $exclusions[] = "{$duplicateCount} duplicate numbers found";
+        }
+        if (!empty($exclusions)) {
+            $message .= " (" . implode(", ", $exclusions) . " and excluded)";
+        }
+        $_SESSION['flash_message'] = ['type' => 'success', 'text' => $message];
 
     } catch (Exception $e) {
         if (isset($conn) && $conn->ping()) { $conn->rollback(); }

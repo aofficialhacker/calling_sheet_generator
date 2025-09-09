@@ -44,7 +44,7 @@ if ($_POST) {
             $stmt->bind_param("s", $finqyId);
             $stmt->execute();
             if ($stmt->get_result()->num_rows > 0) {
-                $message = "This caller is already assigned as a Team Leader.";
+                $message = "This caller is already assigned as a Relationship Manager.";
                 $messageType = "danger";
             } else {
                 // Create team leader
@@ -52,10 +52,10 @@ if ($_POST) {
                 $stmt->bind_param("ssssss", $leaderId, $leaderName, $finqyId, $adminId, $username, $password);
                 
                 if ($stmt->execute()) {
-                    $message = "Team Leader created successfully! Leader ID: $leaderId";
+                    $message = "Relationship Manager created successfully! Leader ID: $leaderId";
                     $messageType = "success";
                 } else {
-                    $message = "Error creating Team Leader: " . $stmt->error;
+                    $message = "Error creating Relationship Manager: " . $stmt->error;
                     $messageType = "danger";
                 }
             }
@@ -72,10 +72,10 @@ if ($_POST) {
         $stmt->bind_param("ss", $leaderId, $adminId);
         
         if ($stmt->execute()) {
-            $message = "Team Leader deactivated successfully.";
+            $message = "Relationship Manager deactivated successfully.";
             $messageType = "success";
         } else {
-            $message = "Error deactivating Team Leader.";
+            $message = "Error deactivating Relationship Manager.";
             $messageType = "danger";
         }
         $stmt->close();
@@ -87,10 +87,10 @@ if ($_POST) {
         $stmt->bind_param("ss", $leaderId, $adminId);
         
         if ($stmt->execute()) {
-            $message = "Team Leader reactivated successfully.";
+            $message = "Relationship Manager reactivated successfully.";
             $messageType = "success";
         } else {
-            $message = "Error reactivating Team Leader.";
+            $message = "Error reactivating Relationship Manager.";
             $messageType = "danger";
         }
         $stmt->close();
@@ -140,7 +140,7 @@ $conn->close();
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Manage Team Leaders</title>
+    <title>Manage Relationship Managers</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <style>
@@ -164,7 +164,7 @@ $conn->close();
 
             <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
                 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-                    <h1 class="h2"><i class="bi bi-people-fill me-2"></i>Manage Team Leaders</h1>
+                    <h1 class="h2"><i class="bi bi-people-fill me-2"></i>Manage Relationship Managers</h1>
                 </div>
 
                 <?php if ($message): ?>
@@ -174,16 +174,16 @@ $conn->close();
                     </div>
                 <?php endif; ?>
 
-                <!-- Create Team Leader Form -->
+                <!-- Create Relationship Manager Form -->
                 <div class="card stat-card mb-4">
                     <div class="card-header bg-primary text-white">
-                        <h5 class="mb-0"><i class="bi bi-person-plus-fill me-2"></i>Create New Team Leader</h5>
+                        <h5 class="mb-0"><i class="bi bi-person-plus-fill me-2"></i>Create New Relationship Manager</h5>
                     </div>
                     <div class="card-body">
                         <?php if (empty($availableCallers)): ?>
                             <div class="alert alert-info">
                                 <i class="bi bi-info-circle me-2"></i>
-                                No available callers to promote as Team Leaders. All your callers are either already Team Leaders or inactive.
+                                No available callers to promote as Relationship Managers. All your callers are either already Relationship Managers or inactive.
                             </div>
                         <?php else: ?>
                             <form method="POST" class="row g-3">
@@ -215,7 +215,7 @@ $conn->close();
                                 </div>
                                 <div class="col-12">
                                     <button type="submit" name="create_leader" class="btn btn-primary">
-                                        <i class="bi bi-plus-circle me-2"></i>Create Team Leader
+                                        <i class="bi bi-plus-circle me-2"></i>Create Relationship Manager
                                     </button>
                                 </div>
                             </form>
@@ -223,16 +223,16 @@ $conn->close();
                     </div>
                 </div>
 
-                <!-- Existing Team Leaders -->
+                <!-- Existing Relationship Managers -->
                 <div class="card stat-card">
                     <div class="card-header bg-white border-0">
-                        <h5 class="mb-0"><i class="bi bi-list-ul me-2"></i>Your Team Leaders</h5>
+                        <h5 class="mb-0"><i class="bi bi-list-ul me-2"></i>Your Relationship Managers</h5>
                     </div>
                     <div class="card-body">
                         <?php if (empty($teamLeaders)): ?>
                             <div class="text-center text-muted py-4">
                                 <i class="bi bi-people display-4 opacity-25"></i>
-                                <p class="mt-3">No Team Leaders created yet.</p>
+                                <p class="mt-3">No Relationship Managers created yet.</p>
                             </div>
                         <?php else: ?>
                             <div class="table-responsive">
@@ -278,7 +278,7 @@ $conn->close();
                                                             <input type="hidden" name="leader_id" value="<?= $leader['leader_id'] ?>">
                                                             <button type="submit" name="deactivate_leader" 
                                                                     class="btn btn-sm btn-warning"
-                                                                    onclick="return confirm('Are you sure you want to deactivate this Team Leader?')">
+                                                                    onclick="return confirm('Are you sure you want to deactivate this Relationship Manager?')">
                                                                 <i class="bi bi-pause-fill"></i> Deactivate
                                                             </button>
                                                         </form>

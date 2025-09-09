@@ -1,6 +1,6 @@
 <?php
 /**
- * Team Leader Authentication Endpoint for View Action
+ * Relationship Manager Authentication Endpoint for View Action
  * Validates access code and grants temporary access to unmask customer data
  */
 
@@ -118,7 +118,7 @@ try {
     }
     
 } catch (Exception $e) {
-    error_log("Team Leader Auth View Error: " . $e->getMessage());
+    error_log("Relationship Manager Auth View Error: " . $e->getMessage());
     $response['message'] = 'An error occurred. Please try again.';
 }
 

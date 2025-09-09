@@ -20,7 +20,7 @@ if (isset($_GET['reason'])) {
             $messageType = 'warning';
             break;
         case 'not_logged_in':
-            $message = 'Please log in to access the Team Leader portal.';
+            $message = 'Please log in to access the Relationship Manager portal.';
             $messageType = 'info';
             break;
         case 'invalid_user':
@@ -169,7 +169,7 @@ $conn->close();
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Team Leader Login</title>
+    <title>Relationship Manager Login</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <style>
@@ -214,7 +214,7 @@ $conn->close();
         <div class="card-body p-5">
             <div class="text-center mb-4">
                 <i class="bi bi-shield-lock-fill text-primary" style="font-size: 3rem;"></i>
-                <h2 class="mt-3">Team Leader Portal</h2>
+                <h2 class="mt-3">Relationship Manager Portal</h2>
                 <p class="text-muted">Secure Access with Time-based Authentication</p>
             </div>
 

@@ -63,7 +63,7 @@ $active_page = basename($_SERVER['PHP_SELF']);
             </li>
             <li class="nav-item">
                 <a class="nav-link <?= $active_page == 'manage_tl_dispositions.php' ? 'active' : '' ?>" href="manage_tl_dispositions.php">
-                    <i class="bi bi-tags-fill me-2"></i>Team Leader Dispositions
+                    <i class="bi bi-tags-fill me-2"></i>Relationship Manager Dispositions
                 </a>
             </li>
             <li class="nav-item">

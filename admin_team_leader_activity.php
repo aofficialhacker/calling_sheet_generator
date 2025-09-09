@@ -198,7 +198,7 @@ $conn->close();
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Team Leader Activity Monitor</title>
+    <title>Relationship Manager Activity Monitor</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <style>
@@ -252,7 +252,7 @@ $conn->close();
             <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
                 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
                     <h1 class="h2">
-                        <i class="bi bi-activity me-2"></i>Team Leader Activity Monitor
+                        <i class="bi bi-activity me-2"></i>Relationship Manager Activity Monitor
                     </h1>
                     <div class="btn-toolbar mb-2 mb-md-0">
                         <button type="button" class="btn btn-outline-secondary" onclick="location.reload()">
@@ -323,9 +323,9 @@ $conn->close();
                         <h6 class="card-title"><i class="bi bi-funnel me-2"></i>Filter Activities</h6>
                         <form method="GET" class="row g-3">
                             <div class="col-md-3">
-                                <label class="form-label">Team Leader</label>
+                                <label class="form-label">Relationship Manager</label>
                                 <select name="leader" class="form-select">
-                                    <option value="">All Team Leaders</option>
+                                    <option value="">All Relationship Managers</option>
                                     <?php foreach ($teamLeaders as $leader): ?>
                                         <option value="<?= $leader['leader_id'] ?>" <?= $filterLeader === $leader['leader_id'] ? 'selected' : '' ?>>
                                             <?= htmlspecialchars($leader['leader_name']) ?> (<?= $leader['leader_id'] ?>)
@@ -381,7 +381,7 @@ $conn->close();
                                     <thead class="table-light">
                                         <tr>
                                             <th>Timestamp</th>
-                                            <th>Team Leader</th>
+                                            <th>Relationship Manager</th>
                                             <th>Activity</th>
                                             <th>Status/Details</th>
                                             <th>IP Address</th>

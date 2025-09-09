@@ -5,6 +5,7 @@ ini_set('zlib.output_compression', '0'); // avoid proxy/compression issues
 
 require 'vendor/autoload.php';
 require_once 'db_config.php';
+require_once 'blocklist_utils.php';
 
 // --- Auth ---------------------------------------------------------------
 require_once __DIR__ . '/session_manager.php';
@@ -163,7 +164,14 @@ if (!empty($excluded_batches)) {
     
     debugLog("Excluding " . count($excluded_batches) . " batches from download: " . implode(', ', $excluded_batches));
 }
-if (count($whereClauses) <= 1 && !$batch_id && !$dispositions) {
+
+// Exclude blocked numbers from PDF generation
+$whereClauses[] = "fcl.mobile_no NOT IN (SELECT mobile_no FROM blocklist_numbers WHERE admin_id = ?)";
+$params[] = $adminId;
+$types .= 's';
+debugLog("Added blocklist filtering for admin: " . $adminId);
+
+if (count($whereClauses) <= 2 && !$batch_id && !$dispositions) {
     die("Error: No criteria selected for PDF generation.");
 }
 $whereSql    = 'WHERE ' . implode(' AND ', $whereClauses);

@@ -10,6 +10,9 @@ requireAdmin();
 $conn = getDBConnection();
 $adminId = $_SESSION['admin_id'];
 
+// Debug: Log the current admin_id being used
+error_log("ADMIN_BATCHWISE_ANALYTICS: Current admin_id from session = " . ($adminId ?? 'NULL'));
+
 // Date range filter
 $date_range = $_GET['date_range'] ?? '90';
 $selected_unit = $_GET['unit_id'] ?? '';
@@ -43,9 +46,9 @@ $products = $products_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 $products_stmt->close();
 
 // Build WHERE clauses for filters - ensure vendor belongs to current admin
-$where_conditions = ["fb.admin_id = ?", "v.admin_id = ?"];
-$params = [$adminId, $adminId];
-$param_types = "ss";
+$where_conditions = ["fb.admin_id = ?", "v.is_approved = 1"];
+$params = [$adminId];
+$param_types = "s";
 
 if ($date_range !== 'all') {
     $where_conditions[] = "fb.upload_time >= DATE_SUB(NOW(), INTERVAL ? DAY)";
@@ -212,30 +215,75 @@ error_log("AFTER QUALITY PROCESSING: " . json_encode(array_map(function($u) {
     return ['id' => $u['vendor_id'], 'name' => $u['vendor_name']];
 }, $unit_performance)));
 
-// Monthly Performance Trends
+// Monthly Performance Trends - Fixed to start with file_batches and LEFT JOIN vendors
 $monthly_trends_sql = "
     SELECT 
-        v.vendor_id,
-        v.vendor_name,
+        COALESCE(v.vendor_id, fb.vendor_id) as vendor_id,
+        COALESCE(v.vendor_name, fb.vendor_id) as vendor_name,
         DATE_FORMAT(fb.upload_time, '%Y-%m') as month_year,
         COUNT(DISTINCT fb.id) as batches_uploaded,
-        COUNT(fcl.id) as records_received,
-        SUM(CASE WHEN fcl.status != 'fresh' THEN 1 ELSE 0 END) as records_processed,
-        ROUND((SUM(CASE WHEN fcl.status != 'fresh' THEN 1 ELSE 0 END) / COUNT(fcl.id)) * 100, 1) as monthly_processing_rate
-    FROM vendors v
-    JOIN file_batches fb ON v.vendor_id = fb.vendor_id
+        COALESCE(COUNT(fcl.id), 0) as records_received,
+        COALESCE(SUM(CASE WHEN fcl.status != 'fresh' THEN 1 ELSE 0 END), 0) as records_processed,
+        COALESCE(ROUND((SUM(CASE WHEN fcl.status != 'fresh' THEN 1 ELSE 0 END) / NULLIF(COUNT(fcl.id), 0)) * 100, 1), 0) as monthly_processing_rate
+    FROM file_batches fb
+    LEFT JOIN vendors v ON fb.vendor_id = v.vendor_id AND v.admin_id = fb.admin_id
     LEFT JOIN final_call_logs fcl ON fb.id = fcl.batch_id
-    $where_clause
-    GROUP BY v.vendor_id, v.vendor_name, DATE_FORMAT(fb.upload_time, '%Y-%m')
-    ORDER BY month_year DESC, records_received DESC
+    WHERE fb.admin_id = ? AND (v.is_approved = 1 OR v.is_approved IS NULL)
+    GROUP BY COALESCE(v.vendor_id, fb.vendor_id), COALESCE(v.vendor_name, fb.vendor_id), DATE_FORMAT(fb.upload_time, '%Y-%m')
+    ORDER BY month_year DESC, batches_uploaded DESC
     LIMIT 50
 ";
 
+// Debug: Log monthly trends query details  
+$monthly_trends_query_debug = str_replace('?', "'$adminId'", $monthly_trends_sql);
+error_log("MONTHLY TRENDS SQL: " . $monthly_trends_query_debug);
+
 $monthly_stmt = $conn->prepare($monthly_trends_sql);
-if ($param_types) $monthly_stmt->bind_param($param_types, ...$params);
-$monthly_stmt->execute();
-$monthly_trends = $monthly_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
-$monthly_stmt->close();
+if ($monthly_stmt === false) {
+    error_log("Monthly trends query preparation failed: " . $conn->error);
+    $monthly_trends = [];
+} else {
+    // Bind single admin_id parameter for file_batches
+    $monthly_stmt->bind_param("s", $adminId);
+    $monthly_stmt->execute();
+    $monthly_trends = $monthly_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $monthly_stmt->close();
+    
+    // Debug: Log monthly trends results
+    error_log("MONTHLY TRENDS RESULTS COUNT: " . count($monthly_trends));
+    if (count($monthly_trends) > 0) {
+        error_log("MONTHLY TRENDS SAMPLE DATA: " . json_encode(array_slice($monthly_trends, 0, 2)));
+    } else {
+        error_log("MONTHLY TRENDS: No data returned - trying fallback query");
+        
+        // Fallback query - just batches by month without vendor restrictions
+        $fallback_sql = "
+            SELECT 
+                'All Batches' as vendor_name,
+                '' as vendor_id,
+                DATE_FORMAT(fb.upload_time, '%Y-%m') as month_year,
+                COUNT(DISTINCT fb.id) as batches_uploaded,
+                COALESCE(COUNT(fcl.id), 0) as records_received,
+                COALESCE(SUM(CASE WHEN fcl.status != 'fresh' THEN 1 ELSE 0 END), 0) as records_processed,
+                COALESCE(ROUND((SUM(CASE WHEN fcl.status != 'fresh' THEN 1 ELSE 0 END) / NULLIF(COUNT(fcl.id), 0)) * 100, 1), 0) as monthly_processing_rate
+            FROM file_batches fb
+            LEFT JOIN final_call_logs fcl ON fb.id = fcl.batch_id
+            WHERE fb.admin_id = ?
+            GROUP BY DATE_FORMAT(fb.upload_time, '%Y-%m')
+            ORDER BY month_year DESC
+            LIMIT 12
+        ";
+        
+        $fallback_stmt = $conn->prepare($fallback_sql);
+        if ($fallback_stmt) {
+            $fallback_stmt->bind_param("s", $adminId);
+            $fallback_stmt->execute();
+            $monthly_trends = $fallback_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+            $fallback_stmt->close();
+            error_log("FALLBACK QUERY RESULTS COUNT: " . count($monthly_trends));
+        }
+    }
+}
 
 // Batch Quality Analysis
 $batch_quality_sql = "
@@ -343,7 +391,18 @@ $conn->close();
         .quality-score { font-size: 1.8rem; font-weight: bold; }
         .quality-badge { font-size: 0.9rem; padding: 0.5rem 0.8rem; }
         .unit-performance-card { border-radius: 12px; border: none; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        .trend-chart { height: 300px; }
+        .trend-chart { 
+            height: 300px !important; 
+            max-height: 300px !important;
+            width: 100% !important;
+            max-width: 100% !important;
+        }
+        .chart-container {
+            position: relative;
+            height: 300px !important;
+            max-height: 300px !important;
+            overflow: hidden;
+        }
         .data-table { font-size: 0.9rem; }
         .performance-indicator { width: 60px; height: 8px; border-radius: 4px; }
     </style>
@@ -417,14 +476,21 @@ $conn->close();
 
                 <!-- Debug: Show what data we're working with -->
                 <div class="alert alert-info">
-                    <small>Debug: Found <?= count($unit_performance) ?> units - 
-                    <?php 
-                    $debug_units = [];
-                    foreach($unit_performance as $unit) {
-                        $debug_units[] = $unit['vendor_id'] . ':' . $unit['vendor_name'];
-                    }
-                    echo implode(', ', $debug_units);
-                    ?>
+                    <small>
+                        <strong>Debug Info:</strong> 
+                        Admin ID: <?= htmlspecialchars($adminId ?? 'NULL') ?> | 
+                        Units found: <?= count($unit_performance) ?> | 
+                        Monthly trends count: <?= count($monthly_trends ?? []) ?> 
+                        <?php if (!empty($unit_performance)): ?>
+                            | Units: 
+                            <?php 
+                            $debug_units = [];
+                            foreach($unit_performance as $unit) {
+                                $debug_units[] = $unit['vendor_id'] . ':' . $unit['vendor_name'];
+                            }
+                            echo implode(', ', $debug_units);
+                            ?>
+                        <?php endif; ?>
                     </small>
                 </div>
 
@@ -517,9 +583,31 @@ $conn->close();
                             </div>
                             <div class="card-body">
                                 <?php if (empty($monthly_trends)): ?>
-                                    <div class="alert alert-info">No trend data available for the selected period.</div>
+                                    <div class="alert alert-warning">
+                                        <i class="bi bi-exclamation-triangle me-2"></i>
+                                        <strong>No trend data available</strong><br>
+                                        <small>This could be due to:</small>
+                                        <ul class="mb-2 mt-1" style="font-size: 0.85rem;">
+                                            <li>No file batches uploaded for the selected period</li>
+                                            <li>No approved vendors for your account</li>
+                                            <li>All data filtered out by current filter settings</li>
+                                        </ul>
+                                        <small>Try:</small>
+                                        <ul class="mb-0" style="font-size: 0.85rem;">
+                                            <li>Extending the date range to "All time"</li>
+                                            <li>Clearing unit and product filters</li>
+                                            <li>Running the <a href="debug_monthly_trends.php" target="_blank">debug diagnostic tool</a></li>
+                                        </ul>
+                                    </div>
                                 <?php else: ?>
-                                    <canvas id="trendsChart" class="trend-chart"></canvas>
+                                    <div class="chart-container">
+                                        <canvas id="trendsChart" class="trend-chart"></canvas>
+                                    </div>
+                                    <!-- Debug info for developers -->
+                                    <small class="text-muted">
+                                        <i class="bi bi-info-circle me-1"></i>
+                                        Showing <?= count($monthly_trends) ?> data points
+                                    </small>
                                 <?php endif; ?>
                             </div>
                         </div>
@@ -704,32 +792,52 @@ $conn->close();
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // Monthly Trends Chart
+        // Monthly Trends Chart with Error Handling
         <?php if (!empty($monthly_trends)): ?>
-        const trendsCtx = document.getElementById('trendsChart').getContext('2d');
-        
-        // Group data by month
-        const monthlyData = {};
-        <?php foreach($monthly_trends as $trend): ?>
-        const monthKey = '<?= $trend['month_year'] ?>';
-        if (!monthlyData[monthKey]) {
-            monthlyData[monthKey] = {
-                batches: 0,
-                records: 0,
-                processed: 0
-            };
-        }
-        monthlyData[monthKey].batches += <?= $trend['batches_uploaded'] ?>;
-        monthlyData[monthKey].records += <?= $trend['records_received'] ?>;
-        monthlyData[monthKey].processed += <?= $trend['records_processed'] ?>;
-        <?php endforeach; ?>
-        
-        const months = Object.keys(monthlyData).sort();
-        const batchData = months.map(month => monthlyData[month].batches);
-        const recordData = months.map(month => monthlyData[month].records);
-        const processedData = months.map(month => monthlyData[month].processed);
-        
-        new Chart(trendsCtx, {
+        try {
+            console.log('Monthly trends data received:', <?= json_encode($monthly_trends) ?>);
+            console.log('Monthly trends count:', <?= count($monthly_trends) ?>);
+            
+            const trendsCtx = document.getElementById('trendsChart');
+            if (!trendsCtx) {
+                console.error('trendsChart canvas element not found');
+                throw new Error('Chart canvas not found');
+            }
+            
+            const ctx = trendsCtx.getContext('2d');
+            
+            // Group data by month
+            const monthlyData = {};
+            <?php foreach($monthly_trends as $trend): ?>
+            (function() {
+                const monthKey = '<?= $trend['month_year'] ?>';
+                if (!monthlyData[monthKey]) {
+                    monthlyData[monthKey] = {
+                        batches: 0,
+                        records: 0,
+                        processed: 0
+                    };
+                }
+                monthlyData[monthKey].batches += <?= intval($trend['batches_uploaded'] ?? 0) ?>;
+                monthlyData[monthKey].records += <?= intval($trend['records_received'] ?? 0) ?>;
+                monthlyData[monthKey].processed += <?= intval($trend['records_processed'] ?? 0) ?>;
+            })();
+            <?php endforeach; ?>
+            
+            console.log('Processed monthly data:', monthlyData);
+            
+            const months = Object.keys(monthlyData).sort();
+            const batchData = months.map(month => monthlyData[month].batches);
+            const recordData = months.map(month => monthlyData[month].records);
+            const processedData = months.map(month => monthlyData[month].processed);
+            
+            console.log('Chart data - Months:', months, 'Batches:', batchData, 'Records:', recordData);
+            
+            if (months.length === 0) {
+                throw new Error('No monthly data available for chart');
+            }
+            
+            new Chart(ctx, {
             type: 'line',
             data: {
                 labels: months,
@@ -756,6 +864,10 @@ $conn->close();
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                aspectRatio: 2,
+                layout: {
+                    padding: 10
+                },
                 scales: {
                     y: {
                         beginAtZero: true
@@ -765,9 +877,22 @@ $conn->close();
                     legend: {
                         position: 'top',
                     }
+                },
+                animation: {
+                    duration: 1000
                 }
             }
         });
+        
+        console.log('Monthly trends chart initialized successfully');
+        
+        } catch (error) {
+            console.error('Error initializing monthly trends chart:', error);
+            const chartContainer = document.getElementById('trendsChart').parentElement;
+            chartContainer.innerHTML = '<div class="alert alert-warning"><i class="bi bi-exclamation-triangle me-2"></i>Unable to load trend chart. Error: ' + error.message + '</div>';
+        }
+        <?php else: ?>
+        console.log('No monthly trends data available for chart');
         <?php endif; ?>
         
         function exportBatchAnalytics() {

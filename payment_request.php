@@ -39,7 +39,7 @@ $conn->close();
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Payment Request - Team Leader</title>
+    <title>Payment Request - Relationship Manager</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <style>
@@ -126,7 +126,7 @@ $conn->close();
 
             <div class="alert alert-success">
                 <h6><i class="bi bi-check-circle-fill me-2"></i>Status Confirmed</h6>
-                <p class="mb-0">This customer has been confirmed as interested and ready for payment processing by Team Leader.</p>
+                <p class="mb-0">This customer has been confirmed as interested and ready for payment processing by Relationship Manager.</p>
             </div>
 
             <div class="text-center">

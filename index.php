@@ -58,7 +58,7 @@
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
-        .team-leader-icon { 
+        .relationship-manager-icon { 
             background: linear-gradient(45deg, #6f42c1, #8e44ad);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
@@ -149,19 +149,19 @@
                     </div>
                 </div>
 
-                <!-- Team Leader Panel Card -->
+                <!-- Relationship Manager Panel Card -->
                 <div class="col-xl-3 col-lg-6">
                     <div class="card panel-card text-center h-100">
                         <div class="card-body d-flex flex-column">
-                            <div class="panel-icon team-leader-icon">
+                            <div class="panel-icon relationship-manager-icon">
                                 <i class="bi bi-people-fill"></i>
                             </div>
-                            <h3 class="card-title h4 fw-bold">Team Leader Hub</h3>
+                            <h3 class="card-title h4 fw-bold">Relationship Manager Hub</h3>
                             <p class="card-text text-muted mt-2 mb-4 flex-grow-1">
-                                Secure portal for team leaders to review interested leads, take follow-up actions, and manage payment requests with advanced authentication.
+                                Secure portal for relationship managers to review interested leads, take follow-up actions, and manage payment requests with advanced authentication.
                             </p>
                             <a href="team_leader_login.php" class="btn btn-warning btn-lg text-white">
-                                <i class="bi bi-shield-lock-fill me-2"></i>Team Leader Login
+                                <i class="bi bi-shield-lock-fill me-2"></i>Relationship Manager Login
                             </a>
                         </div>
                     </div>

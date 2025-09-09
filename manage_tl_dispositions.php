@@ -29,7 +29,7 @@ if ($_POST) {
             $stmt->bind_param("ssis", $dispositionName, $description, $bucketId, $createdBy);
             
             if ($stmt->execute()) {
-                $message = "Team Leader disposition created successfully!";
+                $message = "Relationship Manager disposition created successfully!";
                 $messageType = "success";
             } else {
                 $message = "Error creating disposition: " . $stmt->error;
@@ -106,7 +106,7 @@ $conn->close();
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Team Leader Dispositions Management</title>
+    <title>Relationship Manager Dispositions Management</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <style>
@@ -139,7 +139,7 @@ $conn->close();
 
             <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
                 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-                    <h1 class="h2"><i class="bi bi-tags-fill me-2"></i>Team Leader Dispositions</h1>
+                    <h1 class="h2"><i class="bi bi-tags-fill me-2"></i>Relationship Manager Dispositions</h1>
                 </div>
 
                 <?php if ($message): ?>
@@ -195,7 +195,7 @@ $conn->close();
                 <!-- Create Disposition Form -->
                 <div class="card stat-card mb-4">
                     <div class="card-header bg-primary text-white">
-                        <h5 class="mb-0"><i class="bi bi-plus-circle-fill me-2"></i>Create New Team Leader Disposition</h5>
+                        <h5 class="mb-0"><i class="bi bi-plus-circle-fill me-2"></i>Create New Relationship Manager Disposition</h5>
                     </div>
                     <div class="card-body">
                         <form method="POST" class="row g-3">
@@ -234,7 +234,7 @@ $conn->close();
                 <div class="card stat-card">
                     <div class="card-header bg-white border-0">
                         <h5 class="mb-0">
-                            <i class="bi bi-list-ul me-2"></i>All Team Leader Dispositions
+                            <i class="bi bi-list-ul me-2"></i>All Relationship Manager Dispositions
                             <span class="badge bg-primary"><?= count($dispositions) ?></span>
                         </h5>
                     </div>

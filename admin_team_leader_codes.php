@@ -21,7 +21,7 @@ if ($_POST && isset($_POST['refresh_code'])) {
         $codeInfo = refreshTeamLeaderCode($leaderId, $conn, true);
         
         if ($codeInfo['code']) {
-            $message = "Access code refreshed successfully for Team Leader $leaderId. The team leader will be automatically logged out and must re-login with the new code.";
+            $message = "Access code refreshed successfully for Relationship Manager $leaderId. The relationship manager will be automatically logged out and must re-login with the new code.";
             $messageType = "success";
         } else {
             $message = "Error refreshing access code";
@@ -93,7 +93,7 @@ $conn->close();
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Team Leader Access Codes</title>
+    <title>Relationship Manager Access Codes</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <style>
@@ -149,7 +149,7 @@ $conn->close();
             <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
                 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
                     <h1 class="h2">
-                        <i class="bi bi-key-fill me-2"></i>Team Leader Access Codes
+                        <i class="bi bi-key-fill me-2"></i>Relationship Manager Access Codes
                     </h1>
                     <div class="btn-toolbar mb-2 mb-md-0">
                         <button type="button" class="btn btn-outline-secondary" onclick="location.reload()">
@@ -172,7 +172,7 @@ $conn->close();
                             <div class="card-body">
                                 <div class="d-flex justify-content-between align-items-center">
                                     <div>
-                                        <h6>Active Team Leaders</h6>
+                                        <h6>Active Relationship Managers</h6>
                                         <h2 class="mb-0"><?= $stats['total_active_leaders'] ?></h2>
                                     </div>
                                     <i class="bi bi-people-fill fs-1 opacity-50"></i>
@@ -208,11 +208,11 @@ $conn->close();
                     </div>
                 </div>
 
-                <!-- Team Leaders List -->
+                <!-- Relationship Managers List -->
                 <div class="card stat-card">
                     <div class="card-header bg-white border-0">
                         <h5 class="mb-0">
-                            <i class="bi bi-list-ul me-2"></i>Team Leader Access Codes
+                            <i class="bi bi-list-ul me-2"></i>Relationship Manager Access Codes
                             <span class="badge bg-primary"><?= count($teamLeaders) ?></span>
                         </h5>
                         <small class="text-muted">Codes automatically refresh every 4 hours</small>
@@ -223,7 +223,7 @@ $conn->close();
                                 <i class="bi bi-people display-4 opacity-25"></i>
                                 <p class="mt-3">No active team leaders found.</p>
                                 <a href="manage_team_leaders.php" class="btn btn-primary">
-                                    <i class="bi bi-plus-circle me-2"></i>Create Team Leader
+                                    <i class="bi bi-plus-circle me-2"></i>Create Relationship Manager
                                 </a>
                             </div>
                         <?php else: ?>
@@ -317,7 +317,7 @@ $conn->close();
                     <div class="card-body">
                         <div class="row">
                             <div class="col-md-6">
-                                <h6>For Team Leaders:</h6>
+                                <h6>For Relationship Managers:</h6>
                                 <ul class="small">
                                     <li>Enter your <strong>username</strong> and <strong>password</strong></li>
                                     <li>Enter the current <strong>6-character access code</strong> shown above</li>

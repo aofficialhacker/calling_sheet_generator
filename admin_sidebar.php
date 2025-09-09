@@ -54,6 +54,11 @@ $active_page = basename($_SERVER['PHP_SELF']);
                 </a>
             </li>
             <li class="nav-item">
+                <a class="nav-link <?= $active_page == 'manage_blocklist.php' ? 'active' : '' ?>" href="manage_blocklist.php">
+                    <i class="bi bi-shield-exclamation me-2"></i>Manage Blocklist
+                </a>
+            </li>
+            <li class="nav-item">
                 <a class="nav-link <?= $active_page == 'manage_batches.php' ? 'active' : '' ?>" href="manage_batches.php">
                     <i class="bi bi-stack me-2"></i>View Batches
                 </a>
@@ -75,7 +80,7 @@ $active_page = basename($_SERVER['PHP_SELF']);
             </li>
             <li class="nav-item">
                 <a class="nav-link <?= $active_page == 'manage_team_leaders.php' ? 'active' : '' ?>" href="manage_team_leaders.php">
-                    <i class="bi bi-people-fill me-2"></i>Team Leaders
+                    <i class="bi bi-people-fill me-2"></i>Relationship Managers
                 </a>
             </li>
             <li class="nav-item">

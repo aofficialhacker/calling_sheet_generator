@@ -415,7 +415,7 @@ $conn->close();
                                 <label for="has_calendar_enabled" class="form-check-label">
                                     <i class="bi bi-calendar-check me-1"></i>Enable Calendar Functionality
                                     <small class="form-text text-muted d-block">
-                                        When enabled, Team Leaders can schedule follow-up dates and times for dispositions in this bucket.
+                                        When enabled, Relationship Managers can schedule follow-up dates and times for dispositions in this bucket.
                                     </small>
                                 </label>
                             </div>
@@ -457,7 +457,7 @@ $conn->close();
                                 <label for="edit_has_calendar_enabled" class="form-check-label">
                                     <i class="bi bi-calendar-check me-1"></i>Enable Calendar Functionality
                                     <small class="form-text text-muted d-block">
-                                        When enabled, Team Leaders can schedule follow-up dates and times for dispositions in this bucket.
+                                        When enabled, Relationship Managers can schedule follow-up dates and times for dispositions in this bucket.
                                     </small>
                                 </label>
                             </div>

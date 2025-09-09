@@ -77,7 +77,7 @@ $conn->close();
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Team Leader Dashboard</title>
+    <title>Relationship Manager Dashboard</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <style>
@@ -158,7 +158,7 @@ $conn->close();
                 <div class="position-sticky">
                     <div class="text-center py-3 mb-4 border-bottom">
                         <i class="bi bi-person-badge-fill fs-2"></i>
-                        <h5 class="mt-2">Team Leader</h5>
+                        <h5 class="mt-2">Relationship Manager</h5>
                         <small><?= htmlspecialchars($leaderName) ?></small>
                         <br><small class="text-muted"><?= $leaderId ?></small>
                     </div>
