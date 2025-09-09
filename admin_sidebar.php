@@ -44,6 +44,11 @@ $active_page = basename($_SERVER['PHP_SELF']);
                 </a>
             </li>
             <li class="nav-item">
+                <a class="nav-link <?= $active_page == 'admin_batchwise_analytics.php' ? 'active' : '' ?>" href="admin_batchwise_analytics.php">
+                    <i class="bi bi-bar-chart-line me-2"></i>Batchwise Analytics
+                </a>
+            </li>
+            <li class="nav-item">
                 <a class="nav-link <?= $active_page == 'upload_batch.php' ? 'active' : '' ?>" href="upload_batch.php">
                     <i class="bi bi-cloud-upload-fill me-2"></i>Upload Batch
                 </a>

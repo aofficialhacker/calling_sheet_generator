@@ -1,5 +1,6 @@
 <?php
-session_start();
+require_once __DIR__ . '/session_manager.php';
+SessionManager::start();
 
 if (!isset($_SESSION['finqy_id']) || !isset($_SESSION['caller_name'])) {
     header('Location: caller_panel.php');

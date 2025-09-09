@@ -3,7 +3,7 @@ require_once 'db_config.php';
 
 // Set up admin session for testing
 if (session_status() == PHP_SESSION_NONE) {
-    session_start();
+    require_once __DIR__ . '/session_manager.php';\nSessionManager::start();
 }
 
 if (!isset($_SESSION['admin_id'])) {

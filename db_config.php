@@ -1,12 +1,17 @@
 <?php
+// Load configuration and security
+require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/security.php';
+
 // Set timezone to UTC to ensure consistency
 date_default_timezone_set('UTC');
 
-// Centralized database configuration
-define('DB_HOST', 'localhost');
-define('DB_USER', 'root');
-define('DB_PASS', '123456');
-define('DB_NAME', 'caller_sheet3');
+// Centralized database configuration using environment variables
+$dbConfig = Config::database();
+define('DB_HOST', $dbConfig['host']);
+define('DB_USER', $dbConfig['user']);
+define('DB_PASS', $dbConfig['password']);
+define('DB_NAME', $dbConfig['database']);
 
 // Function to get database connection
 function getDBConnection() {
@@ -32,7 +37,8 @@ function isAdmin() {
 // Function to require superadmin access
 function requireSuperadmin() {
     if (session_status() == PHP_SESSION_NONE) {
-        session_start();
+        require_once __DIR__ . '/session_manager.php';
+        SessionManager::start();
     }
     if (!isSuperadmin()) {
         header("Location: superadmin_login.php");
@@ -43,7 +49,8 @@ function requireSuperadmin() {
 // Function to require admin access
 function requireAdmin() {
     if (session_status() == PHP_SESSION_NONE) {
-        session_start();
+        require_once __DIR__ . '/session_manager.php';
+        SessionManager::start();
     }
     if (!isAdmin() && !isSuperadmin()) { // Allow superadmin to access admin pages
         header("Location: admin_login.php");
@@ -59,7 +66,8 @@ function isTeamLeader() {
 // Function to require team leader access
 function requireTeamLeader() {
     if (session_status() == PHP_SESSION_NONE) {
-        session_start();
+        require_once __DIR__ . '/session_manager.php';
+        SessionManager::start();
     }
     if (!isTeamLeader()) {
         header("Location: team_leader_login.php?reason=not_logged_in");

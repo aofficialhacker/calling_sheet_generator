@@ -23,7 +23,7 @@ try {
     
     // Start session if needed
     if (session_status() == PHP_SESSION_NONE) {
-        session_start();
+        require_once __DIR__ . '/session_manager.php';\nSessionManager::start();
         $debug[] = "Session started";
     } else {
         $debug[] = "Session already active";

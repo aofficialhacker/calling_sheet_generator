@@ -1,0 +1,71 @@
+# Environment and Configuration Files
+.env
+.env.local
+.env.production
+.env.staging
+
+# Sensitive Files
+config/database.php
+config/secrets.php
+
+# Log Files
+*.log
+logs/
+php_server.log
+pdf_debug.log
+ocr_extraction_log.txt
+debug.log
+error.log
+
+# Temporary Files
+tmp/
+temp/
+cache/
+sessions/
+
+# Upload Directories (keep structure, ignore content)
+uploads/*
+!uploads/.gitkeep
+files/*
+!files/.gitkeep
+
+# IDE and Editor Files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS Generated Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Backup Files
+*.backup
+*.bak
+*_backup_*
+backup_*
+
+# Test and Debug Files
+test_*.php
+debug_*.php
+*_test.php
+*_debug.php
+
+# Vendor Dependencies (if using Composer globally)
+# vendor/ - keep this commented as we need vendor files
+
+# PDF Output Files (temporary)
+*.pdf
+!sample.pdf
+
+# Lock Files
+*.lock
+
+# Runtime Files
+*.pid

@@ -4,7 +4,7 @@ require_once 'db_config.php';
 
 // Check admin authentication with debugging
 if (session_status() == PHP_SESSION_NONE) {
-    session_start();
+    require_once __DIR__ . '/session_manager.php';\nSessionManager::start();
 }
 
 if (!isAdmin() && !isSuperadmin()) {

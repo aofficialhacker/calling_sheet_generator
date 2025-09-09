@@ -1,7 +1,8 @@
 <?php
 // Emergency security disable script
 // Use this only for testing/debugging
-session_start();
+require_once __DIR__ . '/session_manager.php';
+SessionManager::start();
 
 if (isset($_GET['disable']) && $_GET['disable'] === 'all') {
     $_SESSION['security_disabled'] = true;

@@ -3,7 +3,8 @@ require_once 'db_config.php';
 
 // Start session if not already started
 if (session_status() == PHP_SESSION_NONE) {
-    session_start();
+    require_once __DIR__ . '/session_manager.php';
+    SessionManager::start();
 }
 
 // Check if user is logged in as admin

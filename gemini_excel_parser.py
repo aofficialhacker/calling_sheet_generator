@@ -36,10 +36,10 @@ def preprocess_image(input_path: pathlib.Path) -> pathlib.Path | None:
         return input_path
 
 def main():
-    # API key (should ideally be from environment variable)
-    api_key = "AIzaSyDD1HTQWJNbrzFxwH5YWIHbnmcx9-FD_4s"
-    if not api_key or api_key == 'YOUR_API_KEY':
-        print(json.dumps({"error": "API key not set. Set GEMINI_API_KEY environment variable."}))
+    # Get API key from environment variable for security
+    api_key = os.getenv('GEMINI_API_KEY')
+    if not api_key:
+        print(json.dumps({"error": "GEMINI_API_KEY environment variable not set. Please configure your API key in the .env file."}))
         sys.exit(1)
 
     if len(sys.argv) < 2:

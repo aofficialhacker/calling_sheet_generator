@@ -1,13 +1,15 @@
 <?php
-session_start();
+require_once 'db_config.php'; // This includes security initialization
+require_once 'session_manager.php';
+
+// Start session safely with security configuration
+SessionManager::start();
 
 // If already logged in as admin, redirect to panel
 if (isset($_SESSION['is_admin']) && $_SESSION['is_admin'] === true) {
     header("Location: admin_panel.php");
     exit();
 }
-
-require_once 'db_config.php';
 
 $login_error = '';
 
@@ -31,8 +33,26 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         if ($result->num_rows === 1) {
             $admin = $result->fetch_assoc();
             
-            // Simple password check (in production, use proper hashing)
-            if ($password === $admin['password']) {
+            // Secure password verification with backwards compatibility
+            $password_valid = false;
+            
+            // First try password_verify for properly hashed passwords
+            if (password_verify($password, $admin['password'])) {
+                $password_valid = true;
+            }
+            // Fallback: direct comparison for legacy plaintext passwords (TEMPORARY - should be removed after migration)
+            elseif ($password === $admin['password']) {
+                $password_valid = true;
+                
+                // Auto-upgrade to hashed password for security
+                $hashed_password = password_hash($password, PASSWORD_DEFAULT);
+                $update_stmt = $conn->prepare("UPDATE admin_users SET password = ? WHERE admin_id = ?");
+                $update_stmt->bind_param("ss", $hashed_password, $admin['admin_id']);
+                $update_stmt->execute();
+                $update_stmt->close();
+            }
+            
+            if ($password_valid) {
                 $_SESSION['is_admin'] = true;
                 $_SESSION['admin_id'] = $admin['admin_id'];
                 $_SESSION['admin_username'] = $admin['username'];

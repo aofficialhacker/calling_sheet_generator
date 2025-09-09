@@ -1,5 +1,6 @@
 <?php
-session_start();
+require_once __DIR__ . '/session_manager.php';
+SessionManager::start();
 require_once 'db_config.php'; // Use centralized db config
 
 // Secure this page. If the user is not logged in, redirect to the login panel.

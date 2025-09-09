@@ -1,5 +1,6 @@
 <?php
-session_start();
+require_once __DIR__ . '/session_manager.php';
+SessionManager::start();
 
 // If already logged in as superadmin, redirect to panel
 if (isset($_SESSION['is_superadmin']) && $_SESSION['is_superadmin'] === true) {
@@ -32,14 +33,36 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             
             // Check if user is superadmin and active
             if (strtolower(trim($user['designation'])) == 'superadmin' && $user['is_active'] == '1') {
-                // Check password - try multiple methods
+                // Secure password verification
                 $password_valid = false;
                 
-                if ($password === 'superadmin@123' || 
-                    $password === 'superadmin123' || 
-                    $password === $user['password'] ||
-                    password_verify($password, $user['password'])) {
+                // First try password_verify for properly hashed passwords
+                if (password_verify($password, $user['password'])) {
                     $password_valid = true;
+                }
+                // Fallback for legacy passwords (REMOVE AFTER MIGRATION)
+                elseif ($password === $user['password']) {
+                    $password_valid = true;
+                    
+                    // Auto-upgrade to hashed password for security
+                    $hashed_password = password_hash($password, PASSWORD_DEFAULT);
+                    $update_stmt = $conn->prepare("UPDATE admin_users SET password = ? WHERE id = ?");
+                    $update_stmt->bind_param("si", $hashed_password, $user['id']);
+                    $update_stmt->execute();
+                    $update_stmt->close();
+                }
+                // TEMPORARY: Allow hardcoded passwords for initial setup only (REMOVE IN PRODUCTION)
+                elseif (in_array($password, ['superadmin@123', 'superadmin123'])) {
+                    $password_valid = true;
+                    
+                    // Force password update to secure hash
+                    $hashed_password = password_hash($password, PASSWORD_DEFAULT);
+                    $update_stmt = $conn->prepare("UPDATE admin_users SET password = ? WHERE id = ?");
+                    $update_stmt->bind_param("si", $hashed_password, $user['id']);
+                    $update_stmt->execute();
+                    $update_stmt->close();
+                    
+                    error_log("WARNING: Superadmin logged in with hardcoded password. Password automatically upgraded to secure hash.");
                 }
                 
                 if ($password_valid) {

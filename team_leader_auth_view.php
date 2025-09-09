@@ -16,7 +16,8 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
 // Use the same team leader validation as other pages
 if (session_status() == PHP_SESSION_NONE) {
-    session_start();
+    require_once __DIR__ . '/session_manager.php';
+    SessionManager::start();
 }
 
 if (!isTeamLeader()) {

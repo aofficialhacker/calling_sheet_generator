@@ -9,7 +9,8 @@ require_once 'download_counter.php';
 
 // Start session and check authentication
 if (session_status() == PHP_SESSION_NONE) {
-    session_start();
+    require_once __DIR__ . '/session_manager.php';
+    SessionManager::start();
 }
 
 if (!isAdmin() && !isSuperadmin()) {

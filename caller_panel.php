@@ -1,10 +1,16 @@
 <?php
-session_start();
+require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/session_manager.php';
 
-define('DB_HOST', 'localhost');
-define('DB_USER', 'root');
-define('DB_PASS', '123456');
-define('DB_NAME', 'caller_sheet3');
+// Start session safely with security configuration
+SessionManager::start();
+
+// Database configuration using environment variables
+$dbConfig = Config::database();
+define('DB_HOST', $dbConfig['host']);
+define('DB_USER', $dbConfig['user']);
+define('DB_PASS', $dbConfig['password']);
+define('DB_NAME', $dbConfig['database']);
 
 // --- SIMPLIFIED CAPTCHA LOGIC ---
 if (isset($_GET['action']) && $_GET['action'] == 'captcha') {
@@ -181,6 +187,18 @@ const CONNECTIVITY_MAP = [ 'Y' => 'Yes', 'N' => 'No' ];
                     <p class="text-muted">Add photos one by one, then process all together</p>
                 </label>
                 <input class="form-control d-none" type="file" name="singlePhoto" id="singlePhoto" accept="image/*" capture="environment">
+                
+                <!-- Photo quality tips -->
+                <div class="alert alert-info mt-3">
+                    <h6 class="alert-heading"><i class="bi bi-lightbulb me-2"></i>Tips for Clear Photos:</h6>
+                    <small>
+                        • Ensure good lighting (avoid shadows)<br>
+                        • Hold phone steady and focus before shooting<br>
+                        • Keep the calling sheet flat and fully visible<br>
+                        • Avoid reflections from lights or windows<br>
+                        • <strong>Blurry photos will be automatically rejected</strong>
+                    </small>
+                </div>
                 
                 <!-- Collected photos display -->
                 <div id="collectedPhotos" class="mt-3" style="display: none;">
@@ -389,9 +407,32 @@ const CONNECTIVITY_MAP = [ 'Y' => 'Yes', 'N' => 'No' ];
                         });
                         allResults = allResults.concat(result.data);
                         successCount++;
+                    } else if (!result.success && result.blur_details) {
+                        // Handle blur detection failure
+                        feedbackDiv.className = 'alert alert-warning mt-3';
+                        feedbackDiv.innerHTML = `<i class="bi bi-exclamation-triangle-fill me-2"></i>
+                            <strong>Photo ${imageNum} is too blurry!</strong><br>
+                            ${result.message}<br>
+                            <small>Quality: ${result.blur_details.quality.toUpperCase()} (Score: ${result.blur_details.score})</small><br>
+                            <strong>Please retake this photo with better focus and lighting.</strong>`;
+                        
+                        // Stop processing if we encounter a blurry image
+                        setTimeout(() => {
+                            feedbackDiv.innerHTML += `<br><br><button class="btn btn-primary btn-sm" onclick="location.reload()">Try Again</button>`;
+                        }, 3000);
+                        
+                        console.log(`Photo ${imageNum} rejected - too blurry:`, result.blur_details);
+                        return; // Stop processing more images
+                    } else if (!result.success) {
+                        // Handle other processing errors
+                        console.error(`Error processing photo ${imageNum}:`, result.message);
+                        feedbackDiv.className = 'alert alert-danger mt-3';
+                        feedbackDiv.innerHTML = `<i class="bi bi-x-circle-fill me-2"></i>Error processing photo ${imageNum}: ${result.message}`;
                     }
                 } catch (error) {
-                    console.error(`Error processing photo ${imageNum}:`, error);
+                    console.error(`Network error processing photo ${imageNum}:`, error);
+                    feedbackDiv.className = 'alert alert-danger mt-3';
+                    feedbackDiv.innerHTML = `<i class="bi bi-x-circle-fill me-2"></i>Network error processing photo ${imageNum}. Please check your connection.`;
                 }
                 
                 processedCount++;

@@ -4,7 +4,8 @@
  * Shows individual caller's attempt history and performance metrics
  */
 
-session_start();
+require_once __DIR__ . '/session_manager.php';
+SessionManager::start();
 require_once 'db_config.php';
 
 // Check if caller is logged in

@@ -14,11 +14,11 @@ import cv2
 import numpy as np
 import argparse
 
-# --- HARDCODED API KEYS ---
-# Please replace the placeholder values with your actual API keys.
-HARDCODED_API_KEY_1 = "AIzaSyBAlWQ5oMxUxDiZHxW5f1AMS2uOOMC1UdY"  # For the top third of the image
-HARDCODED_API_KEY_2 = "AIzaSyBcVmhC0um5ff__jRc4pPeOCorQNwOhynU"  # For the middle third of the image
-HARDCODED_API_KEY_3 = "AIzaSyC0gI13g7Sf-3QqI-l_pJC18iWJCFrVbck"  # For the bottom third of the image
+# --- SECURE API KEY LOADING ---
+# API keys loaded from environment variables for security
+GEMINI_API_KEY_1 = os.getenv('GEMINI_API_KEY_1')
+GEMINI_API_KEY_2 = os.getenv('GEMINI_API_KEY_2', os.getenv('GEMINI_API_KEY'))  # Fallback to main key
+GEMINI_API_KEY_3 = os.getenv('GEMINI_API_KEY_3', os.getenv('GEMINI_API_KEY'))  # Fallback to main key
 # ---------------------------
 
 # --- CONFIGURATION ---
@@ -231,9 +231,9 @@ if __name__ == "__main__":
     parser.add_argument("output_csv", help="Path to save the output CSV file.")
     args = parser.parse_args()
 
-    if "REPLACE_WITH" in HARDCODED_API_KEY_1:
-        logger.error("API keys are not set. Please edit ocr_processor.py and replace placeholders.")
+    if not GEMINI_API_KEY_1:
+        logger.error("API keys are not set. Please configure GEMINI_API_KEY_1, GEMINI_API_KEY_2, and GEMINI_API_KEY_3 in your .env file.")
         sys.exit(1)
 
-    converter = OcrConverter(api_key1=HARDCODED_API_KEY_1, api_key2=HARDCODED_API_KEY_2, api_key3=HARDCODED_API_KEY_3)
+    converter = OcrConverter(api_key1=GEMINI_API_KEY_1, api_key2=GEMINI_API_KEY_2, api_key3=GEMINI_API_KEY_3)
     converter.run(Path(args.input_file), Path(args.output_csv))

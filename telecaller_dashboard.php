@@ -1,6 +1,7 @@
 <?php
 require_once 'db_config.php';
-session_start();
+require_once __DIR__ . '/session_manager.php';
+SessionManager::start();
 
 // Check if telecaller is logged in
 $finqyId = $_SESSION['finqy_id'] ?? $_GET['finqy_id'] ?? null;

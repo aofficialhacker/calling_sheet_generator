@@ -9,7 +9,8 @@
  * Requires PHP session (email/username optional). Safe to include multiple times.
  */
 
-if (session_status() === PHP_SESSION_NONE) { @session_start(); }
+if (session_status() === PHP_SESSION_NONE) { @require_once __DIR__ . '/session_manager.php';
+SessionManager::start(); }
 
 $__scr_user = null;
 $possible_keys = ['team_leader_email','tl_email','email','username','user_email','user_name'];

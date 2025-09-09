@@ -1,5 +1,6 @@
 <?php
-session_start();
+require_once __DIR__ . '/session_manager.php';
+SessionManager::start();
 require_once 'db_config.php';
 
 $type = $_GET['type'] ?? '';

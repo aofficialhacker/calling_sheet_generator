@@ -1,5 +1,6 @@
 <?php
-session_start();
+require_once __DIR__ . '/session_manager.php';
+SessionManager::start();
 require_once 'db_config.php';
 
 // Check if this is an AJAX request
@@ -60,23 +61,28 @@ function preserveAllCurrentData($conn, $record_id, $finqy_id) {
             INSERT INTO call_history (
                 original_record_id, finqy_id, attempt_number, batch_id,
                 slot, disposition, connectivity, attempt_date,
-                is_original_attempt, data_source, notes
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'complete_preservation', 'AUTO-PRESERVED: All data backed up before update')
+                is_original_attempt, notes
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'AUTO-PRESERVED: All data backed up before update')
         ");
         
-        $is_original = ($current_data['total_attempts'] ?? 0) == 0;
+        if (!$preserve_stmt) {
+            error_log("Failed to prepare preserve statement: " . $conn->error);
+            return false;
+        }
         
-        $preserve_stmt->bind_param("ssissssssi",
+        $is_original = ($current_data['total_attempts'] ?? 0) == 0;
+        $previous_attempt = $attempt_number - 1; // This was the previous attempt
+        
+        $preserve_stmt->bind_param("sississsi",
             $record_id,
             $current_data['finqy_id'],
-            $attempt_number - 1, // This was the previous attempt
+            $previous_attempt,
             $current_data['batch_id'],
             $current_data['slot'],
             $current_data['disposition'], 
             $current_data['connectivity'],
             $current_data['processed_at'],
-            $is_original,
-            "AUTO-PRESERVED: All data backed up before update"
+            $is_original
         );
         
         $preserve_stmt->execute();
@@ -108,18 +114,23 @@ function createNewAttemptEntry($conn, $record_id, $finqy_id, $attempt_number, $n
         INSERT INTO call_history (
             original_record_id, finqy_id, attempt_number, batch_id,
             slot, disposition, connectivity, attempt_date,
-            is_original_attempt, data_source
+            is_original_attempt
         )
-        SELECT ?, ?, ?, batch_id, ?, ?, ?, NOW(), ?, 'upload'
+        SELECT ?, ?, ?, batch_id, ?, ?, ?, NOW(), ?
         FROM final_call_logs WHERE id = ?
     ");
     
+    if (!$new_attempt_stmt) {
+        error_log("Failed to prepare statement: " . $conn->error);
+        return false;
+    }
+    
     $is_original = $attempt_number == 1;
     
-    $new_attempt_stmt->bind_param("sissssiss",
+    $new_attempt_stmt->bind_param("sissssis",
         $record_id, $finqy_id, $attempt_number,
         $new_data['slot'], $new_data['disposition'], $new_data['connectivity'],
-        $is_original, "upload", $record_id
+        $is_original, $record_id
     );
     
     $new_attempt_stmt->execute();
@@ -205,7 +216,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['json_results']) && iss
                                WHERE id = ?";
                 
                 $update_stmt = $conn->prepare($update_sql);
-                $update_stmt->bind_param("ssssssisis", 
+                $update_stmt->bind_param("sssssssss", 
                     $slot, $disposition, $connectivity,
                     $finqy_id, $finqy_id, $finqy_id,
                     $attempt_number, $finqy_id, $record_id

@@ -7,7 +7,8 @@ require 'vendor/autoload.php';
 require_once 'db_config.php';
 
 // --- Auth ---------------------------------------------------------------
-if (session_status() == PHP_SESSION_NONE) { session_start(); }
+require_once __DIR__ . '/session_manager.php';
+SessionManager::start();
 if (!isAdmin() && !isSuperadmin()) {
     header("Location: admin_login.php");
     exit();

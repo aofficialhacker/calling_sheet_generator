@@ -1,5 +1,5 @@
 <?php
-session_start();
+require_once __DIR__ . '/session_manager.php';\nSessionManager::start();
 require_once 'db_config.php'; // Use centralized db config
 
 // Check if this is an AJAX request

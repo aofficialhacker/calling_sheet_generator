@@ -8,7 +8,8 @@ require_once 'db_config.php';
 
 // Start session for admin authentication
 if (session_status() == PHP_SESSION_NONE) {
-    session_start();
+    require_once __DIR__ . '/session_manager.php';
+    SessionManager::start();
 }
 
 // Check if user is superadmin for this migration

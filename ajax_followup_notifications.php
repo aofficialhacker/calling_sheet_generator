@@ -11,7 +11,8 @@ header('Access-Control-Allow-Headers: Content-Type');
 
 // Check if user is authenticated as team leader
 if (session_status() == PHP_SESSION_NONE) {
-    session_start();
+    require_once __DIR__ . '/session_manager.php';
+    SessionManager::start();
 }
 
 if (!isset($_SESSION['leader_id'])) {

@@ -1,5 +1,6 @@
 <?php
-session_start();
+require_once __DIR__ . '/session_manager.php';
+SessionManager::start();
 header('Content-Type: application/json');
 
 require_once 'db_config.php'; // Use centralized db config
@@ -30,7 +31,50 @@ if (move_uploaded_file($_FILES['markedSheet']['tmp_name'], $targetFile)) {
     // Log the upload
     error_log("Image uploaded successfully: " . $targetFile);
     
-    // Call Python script to process the image
+    // Step 1: Check for blur before processing
+    $blurCommand = "python blur_detector.py " . escapeshellarg($targetFile) . " 2>&1";
+    $blurOutput = shell_exec($blurCommand);
+    
+    // Parse blur detection result
+    $blurResult = json_decode(trim($blurOutput), true);
+    
+    if (!$blurResult) {
+        // Clean up and return error
+        @unlink($targetFile);
+        echo json_encode(['success' => false, 'message' => 'Error checking image quality. Please try again.']);
+        exit();
+    }
+    
+    if (isset($blurResult['error'])) {
+        // Clean up and return error
+        @unlink($targetFile);
+        echo json_encode(['success' => false, 'message' => 'Image quality check failed: ' . htmlspecialchars($blurResult['error'])]);
+        exit();
+    }
+    
+    // Check if image is too blurry
+    if ($blurResult['is_blurry'] === true) {
+        // Clean up the blurry image
+        @unlink($targetFile);
+        
+        $qualityMsg = "Image quality: " . strtoupper($blurResult['quality']) . " (Score: " . $blurResult['laplacian_variance'] . ")";
+        echo json_encode([
+            'success' => false, 
+            'message' => 'Image is too blurry to process accurately. Please retake the photo with better focus and lighting.',
+            'blur_details' => [
+                'quality' => $blurResult['quality'],
+                'score' => $blurResult['laplacian_variance'],
+                'recommendation' => $blurResult['recommendation']
+            ],
+            'quality_info' => $qualityMsg
+        ]);
+        exit();
+    }
+    
+    // Log blur detection success
+    error_log("Image quality check passed for $finqyId - Quality: " . $blurResult['quality'] . " (Score: " . $blurResult['laplacian_variance'] . ")");
+    
+    // Step 2: Process the image with Gemini AI (only if not blurry)
     $command = "python gemini_omr_parser.py " . escapeshellarg($targetFile) . " 2>&1";
     $output = shell_exec($command);
     
