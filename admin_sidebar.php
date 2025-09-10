@@ -6,6 +6,9 @@ if (!defined('DB_HOST')) {
 }
 $conn = getDBConnection();
 $pending_requests_count = 0;
+$overdue_followups_count = 0;
+
+// Get pending vendor requests count
 $stmt = $conn->prepare("SELECT COUNT(*) as count FROM vendor_requests WHERE admin_id = ? AND status = 'pending'");
 $stmt->bind_param("s", $_SESSION['admin_id']);
 $stmt->execute();
@@ -14,6 +17,26 @@ if ($result) {
     $pending_requests_count = $result->fetch_assoc()['count'];
 }
 $stmt->close();
+
+// Get overdue follow-ups count for this admin's team leaders
+$overdueQuery = "
+    SELECT COUNT(*) as count 
+    FROM follow_up_schedules fs 
+    JOIN team_leaders tl ON fs.leader_id = tl.leader_id 
+    WHERE tl.admin_id = ? AND fs.status = 'scheduled' AND fs.follow_up_datetime < NOW()
+";
+
+$stmt = $conn->prepare($overdueQuery);
+if ($stmt) {
+    $stmt->bind_param("s", $_SESSION['admin_id']);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    if ($result) {
+        $overdue_followups_count = $result->fetch_assoc()['count'];
+    }
+    $stmt->close();
+}
+
 $conn->close();
 
 // Determine active page
@@ -90,7 +113,22 @@ $active_page = basename($_SERVER['PHP_SELF']);
             </li>
             <li class="nav-item">
                 <a class="nav-link <?= $active_page == 'admin_team_leader_activity.php' ? 'active' : '' ?>" href="admin_team_leader_activity.php">
-                    <i class="bi bi-activity me-2"></i>TL Activity Monitor
+                    <i class="bi bi-activity me-2"></i>RM Activity Monitor
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link <?= $active_page == 'admin_tl_analytics.php' ? 'active' : '' ?>" href="admin_tl_analytics.php">
+                    <i class="bi bi-graph-down-arrow me-2"></i>RM Analytics
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link position-relative <?= $active_page == 'admin_tl_followup_history.php' ? 'active' : '' ?>" href="admin_tl_followup_history.php">
+                    <i class="bi bi-calendar-week me-2"></i>RM Follow-up History
+                    <?php if ($overdue_followups_count > 0): ?>
+                        <span class="badge bg-danger rounded-pill position-absolute top-0 start-100 translate-middle">
+                            <?= $overdue_followups_count ?>
+                        </span>
+                    <?php endif; ?>
                 </a>
             </li>
             <li class="nav-item mt-4">

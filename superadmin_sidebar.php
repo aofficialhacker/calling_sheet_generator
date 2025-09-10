@@ -67,6 +67,11 @@ $active_page = basename($_SERVER['PHP_SELF']);
                 </a>
             </li>
             <li class="nav-item">
+                <a class="nav-link <?= $active_page == 'superadmin_tl_analytics.php' ? 'active' : '' ?>" href="superadmin_tl_analytics.php">
+                    <i class="bi bi-graph-down-arrow me-2"></i>Relationship Manager Analytics
+                </a>
+            </li>
+            <li class="nav-item">
                 <a class="nav-link <?= $active_page == 'superadmin_download_limits.php' ? 'active' : '' ?>" href="superadmin_download_limits.php">
                     <i class="bi bi-download me-2"></i>Download Limits
                 </a>
