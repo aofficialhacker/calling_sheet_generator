@@ -110,6 +110,70 @@ try {
     error_log("Error fetching callers: " . $e->getMessage());
     // Continue without callers - not critical
 }
+
+// Get follow-up count for badge
+$followup_count = 0;
+try {
+    // Check if this is a superadmin
+    $adminCheck = $conn->prepare("SELECT designation FROM admin_users WHERE admin_id = ?");
+    $isSuperadmin = false;
+    if ($adminCheck) {
+        $adminCheck->bind_param("s", $adminId);
+        $adminCheck->execute();
+        $result = $adminCheck->get_result();
+        if ($result && $row = $result->fetch_assoc()) {
+            $isSuperadmin = ($row['designation'] === 'superadmin');
+        }
+        $adminCheck->close();
+    }
+    
+    if ($isSuperadmin) {
+        // For superadmin: count all follow-ups
+        $followupQuery = "
+            SELECT COUNT(*) as count 
+            FROM final_call_logs fcl
+            JOIN file_batches fb ON fcl.batch_id = fb.id
+            WHERE fcl.disposition = 'Follow Up'
+            AND fcl.follow_day IS NOT NULL
+            AND fcl.follow_day > 0
+            AND DATE_ADD(fcl.processed_at, INTERVAL fcl.follow_day DAY) <= DATE_ADD(CURDATE(), INTERVAL 1 DAY)
+        ";
+        $stmt = $conn->prepare($followupQuery);
+        if ($stmt) {
+            $stmt->execute();
+            $result = $stmt->get_result();
+            if ($result) {
+                $followup_count = $result->fetch_assoc()['count'];
+            }
+            $stmt->close();
+        }
+    } else {
+        // For regular admin: use caller mapping
+        $followupQuery = "
+            SELECT COUNT(*) as count 
+            FROM final_call_logs fcl
+            JOIN file_batches fb ON fcl.batch_id = fb.id
+            JOIN admin_caller_mapping acm ON fcl.finqy_id = acm.finqy_id
+            WHERE acm.admin_id = ? 
+            AND fcl.disposition = 'Follow Up'
+            AND fcl.follow_day IS NOT NULL
+            AND fcl.follow_day > 0
+            AND DATE_ADD(fcl.processed_at, INTERVAL fcl.follow_day DAY) <= DATE_ADD(CURDATE(), INTERVAL 1 DAY)
+        ";
+        $stmt = $conn->prepare($followupQuery);
+        if ($stmt) {
+            $stmt->bind_param("s", $adminId);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            if ($result) {
+                $followup_count = $result->fetch_assoc()['count'];
+            }
+            $stmt->close();
+        }
+    }
+} catch (Exception $e) {
+    error_log("Error fetching follow-up count: " . $e->getMessage());
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -138,6 +202,18 @@ try {
             <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
                 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
                     <h1 class="h2"><i class="bi bi-stack me-2"></i>View Batches</h1>
+                    <div class="btn-toolbar mb-2 mb-md-0">
+                        <div class="btn-group me-2">
+                            <a href="admin_batch_followups.php" class="btn btn-outline-primary position-relative">
+                                <i class="bi bi-calendar-check me-2"></i>View Follow-ups
+                                <?php if ($followup_count > 0): ?>
+                                    <span class="badge bg-warning rounded-pill position-absolute top-0 start-100 translate-middle">
+                                        <?= $followup_count ?>
+                                    </span>
+                                <?php endif; ?>
+                            </a>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Advanced Filter & Download Section -->
