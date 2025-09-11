@@ -134,7 +134,7 @@ if (move_uploaded_file($_FILES['markedSheet']['tmp_name'], $targetFile)) {
                 // The record_id is already in $parsed_data from the CSV
                 
                 // Validate the data - at least one mark should be present to be considered a valid entry
-                if (!empty($parsed_data['connectivity_code']) || !empty($parsed_data['disposition_code']) || !empty($parsed_data['slot'])) {
+                if (!empty($parsed_data['disposition_code']) || !empty($parsed_data['slot']) || !empty($parsed_data['follow_day']) || !empty($parsed_data['follow_slot'])) {
                     $results[] = $parsed_data;
                 }
             }

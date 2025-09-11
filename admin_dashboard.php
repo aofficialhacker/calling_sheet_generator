@@ -5,6 +5,30 @@ requireAdmin();
 $conn = getDBConnection();
 $adminId = $_SESSION['admin_id'];
 
+// Calculate follow-ups due today and overdue
+$followup_query = "
+    SELECT 
+        COUNT(CASE WHEN DATE_ADD(fcl.processed_at, INTERVAL fcl.follow_day DAY) = CURDATE() THEN 1 END) as followups_due_today,
+        COUNT(CASE WHEN DATE_ADD(fcl.processed_at, INTERVAL fcl.follow_day DAY) < CURDATE() THEN 1 END) as overdue_followups,
+        COUNT(CASE WHEN DATE_ADD(fcl.processed_at, INTERVAL fcl.follow_day DAY) BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 7 DAY) THEN 1 END) as upcoming_followups
+    FROM final_call_logs fcl 
+    JOIN file_batches fb ON fcl.batch_id = fb.id 
+    WHERE fb.admin_id = ? 
+    AND fcl.disposition IS NOT NULL 
+    AND fcl.follow_day IS NOT NULL 
+    AND fcl.follow_day > 0
+    AND fcl.processed_at IS NOT NULL
+";
+
+$followup_stmt = $conn->prepare($followup_query);
+$followup_stmt->bind_param("s", $adminId);
+$followup_stmt->execute();
+$followup_data = $followup_stmt->get_result()->fetch_assoc();
+$followups_due_today = $followup_data['followups_due_today'];
+$overdue_followups = $followup_data['overdue_followups'];
+$upcoming_followups = $followup_data['upcoming_followups'];
+$followup_stmt->close();
+
 // Get filter parameters
 $caller_filter = $_GET['caller'] ?? '';
 $from_date = $_GET['from_date'] ?? date('Y-m-d', strtotime('-30 days'));
@@ -39,10 +63,11 @@ $where_clause = "WHERE " . implode(' AND ', $where_conditions);
 $team_query = "
     SELECT 
         COUNT(*) as total_calls,
-        SUM(CASE WHEN connectivity IN ('Y', 'Yes') THEN 1 ELSE 0 END) as connected_calls,
+        SUM(CASE WHEN dc.category = 'connected' THEN 1 ELSE 0 END) as connected_calls,
         SUM(CASE WHEN disposition IN ('Interested', 'Call Back', 'More Info') THEN 1 ELSE 0 END) as conversions
     FROM final_call_logs fcl 
     JOIN file_batches fb ON fcl.batch_id = fb.id 
+    LEFT JOIN disposition_codes dc ON fcl.disposition = dc.description AND dc.is_active = 1
     $where_clause
 ";
 
@@ -110,14 +135,13 @@ foreach ($disposition_results as $row) {
 $connectivity_query = "
     SELECT 
         CASE 
-            WHEN connectivity IN ('Y', 'Yes') THEN 'Connected' 
-            WHEN connectivity IN ('N', 'No') THEN 'Not Connected'
-            WHEN connectivity IS NULL OR connectivity = '' THEN 'Not Connected'
+            WHEN dc.category = 'connected' THEN 'Connected' 
             ELSE 'Not Connected'
         END as connectivity_status,
         COUNT(*) as count
     FROM final_call_logs fcl 
     JOIN file_batches fb ON fcl.batch_id = fb.id 
+    LEFT JOIN disposition_codes dc ON fcl.disposition = dc.description AND dc.is_active = 1
     $where_clause
     GROUP BY connectivity_status 
     ORDER BY count DESC
@@ -139,7 +163,8 @@ $connected_disposition_query = "
         COUNT(*) as count
     FROM final_call_logs fcl 
     JOIN file_batches fb ON fcl.batch_id = fb.id 
-    $where_clause AND connectivity IN ('Y', 'Yes')
+    LEFT JOIN disposition_codes dc ON fcl.disposition = dc.description AND dc.is_active = 1
+    $where_clause AND dc.category = 'connected'
     GROUP BY COALESCE(disposition, 'No Disposition')
     HAVING count > 0
     ORDER BY count DESC
@@ -161,7 +186,8 @@ $not_connected_disposition_query = "
         COUNT(*) as count
     FROM final_call_logs fcl 
     JOIN file_batches fb ON fcl.batch_id = fb.id 
-    $where_clause AND (connectivity IN ('N', 'No') OR connectivity IS NULL OR connectivity = '')
+    LEFT JOIN disposition_codes dc ON fcl.disposition = dc.description AND dc.is_active = 1
+    $where_clause AND (dc.category != 'connected' OR dc.category IS NULL)
     GROUP BY COALESCE(disposition, 'No Disposition')
     HAVING count > 0
     ORDER BY count DESC
@@ -182,14 +208,15 @@ $telecaller_query = "
         c.caller_name,
         c.finqy_id,
         COUNT(fcl.id) as calls_made,
-        SUM(CASE WHEN fcl.connectivity IN ('Y', 'Yes') THEN 1 ELSE 0 END) as connected_calls,
+        SUM(CASE WHEN dc.category = 'connected' THEN 1 ELSE 0 END) as connected_calls,
         SUM(CASE WHEN fcl.disposition IN ('Interested', 'Call Back', 'More Info') THEN 1 ELSE 0 END) as conversions,
-        ROUND((SUM(CASE WHEN fcl.connectivity IN ('Y', 'Yes') THEN 1 ELSE 0 END) * 100.0 / COUNT(fcl.id)), 2) as connected_rate,
+        ROUND((SUM(CASE WHEN dc.category = 'connected' THEN 1 ELSE 0 END) * 100.0 / COUNT(fcl.id)), 2) as connected_rate,
         ROUND((SUM(CASE WHEN fcl.disposition IN ('Interested', 'Call Back', 'More Info') THEN 1 ELSE 0 END) * 100.0 / COUNT(fcl.id)), 2) as conversion_rate
     FROM callers c
     JOIN admin_caller_mapping acm ON c.finqy_id = acm.finqy_id
     JOIN final_call_logs fcl ON c.finqy_id = fcl.finqy_id
     JOIN file_batches fb ON fcl.batch_id = fb.id
+    LEFT JOIN disposition_codes dc ON fcl.disposition = dc.description AND dc.is_active = 1
     $where_clause
     GROUP BY c.finqy_id, c.caller_name
     ORDER BY conversion_rate DESC, conversions DESC
@@ -209,11 +236,12 @@ $slot_query = "
     SELECT 
         slot,
         COUNT(*) as total_calls,
-        SUM(CASE WHEN connectivity IN ('Y', 'Yes') THEN 1 ELSE 0 END) as connected_calls,
+        SUM(CASE WHEN dc.category = 'connected' THEN 1 ELSE 0 END) as connected_calls,
         SUM(CASE WHEN disposition IN ('Interested', 'Call Back', 'More Info') THEN 1 ELSE 0 END) as conversions,
         ROUND((SUM(CASE WHEN disposition IN ('Interested', 'Call Back', 'More Info') THEN 1 ELSE 0 END) * 100.0 / COUNT(*)), 2) as conversion_rate
     FROM final_call_logs fcl 
     JOIN file_batches fb ON fcl.batch_id = fb.id 
+    LEFT JOIN disposition_codes dc ON fcl.disposition = dc.description AND dc.is_active = 1
     $where_clause AND slot IS NOT NULL
     GROUP BY slot 
     ORDER BY conversion_rate DESC, slot
@@ -355,6 +383,93 @@ $conn->close();
                         </form>
                     </div>
                 </div>
+
+                <!-- Follow-up Notifications -->
+                <?php if ($followups_due_today > 0 || $overdue_followups > 0): ?>
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <!-- Today's Follow-ups -->
+                        <?php if ($followups_due_today > 0): ?>
+                        <div class="alert alert-info alert-dismissible fade show" role="alert">
+                            <div class="d-flex align-items-center">
+                                <i class="bi bi-calendar-check fs-4 me-3"></i>
+                                <div class="flex-grow-1">
+                                    <h5 class="alert-heading mb-1">Follow-ups Due Today!</h5>
+                                    <p class="mb-2">You have <strong><?= $followups_due_today ?></strong> follow-up<?= $followups_due_today > 1 ? 's' : '' ?> scheduled for today.</p>
+                                    <div class="d-flex gap-2">
+                                        <a href="admin_follow_up_manager.php?filter=today" class="btn btn-info btn-sm">
+                                            <i class="bi bi-list-check me-1"></i>View Today's Follow-ups
+                                        </a>
+                                        <a href="manage_batches.php" class="btn btn-outline-info btn-sm">
+                                            <i class="bi bi-download me-1"></i>Download Sheet
+                                        </a>
+                                    </div>
+                                </div>
+                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                            </div>
+                        </div>
+                        <?php endif; ?>
+                        
+                        <!-- Overdue Follow-ups -->
+                        <?php if ($overdue_followups > 0): ?>
+                        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                            <div class="d-flex align-items-center">
+                                <i class="bi bi-exclamation-triangle fs-4 me-3"></i>
+                                <div class="flex-grow-1">
+                                    <h5 class="alert-heading mb-1">Overdue Follow-ups!</h5>
+                                    <p class="mb-2">You have <strong><?= $overdue_followups ?></strong> overdue follow-up<?= $overdue_followups > 1 ? 's' : '' ?> that need immediate attention.</p>
+                                    <div class="d-flex gap-2">
+                                        <a href="admin_follow_up_manager.php?filter=overdue" class="btn btn-danger btn-sm">
+                                            <i class="bi bi-exclamation-circle me-1"></i>View Overdue Follow-ups
+                                        </a>
+                                        <button class="btn btn-warning btn-sm" onclick="redistributeOverdueFollowups()">
+                                            <i class="bi bi-arrow-repeat me-1"></i>Redistribute Overdue
+                                        </button>
+                                    </div>
+                                </div>
+                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                            </div>
+                        </div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                <?php endif; ?>
+                
+                <!-- Follow-up Summary Cards -->
+                <?php if ($upcoming_followups > 0 || $followups_due_today > 0 || $overdue_followups > 0): ?>
+                <div class="row mb-4">
+                    <div class="col-md-4">
+                        <div class="card border-danger">
+                            <div class="card-body text-center">
+                                <i class="bi bi-exclamation-triangle-fill text-danger fs-1 mb-2"></i>
+                                <div class="h3 text-danger"><?= $overdue_followups ?></div>
+                                <div>Overdue Follow-ups</div>
+                                <small class="text-muted">Need immediate action</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card border-warning">
+                            <div class="card-body text-center">
+                                <i class="bi bi-calendar-check-fill text-warning fs-1 mb-2"></i>
+                                <div class="h3 text-warning"><?= $followups_due_today ?></div>
+                                <div>Due Today</div>
+                                <small class="text-muted">Scheduled for today</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card border-info">
+                            <div class="card-body text-center">
+                                <i class="bi bi-calendar3 text-info fs-1 mb-2"></i>
+                                <div class="h3 text-info"><?= $upcoming_followups ?></div>
+                                <div>This Week</div>
+                                <small class="text-muted">Due in next 7 days</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <?php endif; ?>
 
                 <!-- Team Performance -->
                 <h3><i class="bi bi-people-fill me-2"></i>Team Performance</h3>
@@ -795,6 +910,43 @@ $conn->close();
             slotPerformanceCtx.textAlign = "center";
             slotPerformanceCtx.fillText("No slot performance data available", slotPerformanceCtx.canvas.width / 2, slotPerformanceCtx.canvas.height / 2);
         }
+    </script>
+
+    <script>
+        // Function to redistribute overdue follow-ups
+        function redistributeOverdueFollowups() {
+            if (!confirm('Are you sure you want to redistribute all overdue follow-ups to available telecallers?')) {
+                return;
+            }
+            
+            fetch('ajax_redistribute_followups.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    action: 'redistribute_overdue'
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Successfully redistributed ' + data.count + ' overdue follow-ups!');
+                    location.reload();
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while redistributing follow-ups.');
+            });
+        }
+        
+        // Auto-refresh follow-up notifications every 5 minutes
+        setInterval(function() {
+            location.reload();
+        }, 300000); // 5 minutes
     </script>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>

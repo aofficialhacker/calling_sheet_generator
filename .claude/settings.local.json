@@ -3,7 +3,9 @@
     "allow": [
       "Bash(php:*)",
       "Bash(python:*)",
-      "Bash(mysql:*)"
+      "Bash(mysql:*)",
+      "Bash(dir:*)",
+      "Read(//c/xampp/apache/logs/**)"
     ],
     "deny": [],
     "ask": [],

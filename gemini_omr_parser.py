@@ -50,26 +50,27 @@ def main():
     try:
         prompt = """
 You are a hyper-accurate Optical Mark and Character Recognition (OMR/OCR) system.
-Your task is to analyze the provided image of a calling sheet. The columns in the image are: Id, Slot, Connectivity, Disposition.
+Your task is to analyze the provided image of a calling sheet. The columns in the image are: Id, Slot, Disposition, Follow_Day, Follow_Slot.
 
 **Analysis Protocol:**
 For every single row you can find on the sheet, follow these steps precisely:
 1.  **Find the Anchor:** Use OCR to read the "Id" string. It is a long, unique alphanumeric value (e.g., LIV01B00100001). This is your anchor for the row. If you cannot read an Id, skip the row.
 2.  **Find Slot:** In the "Slot" column for that same row, find the single digit that has been written or circled by a human. If nothing is marked or written in the slot area for that row, you MUST output a blank value for it.
-3.  **Find Connectivity:** In the "Connectivity" column for that same row, find which of the two circles ('Y' or 'N') is marked. Output only the letter 'Y' or 'N'. If neither is marked, you MUST output a blank value.
-4.  **Find Disposition:** In the "Disposition" column for that same row, find the single marked circle and read the two-digit number written right next to it. If no circle is marked in the disposition area for that row, you MUST output a blank value for the disposition code.
+3.  **Find Disposition:** In the "Disposition" column for that same row, find the single marked circle and read the two-digit number written right next to it. If no circle is marked in the disposition area for that row, you MUST output a blank value for the disposition code.
+4.  **Find Follow_Day:** In the "Follow_Day" column for that same row, find the single digit (1-9) that has been written by a human for follow-up scheduling. If nothing is marked or written, you MUST output a blank value.
+5.  **Find Follow_Slot:** In the "Follow_Slot" column for that same row, find the single digit (1-8) that has been written by a human for follow-up time slot preference. If nothing is marked or written, you MUST output a blank value.
 
 **Output Rules (Strict):**
 1.  Your entire output MUST be in raw CSV format with a header row.
-2.  The header must be exactly: `record_id,slot,connectivity_code,disposition_code`.
+2.  The header must be exactly: `record_id,slot,disposition_code,follow_day,follow_slot`.
 3.  You must output one CSV line for every Id you can read, even if no other marks are present for that row.
-4.  Example for a row with an Id but no other marks: `LIV01B00100001,,,`
+4.  Example for a row with an Id but no other marks: `LIV01B00100001,,,,`
 5.  Example of a full, valid response:
     ```csv
-    record_id,slot,connectivity_code,disposition_code
-    LIV01B00100001,1,Y,11
-    LIV01B00100002,,,
-    LIV01B00100003,5,N,22
+    record_id,slot,disposition_code,follow_day,follow_slot
+    LIV01B00100001,1,11,3,2
+    LIV01B00100002,,,,
+    LIV01B00100003,5,22,1,4
     ```
 6.  Do not include any text, explanations, or markdown formatting outside of the single `csv` block.
 """

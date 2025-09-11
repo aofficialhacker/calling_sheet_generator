@@ -13,11 +13,13 @@ if ($isAjax) {
 
 $conn = getDBConnection();
 
-// Fetch disposition map from database for conversion
-$dispositions = $conn->query("SELECT code, description FROM disposition_codes WHERE is_active = 1");
+// Fetch disposition map from database for conversion including category for connectivity mapping
+$dispositions = $conn->query("SELECT code, description, category FROM disposition_codes WHERE is_active = 1");
 $DISPOSITION_MAP = [];
+$DISPOSITION_CATEGORY_MAP = [];
 while($row = $dispositions->fetch_assoc()) {
     $DISPOSITION_MAP[$row['code']] = $row['description'];
+    $DISPOSITION_CATEGORY_MAP[$row['code']] = $row['category'];
 }
 
 const CONNECTIVITY_MAP = [ 'Y' => 'Yes', 'N' => 'No' ];
@@ -37,7 +39,7 @@ $new_attempts = [];
 function preserveAllCurrentData($conn, $record_id, $finqy_id) {
     // Get ALL current data that exists
     $current_stmt = $conn->prepare("
-        SELECT id, slot, disposition, connectivity, finqy_id, processed_at, 
+        SELECT id, slot, disposition, follow_day, follow_slot, finqy_id, processed_at, 
                total_attempts, first_attempt_date, batch_id,
                original_caller_id, last_updated_by
         FROM final_call_logs 
@@ -60,9 +62,9 @@ function preserveAllCurrentData($conn, $record_id, $finqy_id) {
         $preserve_stmt = $conn->prepare("
             INSERT INTO call_history (
                 original_record_id, finqy_id, attempt_number, batch_id,
-                slot, disposition, connectivity, attempt_date,
+                slot, disposition, follow_day, follow_slot, attempt_date,
                 is_original_attempt, notes
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'AUTO-PRESERVED: All data backed up before update')
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'AUTO-PRESERVED: All data backed up before update')
         ");
         
         if (!$preserve_stmt) {
@@ -73,14 +75,15 @@ function preserveAllCurrentData($conn, $record_id, $finqy_id) {
         $is_original = ($current_data['total_attempts'] ?? 0) == 0;
         $previous_attempt = $attempt_number - 1; // This was the previous attempt
         
-        $preserve_stmt->bind_param("sississsi",
+        $preserve_stmt->bind_param("sississiis",
             $record_id,
             $current_data['finqy_id'],
             $previous_attempt,
             $current_data['batch_id'],
             $current_data['slot'],
             $current_data['disposition'], 
-            $current_data['connectivity'],
+            $current_data['follow_day'],
+            $current_data['follow_slot'],
             $current_data['processed_at'],
             $is_original
         );
@@ -113,10 +116,10 @@ function createNewAttemptEntry($conn, $record_id, $finqy_id, $attempt_number, $n
     $new_attempt_stmt = $conn->prepare("
         INSERT INTO call_history (
             original_record_id, finqy_id, attempt_number, batch_id,
-            slot, disposition, connectivity, attempt_date,
+            slot, disposition, follow_day, follow_slot, attempt_date,
             is_original_attempt
         )
-        SELECT ?, ?, ?, batch_id, ?, ?, ?, NOW(), ?
+        SELECT ?, ?, ?, batch_id, ?, ?, ?, ?, NOW(), ?
         FROM final_call_logs WHERE id = ?
     ");
     
@@ -127,9 +130,9 @@ function createNewAttemptEntry($conn, $record_id, $finqy_id, $attempt_number, $n
     
     $is_original = $attempt_number == 1;
     
-    $new_attempt_stmt->bind_param("sissssis",
+    $new_attempt_stmt->bind_param("sissssiis",
         $record_id, $finqy_id, $attempt_number,
-        $new_data['slot'], $new_data['disposition'], $new_data['connectivity'],
+        $new_data['slot'], $new_data['disposition'], $new_data['follow_day'], $new_data['follow_slot'],
         $is_original, $record_id
     );
     
@@ -150,14 +153,28 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['json_results']) && iss
                     continue;
                 }
 
-                $connectivity = !empty($row['connectivity_code']) ? (CONNECTIVITY_MAP[$row['connectivity_code']] ?? null) : null;
                 $disposition = !empty($row['disposition_code']) ? ($DISPOSITION_MAP[$row['disposition_code']] ?? null) : null;
                 $slot = !empty($row['slot']) ? (int)$row['slot'] : null;
+                $follow_day = !empty($row['follow_day']) ? (int)$row['follow_day'] : null;
+                $follow_slot = !empty($row['follow_slot']) ? (int)$row['follow_slot'] : null;
+                
+                // Auto-populate connectivity based on disposition category
+                $connectivity = null;
+                if (!empty($row['disposition_code']) && isset($DISPOSITION_CATEGORY_MAP[$row['disposition_code']])) {
+                    $category = $DISPOSITION_CATEGORY_MAP[$row['disposition_code']];
+                    $connectivity = ($category === 'connected') ? 'Yes' : 'No';
+                    error_log("Auto-populating connectivity: disposition_code={$row['disposition_code']}, category=$category, connectivity=$connectivity");
+                }
+                
+                // Debug follow-up data processing
+                error_log("Processing record $record_id: follow_day=" . ($follow_day ?? 'NULL') . ", follow_slot=" . ($follow_slot ?? 'NULL') . ", connectivity=" . ($connectivity ?? 'NULL'));
                 
                 $new_data = [
                     'slot' => $slot,
                     'disposition' => $disposition,
-                    'connectivity' => $connectivity
+                    'connectivity' => $connectivity,
+                    'follow_day' => $follow_day,
+                    'follow_slot' => $follow_slot
                 ];
                 
                 // STEP 1: PRESERVE ALL EXISTING DATA (COMPLETE PRESERVATION)
@@ -168,6 +185,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['json_results']) && iss
                 }
                 
                 $attempt_number = $preservation_result['attempt_number'];
+                error_log("Record $record_id: attempt_number = " . var_export($attempt_number, true) . " (type: " . gettype($attempt_number) . ")");
                 
                 // Track what type of operation this is
                 if ($preservation_result['preserved']) {
@@ -201,7 +219,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['json_results']) && iss
                 
                 // STEP 2: UPDATE CURRENT STATE with complete tracking
                 $update_sql = "UPDATE final_call_logs 
-                               SET slot = ?, disposition = ?, connectivity = ?, 
+                               SET slot = ?, disposition = ?, connectivity = ?, follow_day = ?, follow_slot = ?, 
                                    finqy_id = ?, processed_at = NOW(),
                                    last_updated_by = ?, last_attempt_date = NOW(),
                                    original_caller_id = COALESCE(original_caller_id, ?),
@@ -216,12 +234,35 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['json_results']) && iss
                                WHERE id = ?";
                 
                 $update_stmt = $conn->prepare($update_sql);
-                $update_stmt->bind_param("sssssssss", 
-                    $slot, $disposition, $connectivity,
+                if ($update_stmt === false) {
+                    error_log("Failed to prepare update statement: " . $conn->error);
+                    continue;
+                }
+                
+                // Ensure numeric values are properly typed (preserve NULL values)
+                $slot = $slot !== null ? (int)$slot : null;
+                $follow_day = $follow_day !== null ? (int)$follow_day : null;
+                $follow_slot = $follow_slot !== null ? (int)$follow_slot : null;
+                $attempt_number = (int)$attempt_number;
+                
+                $bind_result = $update_stmt->bind_param("issiisssiss", 
+                    $slot, $disposition, $connectivity, $follow_day, $follow_slot,
                     $finqy_id, $finqy_id, $finqy_id,
                     $attempt_number, $finqy_id, $record_id
                 );
-                $update_stmt->execute();
+                
+                if ($bind_result === false) {
+                    error_log("Failed to bind parameters: " . $update_stmt->error);
+                    $update_stmt->close();
+                    continue;
+                }
+                
+                $execute_result = $update_stmt->execute();
+                if ($execute_result === false) {
+                    error_log("Failed to execute update for record $record_id: " . $update_stmt->error);
+                } else {
+                    error_log("Successfully updated record $record_id with follow_day=$follow_day, follow_slot=$follow_slot");
+                }
                 
                 if ($update_stmt->affected_rows > 0) {
                     $saved_count++;
@@ -254,7 +295,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['json_results']) && iss
                     $message .= "\n• Redistributed leads: " . count($redistributions) . " (other callers' work preserved)";
                 }
                 
-                $message .= "\n\n✅ ALL PREVIOUS DATA PRESERVED: slot, disposition, connectivity, timestamps, caller info";
+                $message .= "\n\n✅ ALL PREVIOUS DATA PRESERVED: slot, disposition, follow-up details, timestamps, caller info";
                 $message .= "\n✅ COMPLETE AUDIT TRAIL: Every attempt tracked with full details";
                 $message .= "\n✅ ZERO DATA LOSS: No information ever lost or overwritten";
             }

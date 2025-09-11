@@ -15,7 +15,6 @@ if (!isAdmin() && !isSuperadmin()) {
     exit();
 }
 
-use TCPDF;
 
 // --- Runtime ------------------------------------------------------------
 set_time_limit(300);
@@ -37,6 +36,8 @@ $product_code = $_GET['product_code'] ?? '';
 $caller_id    = $_GET['caller_id'] ?? null;
 $excluded_batches = isset($_GET['excluded_batches']) ? explode(',', $_GET['excluded_batches']) : [];
 $redistribute = isset($_GET['redistribute']) && $_GET['redistribute'] === '1';
+$followup_from_date = $_GET['followup_from_date'] ?? null;
+$followup_to_date = $_GET['followup_to_date'] ?? null;
 
 if (!$batch_id && !isset($_GET['disposition'])) {
     die("Error: No valid batch ID or disposition provided.");
@@ -123,6 +124,7 @@ if (!empty($dispLegendN)) {
     $dispLegend .= 'DISPO (N): ' . implode(' | ', $dispLegendN);
 }
 $slotLegend = "SLOTS: 1 (10-11a) | 2 (11a-12p) | 3 (12-1p) | 4 (1-2p) | 5 (2-3p) | 6 (3-4p) | 7 (4-5p) | 8 (5-6p)";
+$followUpLegend = "FOLLOW-UP: Follow_Day (1-9 days) | Follow_Slot (1-8 time slots)";
 
 // --- Query Build --------------------------------------------------------
 $baseSql = "FROM final_call_logs fcl JOIN file_batches fb ON fcl.batch_id = fb.id ";
@@ -155,6 +157,34 @@ if ($dispositions && !empty($dispositions)) {
     $types .= str_repeat('s', count($dispositions));
 }
 
+// Add follow-up date range filter
+if ($followup_from_date && $followup_to_date) {
+    $whereClauses[] = "DATE_ADD(fcl.processed_at, INTERVAL COALESCE(fcl.follow_day, 1) DAY) BETWEEN ? AND ?";
+    $params[] = $followup_from_date;
+    $params[] = $followup_to_date;
+    $types .= 'ss';
+    debugLog("Follow-up date filtering: " . $followup_from_date . " to " . $followup_to_date);
+    
+    // Debug: Show what follow-up dates are being calculated
+    $debugQuery = "SELECT fcl.id, fcl.processed_at, fcl.follow_day, 
+                   DATE_ADD(fcl.processed_at, INTERVAL COALESCE(fcl.follow_day, 1) DAY) as calculated_followup_date 
+                   FROM final_call_logs fcl 
+                   JOIN file_batches fb ON fcl.batch_id = fb.id 
+                   WHERE fb.admin_id = ? AND fcl.follow_day IS NOT NULL 
+                   ORDER BY calculated_followup_date LIMIT 10";
+    $debugStmt = $conn->prepare($debugQuery);
+    if ($debugStmt) {
+        $debugStmt->bind_param("s", $adminId);
+        $debugStmt->execute();
+        $debugResult = $debugStmt->get_result();
+        debugLog("Sample follow-up date calculations:");
+        while ($row = $debugResult->fetch_assoc()) {
+            debugLog("ID: {$row['id']}, Processed: {$row['processed_at']}, Follow Days: {$row['follow_day']}, Calculated Date: {$row['calculated_followup_date']}");
+        }
+        $debugStmt->close();
+    }
+}
+
 // Exclude batches that have reached download limits
 if (!empty($excluded_batches)) {
     $excludePlaceholders = implode(',', array_fill(0, count($excluded_batches), '?'));
@@ -180,6 +210,11 @@ $fullBaseSql = $baseSql . $whereSql;
 // --- Count --------------------------------------------------------------
 $countSql = "SELECT COUNT(*) as total " . $fullBaseSql;
 $countStmt = $conn->prepare($countSql);
+if ($countStmt === false) {
+    debugLog("Count SQL Error: " . $conn->error);
+    debugLog("Count SQL: " . $countSql);
+    die("Database error: " . $conn->error);
+}
 if ($types) $countStmt->bind_param($types, ...$params);
 $countStmt->execute();
 $totalRecords = $countStmt->get_result()->fetch_assoc()['total'];
@@ -200,7 +235,7 @@ $columnPresence = $stmt->get_result()->fetch_assoc();
 $stmt->close();
 
 // --- Final headers ------------------------------------------------------
-$finalHeaders = ['id','slot','connectivity','disposition','mobile_no'];
+$finalHeaders = ['id','slot','disposition','follow_day','follow_slot','mobile_no'];
 if (!empty($columnPresence['has_title'])) $finalHeaders[] = 'title';
 if (!empty($columnPresence['has_name']))  $finalHeaders[] = 'name';
 
@@ -215,12 +250,12 @@ foreach ($optionalColumns as $column) {
 
 // --- PDF Class (center cutline + scissors using core font) -------------
 class CompletePDF extends TCPDF {
-    private $pdfTitle; private $slotLegend; private $dispLegend;
+    private $pdfTitle; private $slotLegend; private $dispLegend; private $followUpLegend;
     private $cutlineCenter = null;
 
-    public function __construct($title, $slotLegend, $dispLegend) {
+    public function __construct($title, $slotLegend, $dispLegend, $followUpLegend) {
         parent::__construct('L', 'mm', 'A4', true, 'UTF-8', false);
-        $this->pdfTitle = $title; $this->slotLegend = $slotLegend; $this->dispLegend = $dispLegend;
+        $this->pdfTitle = $title; $this->slotLegend = $slotLegend; $this->dispLegend = $dispLegend; $this->followUpLegend = $followUpLegend;
     }
     public function setCutlines($before, $after) { $this->cutlineCenter = ($before + $after) / 2.0; }
 
@@ -230,6 +265,7 @@ class CompletePDF extends TCPDF {
         $this->Cell(0, 6, $this->pdfTitle, 0, 1, 'C');
         $this->SetFont('helvetica', '', 7);
         $this->Cell(0, 4, $this->slotLegend, 0, 1, 'C');
+        $this->Cell(0, 3, $this->followUpLegend, 0, 1, 'C');
         $lines = strlen($this->dispLegend) > 140 ? explode(' || ', $this->dispLegend) : [$this->dispLegend];
         foreach ($lines as $line) { $this->Cell(0, 3, $line, 0, 1, 'C'); }
         $this->Ln(2);
@@ -285,7 +321,7 @@ public function drawPageCutlines() {
 $columnData  = [];
 $totalWidth  = 275; // target content width (mm)
 $widthMap = [
-    'id'=>22,'slot'=>12,'connectivity'=>18,'disposition'=>42,
+    'id'=>22,'slot'=>12,'disposition'=>42,'follow_day'=>18,'follow_slot'=>18,
     'mobile_no'=>25,'title'=>12,'name'=>45,'policy_number'=>25,
     'pan'=>20,'dob'=>20,'age'=>12,'expiry'=>20,
     'address'=>50,'city'=>25,'state'=>25,'country'=>18,
@@ -297,7 +333,7 @@ foreach ($finalHeaders as $h) {
     $columnData[] = ['header'=>$label,'width'=>$w,'key'=>$h];
 }
 
-$pdf = new CompletePDF($pdfTitle, $slotLegend, $dispLegend);
+$pdf = new CompletePDF($pdfTitle, $slotLegend, $dispLegend, $followUpLegend);
 $pdf->SetCreator('Calling Sheet Generator');
 $pdf->SetTitle($pdfTitle);
 
@@ -370,12 +406,18 @@ debugLog("Found $totalRecords total records");
 
 // --- Data streaming -----------------------------------------------------
 $finalHeadersWithAlias = 'fcl.`' . implode('`, fcl.`', $finalHeaders) . '`';
+debugLog("Final headers for query: " . $finalHeadersWithAlias);
 $chunkSize=500; $offset=0; $processed=0; $maxRows=min($totalRecords,10000); $memCheckEvery=100;
 
 while ($offset < $totalRecords && $processed < $maxRows) {
     $currentChunk = min($chunkSize, $totalRecords - $offset, $maxRows - $processed);
     $sql = "SELECT {$finalHeadersWithAlias} " . $fullBaseSql . " ORDER BY fcl.id LIMIT ?, ?";
     $stmt = $conn->prepare($sql);
+    if ($stmt === false) {
+        debugLog("Chunk SQL Error: " . $conn->error);
+        debugLog("Chunk SQL: " . $sql);
+        die("Database error: " . $conn->error);
+    }
     $chunkParams = array_merge($params, [$offset, $currentChunk]);
     $chunkTypes  = $types . 'ii';
     if ($chunkTypes) $stmt->bind_param($chunkTypes, ...$chunkParams);
@@ -397,7 +439,8 @@ while ($offset < $totalRecords && $processed < $maxRows) {
             $k = $col['key'];
             switch ($k) {
                 case 'disposition': $content = $dispGrid; $font=6; break;
-                case 'connectivity': $content = 'O Y / O N'; $font=7; break;
+                case 'follow_day': $content = ''; $font=7; break;
+                case 'follow_slot': $content = ''; $font=7; break;
                 case 'slot': 
                     // If redistribution mode is enabled, show blank slot for fresh calling
                     $content = $redistribute ? '' : ($row[$k] ?? ''); 
@@ -431,7 +474,8 @@ while ($offset < $totalRecords && $processed < $maxRows) {
                 case 'dob':
                 case 'expiry':
                 case 'slot': $align='C'; break;
-                case 'connectivity': $align='C'; break;
+                case 'follow_day': $align='C'; break;
+                case 'follow_slot': $align='C'; break;
                 case 'disposition': $font=6; break;
                 case 'address': $font=6; break;
             }

@@ -199,6 +199,24 @@ try {
                                     </select>
                                 </div>
                             </div>
+
+                            <!-- Follow-up Date Range Filter (Shows only when follow-up status selected) -->
+                            <div class="row g-3 mt-3" id="followup-date-filter" style="background-color: #fff3e0; padding: 15px; border-radius: 8px; border-left: 4px solid #ff9800; display: none;">
+                                <div class="col-12">
+                                    <h6 class="text-warning mb-3"><i class="bi bi-calendar-range me-2"></i>Follow-up Date Range</h6>
+                                    <p class="small text-muted mb-3">Download follow-ups that are due within the selected date range</p>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label"><strong>From Date</strong></label>
+                                    <input type="date" class="form-control" id="followup-from-date" value="<?= date('Y-m-d') ?>">
+                                    <small class="text-muted">Start date for follow-up range</small>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label"><strong>To Date</strong></label>
+                                    <input type="date" class="form-control" id="followup-to-date" value="<?= date('Y-m-d', strtotime('+7 days')) ?>">
+                                    <small class="text-muted">End date for follow-up range</small>
+                                </div>
+                            </div>
                             
                             <!-- Second Row - Product and Batch Selection (SIMPLIFIED) -->
                             <div class="row g-3 mt-3" style="background-color: #e3f2fd; padding: 15px; border-radius: 8px; border-left: 4px solid #2196f3;">
@@ -240,23 +258,15 @@ try {
                                 </div>
                             </div>
                             
-                            <!-- Redistribution Option -->
-                            <div class="row g-3 mt-3" style="background-color: #fff3cd; padding: 15px; border-radius: 8px; border-left: 4px solid #ffc107;">
+                            <!-- Auto-Redistribution Info -->
+                            <div class="row g-3 mt-3" style="background-color: #e8f5e8; padding: 15px; border-radius: 8px; border-left: 4px solid #28a745;">
                                 <div class="col-12">
-                                    <h6 class="text-warning mb-3"><i class="bi bi-arrow-repeat me-2"></i>Redistribution Options</h6>
-                                </div>
-                                <div class="col-12">
-                                    <div class="form-check form-switch">
-                                        <input class="form-check-input" type="checkbox" id="redistribute-mode" name="redistribute" value="1">
-                                        <label class="form-check-label" for="redistribute-mode">
-                                            <strong>Enable Redistribution Mode</strong>
-                                        </label>
-                                    </div>
+                                    <h6 class="text-success mb-3"><i class="bi bi-info-circle me-2"></i>Redistribution Mode</h6>
                                     <small class="text-muted">
-                                        <i class="bi bi-info-circle me-1"></i>
-                                        <strong>When enabled:</strong> Slot column will be blank for fresh calling. Use this when redistributing follow-up leads to other callers.
+                                        <i class="bi bi-check-circle-fill me-1 text-success"></i>
+                                        <strong>Automatic:</strong> When downloading follow-up dispositions, slot columns will be automatically cleared for fresh calling.
                                         <br>
-                                        <strong>When disabled:</strong> Shows existing slot values (regular download for reference).
+                                        <strong>Regular downloads:</strong> Will show existing slot values for reference.
                                     </small>
                                 </div>
                             </div>
@@ -356,6 +366,7 @@ document.addEventListener('DOMContentLoaded', function() {
             statusCheckboxes.forEach(checkbox => {
                 checkbox.checked = this.checked;
             });
+            checkForFollowUpSelection(); // Check for follow-up after select all
         });
         
         statusCheckboxes.forEach(checkbox => {
@@ -365,8 +376,37 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 selectAllStatus.checked = allChecked;
                 selectAllStatus.indeterminate = !allChecked && !noneChecked;
+                checkForFollowUpSelection(); // Check for follow-up after individual change
             });
         });
+    } else {
+        // For single status selection
+        document.getElementById('single-status-select').addEventListener('change', function() {
+            checkForFollowUpSelection();
+        });
+    }
+
+    // Function to check if follow-up dispositions are selected and show/hide date filter
+    function checkForFollowUpSelection() {
+        let selectedStatuses = [];
+        if (multiStatusEnabled) {
+            const checkedBoxes = document.querySelectorAll('.status-checkbox:checked');
+            selectedStatuses = Array.from(checkedBoxes).map(cb => cb.value);
+        } else {
+            const singleStatus = document.getElementById('single-status-select').value;
+            if (singleStatus) selectedStatuses = [singleStatus];
+        }
+        
+        const hasFollowUp = selectedStatuses.some(status => 
+            status.toLowerCase().includes('follow') || status.toLowerCase().includes('callback')
+        );
+        
+        const followupDateFilter = document.getElementById('followup-date-filter');
+        if (hasFollowUp) {
+            followupDateFilter.style.display = 'block';
+        } else {
+            followupDateFilter.style.display = 'none';
+        }
     }
     
     // Handle form submission
@@ -427,10 +467,22 @@ document.addEventListener('DOMContentLoaded', function() {
             params.append('caller_id', callerFilter);
         }
         
-        // Add redistribution mode parameter
-        const redistributeMode = document.getElementById('redistribute-mode').checked;
-        if (redistributeMode) {
+        // Auto-determine redistribution mode based on disposition type
+        // Follow-up dispositions automatically enable redistribution mode
+        const isFollowUpDisposition = selectedStatuses.some(status => 
+            status.toLowerCase().includes('follow') || status.toLowerCase().includes('callback')
+        );
+        if (isFollowUpDisposition) {
             params.append('redistribute', '1');
+            
+            // Add follow-up date range parameters
+            const fromDate = document.getElementById('followup-from-date').value;
+            const toDate = document.getElementById('followup-to-date').value;
+            
+            if (fromDate && toDate) {
+                params.append('followup_from_date', fromDate);
+                params.append('followup_to_date', toDate);
+            }
         }
         
         // Add download token and start download
@@ -451,8 +503,7 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('select-all-status').indeterminate = false;
         }
         
-        // Reset redistribution mode
-        document.getElementById('redistribute-mode').checked = false;
+        // Redistribution mode is now automatic - no manual reset needed
         
         // Show all batch options
         const batchOptions = batchSelect.querySelectorAll('option[data-product]');
