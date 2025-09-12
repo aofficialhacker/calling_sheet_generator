@@ -1,6 +1,0 @@
-now I need to do following additions and modifications :
-1. superadmin should be able to create Team leader dispositions and this disposition should be visible for Team leader when taking action on Interested leads, give separate panel to superadmin to create Team leader disposition.
-
-2.we will need to make another panel for Admin where he can see active Team leaders and there should be an code generated for each active team leader which will be used by Team leader for login i.e team leader needs to enter the code for login. and this code should get changed after 4 hours so take timestamp when the code was created and if 4 hours have passed then change the code, then Team leader will have to enter this updated code for login.
-
-3. Implement this functionality : Team leader should not be able to take any screenshot of any page or can capture video recording of pages.

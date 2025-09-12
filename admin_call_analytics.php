@@ -80,7 +80,7 @@ $overall_stats_sql = "
         SUM(CASE WHEN ch.attempt_number > 1 THEN 1 ELSE 0 END) as total_reattempts
     FROM call_history ch
     JOIN file_batches fb ON CAST(ch.batch_id AS CHAR) = CAST(fb.id AS CHAR)
-    $where_clause
+    $where_clause AND ch.finqy_id != '0' AND ch.finqy_id IS NOT NULL AND ch.finqy_id != ''
 ";
 
 $overall_stmt = $conn->prepare($overall_stats_sql);
@@ -112,7 +112,7 @@ $caller_performance_sql = "
     FROM call_history ch
     JOIN file_batches fb ON CAST(ch.batch_id AS CHAR) = CAST(fb.id AS CHAR)
     LEFT JOIN callers c ON CAST(ch.finqy_id AS CHAR) = CAST(c.finqy_id AS CHAR)
-    $where_clause
+    $where_clause AND ch.finqy_id != '0' AND ch.finqy_id IS NOT NULL AND ch.finqy_id != ''
     GROUP BY ch.finqy_id
     ORDER BY success_rate DESC, total_attempts DESC
 ";
@@ -171,7 +171,7 @@ $reattempt_analysis_sql = "
         ROUND((SUM(CASE WHEN ch.disposition IN ('Interested', 'Callback', 'Hot Lead') THEN 1 ELSE 0 END) / COUNT(*)) * 100, 1) as success_rate
     FROM call_history ch
     JOIN file_batches fb ON CAST(ch.batch_id AS CHAR) = CAST(fb.id AS CHAR)
-    $where_clause
+    $where_clause AND ch.finqy_id != '0' AND ch.finqy_id IS NOT NULL AND ch.finqy_id != ''
     GROUP BY ch.attempt_number
     ORDER BY ch.attempt_number
     LIMIT 5

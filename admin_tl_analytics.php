@@ -131,10 +131,20 @@ $individual_performance_sql = "
         tl.leader_name,
         c.caller_name,
         COUNT(tla.id) as total_actions,
-        COUNT(CASE WHEN tla.new_disposition = 'Interested - Proceed to Payment' THEN 1 END) as payment_conversions,
+        COUNT(CASE WHEN tla.new_disposition IN (
+            SELECT tld.disposition_name 
+            FROM team_leader_dispositions tld 
+            JOIN disposition_buckets db ON tld.bucket_id = db.id 
+            WHERE db.bucket_name = 'Interested' AND tld.is_active = 1
+        ) THEN 1 END) as payment_conversions,
         COUNT(CASE WHEN tla.new_disposition IN ('Interested - Proceed to Payment', 'Need More Information', 'Call Back Later') THEN 1 END) as positive_outcomes,
         COUNT(CASE WHEN tla.new_disposition = 'Not Interested' THEN 1 END) as not_interested,
-        ROUND((COUNT(CASE WHEN tla.new_disposition = 'Interested - Proceed to Payment' THEN 1 END) / NULLIF(COUNT(tla.id), 0)) * 100, 1) as conversion_rate,
+        ROUND((COUNT(CASE WHEN tla.new_disposition IN (
+            SELECT tld.disposition_name 
+            FROM team_leader_dispositions tld 
+            JOIN disposition_buckets db ON tld.bucket_id = db.id 
+            WHERE db.bucket_name = 'Interested' AND tld.is_active = 1
+        ) THEN 1 END) / NULLIF(COUNT(tla.id), 0)) * 100, 1) as conversion_rate,
         ROUND((COUNT(CASE WHEN tla.new_disposition IN ('Interested - Proceed to Payment', 'Need More Information', 'Call Back Later') THEN 1 END) / NULLIF(COUNT(tla.id), 0)) * 100, 1) as positive_rate,
         COUNT(DISTINCT DATE(tla.action_date)) as active_days,
         MAX(tla.action_date) as last_activity,
@@ -243,7 +253,12 @@ $benchmarks_sql = "
         SELECT 
             tl.leader_id,
             COUNT(tla.id) as total_actions,
-            COUNT(CASE WHEN tla.new_disposition = 'Interested - Proceed to Payment' THEN 1 END) as payment_conversions
+            COUNT(CASE WHEN tla.new_disposition IN (
+                SELECT tld.disposition_name 
+                FROM team_leader_dispositions tld 
+                JOIN disposition_buckets db ON tld.bucket_id = db.id 
+                WHERE db.bucket_name = 'Interested' AND tld.is_active = 1
+            ) THEN 1 END) as payment_conversions
         FROM team_leaders tl
         LEFT JOIN team_leader_actions tla ON tl.leader_id = tla.leader_id AND tla.action_date >= DATE_SUB(NOW(), INTERVAL ? DAY)
         WHERE tl.admin_id = ? AND tl.is_active = 1
