@@ -78,9 +78,21 @@ $unit_performance_sql = "
         COUNT(DISTINCT fb.id) as total_batches,
         COUNT(DISTINCT fb.product_code) as product_diversity,
         COUNT(fcl.id) as total_records,
-        SUM(CASE WHEN fcl.status != 'fresh' THEN 1 ELSE 0 END) as processed_records,
+        SUM(CASE WHEN fcl.status != 'fresh' OR fcl.processed_at IS NOT NULL OR (fcl.last_updated_by IS NOT NULL AND fcl.last_updated_by != '') THEN 1 ELSE 0 END) as processed_records,
+        SUM(CASE WHEN fcl.disposition LIKE '%nterested%' AND fcl.disposition NOT LIKE '%Not Interested%' THEN 1 ELSE 0 END) as interested_conversions,
+        SUM(CASE WHEN fcl.disposition IN (
+            'Interested', 'Not Interested', 'Call Back', 'Follow Up', 'Interested for Auto Loan', 
+            'Language Barrier', 'Drop', 'Interested For CC', 'Interested for HL', 'Interested For PL'
+        ) THEN 1 ELSE 0 END) as connected_calls,
         COALESCE(ROUND(
-            (SUM(CASE WHEN fcl.status != 'fresh' THEN 1 ELSE 0 END) / NULLIF(COUNT(fcl.id), 0)) * 100, 1), 0) as processing_rate,
+            (SUM(CASE WHEN fcl.status != 'fresh' OR fcl.processed_at IS NOT NULL OR (fcl.last_updated_by IS NOT NULL AND fcl.last_updated_by != '') THEN 1 ELSE 0 END) / NULLIF(COUNT(fcl.id), 0)) * 100, 1), 0) as processing_rate,
+        COALESCE(ROUND(
+            (SUM(CASE WHEN fcl.disposition IN (
+                'Interested', 'Not Interested', 'Call Back', 'Follow Up', 'Interested for Auto Loan', 
+                'Language Barrier', 'Drop', 'Interested For CC', 'Interested for HL', 'Interested For PL'
+            ) THEN 1 ELSE 0 END) / NULLIF(COUNT(fcl.id), 0)) * 100, 1), 0) as connected_percentage,
+        COALESCE(ROUND(
+            (SUM(CASE WHEN fcl.disposition LIKE '%nterested%' AND fcl.disposition NOT LIKE '%Not Interested%' THEN 1 ELSE 0 END) / NULLIF(COUNT(fcl.id), 0)) * 100, 1), 0) as conversion_percentage,
         COUNT(DISTINCT fcl.last_updated_by) as active_callers,
         COALESCE(AVG(DATEDIFF(NOW(), fb.upload_time)), 1) as avg_batch_age_days,
         MIN(fb.upload_time) as first_batch_date,
@@ -153,56 +165,36 @@ foreach ($unit_performance as $index => &$unit) {
     $unit['product_diversity'] = intval($unit['product_diversity'] ?? 0);
     $unit['total_records'] = intval($unit['total_records'] ?? 0);
     $unit['processed_records'] = intval($unit['processed_records'] ?? 0);
+    $unit['interested_conversions'] = intval($unit['interested_conversions'] ?? 0);
+    $unit['connected_calls'] = intval($unit['connected_calls'] ?? 0);
     $unit['processing_rate'] = floatval($unit['processing_rate'] ?? 0);
+    $unit['connected_percentage'] = floatval($unit['connected_percentage'] ?? 0);
+    $unit['conversion_percentage'] = floatval($unit['conversion_percentage'] ?? 0);
     $unit['active_callers'] = intval($unit['active_callers'] ?? 0);
     $unit['avg_batch_age_days'] = floatval($unit['avg_batch_age_days'] ?? 1);
     $unit['first_batch_date'] = $unit['first_batch_date'] ?? null;
     $unit['last_batch_date'] = $unit['last_batch_date'] ?? null;
     
-    // Initialize quality fields with defaults
-    $unit['quality_score'] = 0;
-    $unit['quality_grade'] = 'N/A';
-    $unit['quality_color'] = 'secondary';
-    
-    $quality_score = 0;
-    
-    // Processing Rate (30% weight) - handle division by zero
-    $processing_rate = floatval($unit['processing_rate']);
-    $processing_score = min(($processing_rate / 80) * 30, 30);
-    
-    // Product Diversity (20% weight)
-    $diversity = intval($unit['product_diversity']);
-    $diversity_score = min(($diversity / 5) * 20, 20);
-    
-    // Volume Score (25% weight)
-    $records = intval($unit['total_records']);
-    $volume_score = min(($records / 1000) * 25, 25);
-    
-    // Consistency Score based on batch frequency (25% weight)
-    $batches = intval($unit['total_batches']);
-    $age_days = floatval($unit['avg_batch_age_days']);
-    $batch_frequency = $batches / max(1, $age_days / 30);
-    $consistency_score = min($batch_frequency * 5, 25);
-    
-    $quality_score = round($processing_score + $diversity_score + $volume_score + $consistency_score, 1);
-    $unit['quality_score'] = min($quality_score, 100);
-    
-    // Quality Grade
-    if ($unit['quality_score'] >= 80) {
-        $unit['quality_grade'] = 'A+';
-        $unit['quality_color'] = 'success';
-    } elseif ($unit['quality_score'] >= 70) {
-        $unit['quality_grade'] = 'A';
-        $unit['quality_color'] = 'primary';
-    } elseif ($unit['quality_score'] >= 60) {
-        $unit['quality_grade'] = 'B';
-        $unit['quality_color'] = 'info';
-    } elseif ($unit['quality_score'] >= 50) {
-        $unit['quality_grade'] = 'C';
-        $unit['quality_color'] = 'warning';
+    // Set color coding based on connected percentage
+    if ($unit['connected_percentage'] >= 70) {
+        $unit['connected_color'] = 'success';
+    } elseif ($unit['connected_percentage'] >= 50) {
+        $unit['connected_color'] = 'primary';
+    } elseif ($unit['connected_percentage'] >= 30) {
+        $unit['connected_color'] = 'warning';
     } else {
-        $unit['quality_grade'] = 'D';
-        $unit['quality_color'] = 'danger';
+        $unit['connected_color'] = 'danger';
+    }
+    
+    // Set color coding based on conversion percentage  
+    if ($unit['conversion_percentage'] >= 50) {
+        $unit['conversion_color'] = 'success';
+    } elseif ($unit['conversion_percentage'] >= 30) {
+        $unit['conversion_color'] = 'primary';
+    } elseif ($unit['conversion_percentage'] >= 15) {
+        $unit['conversion_color'] = 'warning';
+    } else {
+        $unit['conversion_color'] = 'danger';
     }
 }
 
@@ -224,7 +216,7 @@ $monthly_trends_sql = "
         COUNT(DISTINCT fb.id) as batches_uploaded,
         COALESCE(COUNT(fcl.id), 0) as records_received,
         COALESCE(SUM(CASE WHEN fcl.status != 'fresh' THEN 1 ELSE 0 END), 0) as records_processed,
-        COALESCE(ROUND((SUM(CASE WHEN fcl.status != 'fresh' THEN 1 ELSE 0 END) / NULLIF(COUNT(fcl.id), 0)) * 100, 1), 0) as monthly_processing_rate
+        COALESCE(ROUND((SUM(CASE WHEN fcl.status != 'fresh' OR fcl.processed_at IS NOT NULL OR (fcl.last_updated_by IS NOT NULL AND fcl.last_updated_by != '') THEN 1 ELSE 0 END) / NULLIF(COUNT(fcl.id), 0)) * 100, 1), 0) as monthly_processing_rate
     FROM file_batches fb
     LEFT JOIN vendors v ON fb.vendor_id = v.vendor_id AND v.admin_id = fb.admin_id
     LEFT JOIN final_call_logs fcl ON fb.id = fcl.batch_id
@@ -264,8 +256,8 @@ if ($monthly_stmt === false) {
                 DATE_FORMAT(fb.upload_time, '%Y-%m') as month_year,
                 COUNT(DISTINCT fb.id) as batches_uploaded,
                 COALESCE(COUNT(fcl.id), 0) as records_received,
-                COALESCE(SUM(CASE WHEN fcl.status != 'fresh' THEN 1 ELSE 0 END), 0) as records_processed,
-                COALESCE(ROUND((SUM(CASE WHEN fcl.status != 'fresh' THEN 1 ELSE 0 END) / NULLIF(COUNT(fcl.id), 0)) * 100, 1), 0) as monthly_processing_rate
+                COALESCE(SUM(CASE WHEN fcl.status != 'fresh' OR fcl.processed_at IS NOT NULL OR (fcl.last_updated_by IS NOT NULL AND fcl.last_updated_by != '') THEN 1 ELSE 0 END), 0) as records_processed,
+                COALESCE(ROUND((SUM(CASE WHEN fcl.status != 'fresh' OR fcl.processed_at IS NOT NULL OR (fcl.last_updated_by IS NOT NULL AND fcl.last_updated_by != '') THEN 1 ELSE 0 END) / NULLIF(COUNT(fcl.id), 0)) * 100, 1), 0) as monthly_processing_rate
             FROM file_batches fb
             LEFT JOIN final_call_logs fcl ON fb.id = fcl.batch_id
             WHERE fb.admin_id = ?
@@ -296,10 +288,10 @@ $batch_quality_sql = "
         COUNT(fcl.id) as total_records,
         SUM(CASE WHEN fcl.mobile_no IS NOT NULL AND fcl.mobile_no != '' THEN 1 ELSE 0 END) as valid_mobile_records,
         SUM(CASE WHEN fcl.name IS NOT NULL AND fcl.name != '' THEN 1 ELSE 0 END) as named_records,
-        SUM(CASE WHEN fcl.status != 'fresh' THEN 1 ELSE 0 END) as processed_records,
+        SUM(CASE WHEN fcl.status != 'fresh' OR fcl.processed_at IS NOT NULL OR (fcl.last_updated_by IS NOT NULL AND fcl.last_updated_by != '') THEN 1 ELSE 0 END) as processed_records,
         ROUND((SUM(CASE WHEN fcl.mobile_no IS NOT NULL AND fcl.mobile_no != '' THEN 1 ELSE 0 END) / COUNT(fcl.id)) * 100, 1) as mobile_completeness,
         ROUND((SUM(CASE WHEN fcl.name IS NOT NULL AND fcl.name != '' THEN 1 ELSE 0 END) / COUNT(fcl.id)) * 100, 1) as name_completeness,
-        ROUND((SUM(CASE WHEN fcl.status != 'fresh' THEN 1 ELSE 0 END) / COUNT(fcl.id)) * 100, 1) as processing_completeness
+        ROUND((SUM(CASE WHEN fcl.status != 'fresh' OR fcl.processed_at IS NOT NULL OR (fcl.last_updated_by IS NOT NULL AND fcl.last_updated_by != '') THEN 1 ELSE 0 END) / COUNT(fcl.id)) * 100, 1) as processing_completeness
     FROM file_batches fb
     JOIN vendors v ON fb.vendor_id = v.vendor_id
     LEFT JOIN final_call_logs fcl ON fb.id = fcl.batch_id
@@ -315,13 +307,56 @@ $batch_stmt->execute();
 $batch_quality = $batch_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 $batch_stmt->close();
 
-// Calculate batch quality scores
+// Calculate batch quality scores based on actual telecalling performance
 foreach ($batch_quality as &$batch) {
-    $data_quality = ($batch['mobile_completeness'] + $batch['name_completeness']) / 2;
-    $processing_quality = $batch['processing_completeness'];
-    $volume_factor = min($batch['total_records'] / 100, 1) * 10;
+    // Get connected and conversion data for this batch
+    $batch_id = $batch['batch_id'];
+    $connected_count = 0;
+    $interested_count = 0;
     
-    $batch['batch_quality_score'] = round(($data_quality * 0.4) + ($processing_quality * 0.5) + ($volume_factor * 0.1), 1);
+    // Query to get connection and conversion data for this specific batch
+    $perf_sql = "
+        SELECT 
+            COUNT(CASE WHEN disposition IN (
+                'Interested', 'Not Interested', 'Call Back', 'Follow Up', 'Interested for Auto Loan', 
+                'Language Barrier', 'Drop', 'Interested For CC', 'Interested for HL', 'Interested For PL'
+            ) THEN 1 END) as connected_count,
+            COUNT(CASE WHEN disposition LIKE '%nterested%' AND disposition NOT LIKE '%Not Interested%' THEN 1 END) as interested_count
+        FROM final_call_logs 
+        WHERE batch_id = ?
+    ";
+    
+    $perf_stmt = $conn->prepare($perf_sql);
+    $perf_stmt->bind_param("s", $batch_id);
+    $perf_stmt->execute();
+    $perf_result = $perf_stmt->get_result()->fetch_assoc();
+    $perf_stmt->close();
+    
+    $connected_count = intval($perf_result['connected_count'] ?? 0);
+    $interested_count = intval($perf_result['interested_count'] ?? 0);
+    
+    // Calculate realistic performance metrics
+    $processing_rate = floatval($batch['processing_completeness']);
+    $connection_rate = $batch['total_records'] > 0 ? round(($connected_count / $batch['total_records']) * 100, 1) : 0;
+    $conversion_rate = $batch['total_records'] > 0 ? round(($interested_count / $batch['total_records']) * 100, 1) : 0;
+    
+    // Performance-focused scoring
+    // Processing Rate (30% weight) - How much of batch was attempted
+    $processing_score = min($processing_rate * 0.3, 30);
+    
+    // Connection Rate (40% weight) - How many calls connected successfully  
+    $connection_score = min($connection_rate * 4, 40); // 10% connection rate = full points
+    
+    // Conversion Rate (30% weight) - How many resulted in interested prospects
+    $conversion_score = min($conversion_rate * 6, 30); // 5% conversion rate = full points
+    
+    $batch['batch_quality_score'] = round($processing_score + $connection_score + $conversion_score, 1);
+    
+    // Store additional metrics for display
+    $batch['connection_rate'] = $connection_rate;
+    $batch['conversion_rate'] = $conversion_rate;
+    $batch['connected_count'] = $connected_count;
+    $batch['interested_count'] = $interested_count;
     
     if ($batch['batch_quality_score'] >= 80) {
         $batch['batch_quality_grade'] = 'Excellent';
@@ -348,8 +383,8 @@ $product_performance_sql = "
         fb.product_code,
         COUNT(DISTINCT fb.id) as total_batches,
         COUNT(fcl.id) as total_records,
-        SUM(CASE WHEN fcl.status != 'fresh' THEN 1 ELSE 0 END) as processed_records,
-        ROUND((SUM(CASE WHEN fcl.status != 'fresh' THEN 1 ELSE 0 END) / COUNT(fcl.id)) * 100, 1) as processing_rate,
+        SUM(CASE WHEN fcl.status != 'fresh' OR fcl.processed_at IS NOT NULL OR (fcl.last_updated_by IS NOT NULL AND fcl.last_updated_by != '') THEN 1 ELSE 0 END) as processed_records,
+        ROUND((SUM(CASE WHEN fcl.status != 'fresh' OR fcl.processed_at IS NOT NULL OR (fcl.last_updated_by IS NOT NULL AND fcl.last_updated_by != '') THEN 1 ELSE 0 END) / COUNT(fcl.id)) * 100, 1) as processing_rate,
         AVG(DATEDIFF(NOW(), fb.upload_time)) as avg_age_days
     FROM vendors v
     JOIN file_batches fb ON v.vendor_id = fb.vendor_id
@@ -509,12 +544,15 @@ $conn->close();
                             // Safety check: ensure all required keys exist with defaults
                             $unit['vendor_name'] = $unit['vendor_name'] ?? 'Unknown Unit';
                             $unit['vendor_id'] = $unit['vendor_id'] ?? 'Unknown';
-                            $unit['quality_color'] = $unit['quality_color'] ?? 'secondary';
-                            $unit['quality_grade'] = $unit['quality_grade'] ?? 'N/A';
-                            $unit['quality_score'] = $unit['quality_score'] ?? 0;
+                            $unit['connected_color'] = $unit['connected_color'] ?? 'secondary';
+                            $unit['conversion_color'] = $unit['conversion_color'] ?? 'secondary';
+                            $unit['connected_calls'] = $unit['connected_calls'] ?? 0;
                             $unit['total_batches'] = $unit['total_batches'] ?? 0;
                             $unit['total_records'] = $unit['total_records'] ?? 0;
                             $unit['processing_rate'] = $unit['processing_rate'] ?? 0;
+                            $unit['connected_percentage'] = $unit['connected_percentage'] ?? 0;
+                            $unit['conversion_percentage'] = $unit['conversion_percentage'] ?? 0;
+                            $unit['interested_conversions'] = $unit['interested_conversions'] ?? 0;
                             $unit['product_diversity'] = $unit['product_diversity'] ?? 0;
                             $unit['active_callers'] = $unit['active_callers'] ?? 0;
                             ?>
@@ -528,16 +566,24 @@ $conn->close();
                                             </h6>
                                             <small class="text-muted"><?= htmlspecialchars($unit['vendor_id']) ?></small>
                                         </div>
-                                        <span class="badge bg-<?= $unit['quality_color'] ?> quality-badge">
-                                            <?= $unit['quality_grade'] ?>
+                                        <span class="badge bg-secondary">
+                                            <?= $unit['connected_calls'] ?> Connected
                                         </span>
                                     </div>
                                     
-                                    <div class="text-center mb-3">
-                                        <div class="quality-score text-<?= $unit['quality_color'] ?>">
-                                            <?= $unit['quality_score'] ?>%
+                                    <div class="row text-center mb-3">
+                                        <div class="col-6">
+                                            <div class="quality-score text-<?= $unit['connected_color'] ?>">
+                                                <?= $unit['connected_percentage'] ?>%
+                                            </div>
+                                            <small class="text-muted">Connected</small>
                                         </div>
-                                        <small class="text-muted">Quality Score</small>
+                                        <div class="col-6">
+                                            <div class="quality-score text-<?= $unit['conversion_color'] ?>">
+                                                <?= $unit['conversion_percentage'] ?>%
+                                            </div>
+                                            <small class="text-muted">Conversion</small>
+                                        </div>
                                     </div>
                                     
                                     <div class="row text-center">
@@ -552,6 +598,19 @@ $conn->close();
                                         <div class="col-4">
                                             <strong class="text-info"><?= $unit['processing_rate'] ?>%</strong>
                                             <br><small class="text-muted">Processed</small>
+                                        </div>
+                                    </div>
+                                    
+                                    <hr class="my-2">
+                                    
+                                    <div class="row text-center">
+                                        <div class="col-6">
+                                            <strong class="text-warning"><?= $unit['interested_conversions'] ?></strong>
+                                            <br><small class="text-muted">Interested</small>
+                                        </div>
+                                        <div class="col-6">
+                                            <strong class="text-info"><?= $unit['connected_calls'] ?></strong>
+                                            <br><small class="text-muted">Connected</small>
                                         </div>
                                     </div>
                                     
@@ -677,7 +736,7 @@ $conn->close();
                                             <th>Unit</th>
                                             <th>Product</th>
                                             <th>Records</th>
-                                            <th>Data Quality</th>
+                                            <th>Performance</th>
                                             <th>Processing</th>
                                             <th>Overall Score</th>
                                             <th>Upload Date</th>
@@ -698,16 +757,16 @@ $conn->close();
                                             <td><?= number_format($batch['total_records']) ?></td>
                                             <td>
                                                 <div class="mb-1">
-                                                    <small>Mobile: <?= $batch['mobile_completeness'] ?>%</small>
+                                                    <small>Connected: <?= $batch['connection_rate'] ?>%</small>
                                                 </div>
                                                 <div class="progress" style="height: 4px;">
-                                                    <div class="progress-bar bg-info" style="width: <?= $batch['mobile_completeness'] ?>%"></div>
+                                                    <div class="progress-bar bg-info" style="width: <?= min($batch['connection_rate'] * 10, 100) ?>%"></div>
                                                 </div>
                                                 <div class="mt-1">
-                                                    <small>Name: <?= $batch['name_completeness'] ?>%</small>
+                                                    <small>Interested: <?= $batch['conversion_rate'] ?>%</small>
                                                 </div>
                                                 <div class="progress" style="height: 4px;">
-                                                    <div class="progress-bar bg-warning" style="width: <?= $batch['name_completeness'] ?>%"></div>
+                                                    <div class="progress-bar bg-warning" style="width: <?= min($batch['conversion_rate'] * 20, 100) ?>%"></div>
                                                 </div>
                                             </td>
                                             <td>
