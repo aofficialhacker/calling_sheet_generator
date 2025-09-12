@@ -14,13 +14,17 @@ $stmt = $conn->prepare("
     SELECT fcl.id, fcl.name, fcl.mobile_no, fcl.status, fcl.disposition, fcl.processed_at,
            p.product_name, b.original_filename,
            tla.id as action_id, tla.new_disposition, tla.action_date,
-           c.caller_name as original_caller_name
+           c.caller_name as original_caller_name,
+           tld.bucket_id as action_bucket_id,
+           db.bucket_name as action_bucket_name
     FROM final_call_logs fcl
     JOIN file_batches b ON fcl.batch_id = b.id
     JOIN products p ON b.product_code = p.product_code
     JOIN admin_caller_mapping acm ON fcl.finqy_id = acm.finqy_id
     JOIN callers c ON fcl.finqy_id = c.finqy_id
     LEFT JOIN team_leader_actions tla ON fcl.id = tla.lead_id AND tla.leader_id = ?
+    LEFT JOIN team_leader_dispositions tld ON tla.new_disposition = tld.disposition_name
+    LEFT JOIN disposition_buckets db ON tld.bucket_id = db.id
     WHERE acm.admin_id = ? AND fcl.disposition = 'Interested'
     ORDER BY 
         CASE WHEN tla.id IS NULL THEN 0 ELSE 1 END,
@@ -360,7 +364,7 @@ $conn->close();
                                                                     <i class="bi bi-telephone-fill me-1"></i>Take Action
                                                                 </button>
                                                             </div>
-                                                        <?php elseif ($lead['new_disposition'] === 'Interested - Proceed to Payment'): ?>
+                                                        <?php elseif ($lead['action_bucket_name'] === 'Interested'): ?>
                                                             <a href="payment_request.php?lead_id=<?= $lead['id'] ?>" class="btn btn-success action-btn">
                                                                 <i class="bi bi-credit-card-fill me-1"></i>Payment
                                                             </a>

@@ -11,12 +11,15 @@ $leaderName = $_SESSION['leader_name'];
 $actions = [];
 $stmt = $conn->prepare("
     SELECT tla.*, fcl.name, fcl.mobile_no,
-           p.product_name, c.caller_name as original_caller
+           p.product_name, c.caller_name as original_caller,
+           tld.bucket_id, db.bucket_name
     FROM team_leader_actions tla
     JOIN final_call_logs fcl ON tla.lead_id = fcl.id
     JOIN file_batches b ON fcl.batch_id = b.id
     JOIN products p ON b.product_code = p.product_code
     JOIN callers c ON fcl.finqy_id = c.finqy_id
+    LEFT JOIN team_leader_dispositions tld ON tla.new_disposition = tld.disposition_name
+    LEFT JOIN disposition_buckets db ON tld.bucket_id = db.id
     WHERE tla.leader_id = ?
     ORDER BY tla.action_date DESC
 ");
@@ -33,11 +36,13 @@ $stats = [];
 $stmt = $conn->prepare("
     SELECT 
         COUNT(*) as total_actions,
-        COUNT(DISTINCT DATE(action_date)) as active_days,
-        COUNT(CASE WHEN new_disposition = 'Interested - Proceed to Payment' THEN 1 END) as payment_ready,
-        COUNT(CASE WHEN DATE(action_date) = CURDATE() THEN 1 END) as today_actions
-    FROM team_leader_actions 
-    WHERE leader_id = ?
+        COUNT(DISTINCT DATE(tla.action_date)) as active_days,
+        COUNT(CASE WHEN db.bucket_name = 'Interested' THEN 1 END) as payment_ready,
+        COUNT(CASE WHEN DATE(tla.action_date) = CURDATE() THEN 1 END) as today_actions
+    FROM team_leader_actions tla
+    LEFT JOIN team_leader_dispositions tld ON tla.new_disposition = tld.disposition_name
+    LEFT JOIN disposition_buckets db ON tld.bucket_id = db.id
+    WHERE tla.leader_id = ?
 ");
 $stmt->bind_param("s", $leaderId);
 $stmt->execute();
@@ -250,7 +255,7 @@ $conn->close();
                                                             <i class="bi bi-person me-1"></i><?= htmlspecialchars(maskName($action['name'])) ?>
                                                         </h6>
                                                         <div class="mb-2">
-                                                            <span class="badge disposition-badge <?= $action['new_disposition'] == 'Interested - Proceed to Payment' ? 'bg-success' : 'bg-secondary' ?>">
+                                                            <span class="badge disposition-badge <?= $action['bucket_name'] == 'Interested' ? 'bg-success' : 'bg-secondary' ?>">
                                                                 <?= htmlspecialchars($action['new_disposition']) ?>
                                                             </span>
                                                         </div>
@@ -275,7 +280,7 @@ $conn->close();
                                                             <strong>Date:</strong><br>
                                                             <?= date('d-M-Y H:i', strtotime($action['action_date'])) ?><br>
                                                         </div>
-                                                        <?php if ($action['new_disposition'] == 'Interested - Proceed to Payment'): ?>
+                                                        <?php if ($action['bucket_name'] == 'Interested'): ?>
                                                             <div class="mt-2">
                                                                 <a href="payment_request.php?lead_id=<?= $action['lead_id'] ?>" 
                                                                    class="btn btn-sm btn-success">

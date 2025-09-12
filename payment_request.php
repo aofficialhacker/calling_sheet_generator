@@ -19,7 +19,9 @@ $stmt = $conn->prepare("
     JOIN file_batches b ON fcl.batch_id = b.id
     JOIN products p ON b.product_code = p.product_code
     JOIN callers c ON fcl.finqy_id = c.finqy_id
-    WHERE fcl.id = ? AND tla.leader_id = ? AND tla.new_disposition = 'Interested - Proceed to Payment'
+    JOIN team_leader_dispositions tld ON tla.new_disposition = tld.disposition_name
+    JOIN disposition_buckets db ON tld.bucket_id = db.id
+    WHERE fcl.id = ? AND tla.leader_id = ? AND db.bucket_name = 'Interested'
 ");
 $stmt->bind_param("ss", $leadId, $leaderId);
 $stmt->execute();

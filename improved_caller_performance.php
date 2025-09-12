@@ -24,29 +24,63 @@ if ($caller_stmt === false) {
     $caller_stmt->close();
 }
 
-// Get performance statistics
-$stats_sql = "
+// Get basic performance statistics from final_call_logs (current work)
+$basic_stats_sql = "
     SELECT 
-        COUNT(DISTINCT ch.original_record_id) as total_records_worked,
-        COUNT(ch.id) as total_attempts,
+        COUNT(*) as total_records_worked,
+        COUNT(*) as total_attempts,
+        SUM(CASE WHEN disposition IN ('Interested', 'Call Back', 'More Info', 'Hot Lead') THEN 1 ELSE 0 END) as positive_outcomes,
+        SUM(CASE WHEN disposition IN ('Not Interested', 'DND', 'Wrong Number', 'Invalid') THEN 1 ELSE 0 END) as negative_outcomes,
+        SUM(CASE WHEN disposition IN ('Follow Up', 'Busy', 'No Response', 'Callback') THEN 1 ELSE 0 END) as follow_up_required,
+        SUM(CASE WHEN connectivity IN ('Y', 'Yes') THEN 1 ELSE 0 END) as connected_calls
+    FROM final_call_logs 
+    WHERE finqy_id = ? 
+    AND ((disposition IS NOT NULL AND disposition != '') OR (connectivity IS NOT NULL AND connectivity != ''))
+";
+
+$basic_stats_stmt = $conn->prepare($basic_stats_sql);
+if ($basic_stats_stmt === false) {
+    $basic_stats = ['total_records_worked' => 0, 'total_attempts' => 0, 'positive_outcomes' => 0, 'negative_outcomes' => 0, 'follow_up_required' => 0, 'connected_calls' => 0];
+} else {
+    $basic_stats_stmt->bind_param("s", $finqy_id);
+    $basic_stats_stmt->execute();
+    $basic_stats = $basic_stats_stmt->get_result()->fetch_assoc();
+    $basic_stats_stmt->close();
+}
+
+// Get re-attempt performance statistics from call_history (follow-up attempts)
+$reattempt_stats_sql = "
+    SELECT 
+        COUNT(DISTINCT ch.original_record_id) as reattempt_records,
+        COUNT(ch.id) as reattempt_attempts,
         AVG(ch.attempt_number) as avg_attempts_per_record,
-        SUM(CASE WHEN ch.disposition IN ('Interested', 'Callback', 'Hot Lead') THEN 1 ELSE 0 END) as positive_outcomes,
-        SUM(CASE WHEN ch.disposition IN ('Not Interested', 'DND', 'Wrong Number') THEN 1 ELSE 0 END) as negative_outcomes,
-        SUM(CASE WHEN ch.disposition IN ('Follow Up', 'Busy', 'No Response') THEN 1 ELSE 0 END) as follow_up_required,
-        SUM(CASE WHEN ch.attempt_number > 1 THEN 1 ELSE 0 END) as reattempts_made
+        SUM(CASE WHEN ch.attempt_number > 1 THEN 1 ELSE 0 END) as reattempts_made,
+        SUM(CASE WHEN ch.disposition IN ('Interested', 'Callback', 'Hot Lead') THEN 1 ELSE 0 END) as reattempt_positive
     FROM call_history ch
     WHERE ch.finqy_id = ?
 ";
 
-$stats_stmt = $conn->prepare($stats_sql);
-if ($stats_stmt === false) {
-    $stats = ['total_records_worked' => 0, 'total_attempts' => 0, 'positive_outcomes' => 0, 'avg_attempts_per_record' => 0, 'reattempts_made' => 0, 'negative_outcomes' => 0, 'follow_up_required' => 0];
+$reattempt_stats_stmt = $conn->prepare($reattempt_stats_sql);
+if ($reattempt_stats_stmt === false) {
+    $reattempt_stats = ['reattempt_records' => 0, 'reattempt_attempts' => 0, 'avg_attempts_per_record' => 0, 'reattempts_made' => 0, 'reattempt_positive' => 0];
 } else {
-    $stats_stmt->bind_param("s", $finqy_id);
-    $stats_stmt->execute();
-    $stats = $stats_stmt->get_result()->fetch_assoc();
-    $stats_stmt->close();
+    $reattempt_stats_stmt->bind_param("s", $finqy_id);
+    $reattempt_stats_stmt->execute();
+    $reattempt_stats = $reattempt_stats_stmt->get_result()->fetch_assoc();
+    $reattempt_stats_stmt->close();
 }
+
+// Combine stats for display
+$stats = [
+    'total_records_worked' => $basic_stats['total_records_worked'] + $reattempt_stats['reattempt_records'],
+    'total_attempts' => $basic_stats['total_attempts'] + $reattempt_stats['reattempt_attempts'],
+    'positive_outcomes' => $basic_stats['positive_outcomes'] + $reattempt_stats['reattempt_positive'],
+    'negative_outcomes' => $basic_stats['negative_outcomes'],
+    'follow_up_required' => $basic_stats['follow_up_required'],
+    'reattempts_made' => $reattempt_stats['reattempts_made'],
+    'connected_calls' => $basic_stats['connected_calls'],
+    'avg_attempts_per_record' => $reattempt_stats['avg_attempts_per_record'] ?: 1
+];
 
 // Calculate conversion rates
 $total_attempts = $stats['total_attempts'] ?: 1;
@@ -78,28 +112,79 @@ if ($reattempt_stmt === false) {
     $reattempt_stmt->close();
 }
 
-// Get disposition breakdown
-$disposition_breakdown_sql = "
+// Get disposition breakdown from both tables
+$basic_disposition_sql = "
     SELECT 
-        ch.disposition,
+        disposition,
         COUNT(*) as count,
-        ROUND((COUNT(*) / (SELECT COUNT(*) FROM call_history WHERE finqy_id = ?)) * 100, 1) as percentage
-    FROM call_history ch
-    WHERE ch.finqy_id = ?
-    GROUP BY ch.disposition
-    ORDER BY count DESC
-    LIMIT 10
+        'final_call_logs' as source
+    FROM final_call_logs 
+    WHERE finqy_id = ? 
+    AND disposition IS NOT NULL AND disposition != ''
+    GROUP BY disposition
 ";
 
-$disposition_stmt = $conn->prepare($disposition_breakdown_sql);
-if ($disposition_stmt === false) {
-    $disposition_breakdown = [];
-} else {
-    $disposition_stmt->bind_param("ss", $finqy_id, $finqy_id);
-    $disposition_stmt->execute();
-    $disposition_breakdown = $disposition_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
-    $disposition_stmt->close();
+$reattempt_disposition_sql = "
+    SELECT 
+        disposition,
+        COUNT(*) as count,
+        'call_history' as source
+    FROM call_history 
+    WHERE finqy_id = ?
+    AND disposition IS NOT NULL AND disposition != ''
+    GROUP BY disposition
+";
+
+$disposition_breakdown = [];
+
+// Get basic dispositions
+$basic_disp_stmt = $conn->prepare($basic_disposition_sql);
+if ($basic_disp_stmt !== false) {
+    $basic_disp_stmt->bind_param("s", $finqy_id);
+    $basic_disp_stmt->execute();
+    $basic_dispositions = $basic_disp_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $basic_disp_stmt->close();
+    
+    foreach ($basic_dispositions as $disp) {
+        $disposition_breakdown[$disp['disposition']] = $disp['count'];
+    }
 }
+
+// Get reattempt dispositions and add to the breakdown
+$reattempt_disp_stmt = $conn->prepare($reattempt_disposition_sql);
+if ($reattempt_disp_stmt !== false) {
+    $reattempt_disp_stmt->bind_param("s", $finqy_id);
+    $reattempt_disp_stmt->execute();
+    $reattempt_dispositions = $reattempt_disp_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $reattempt_disp_stmt->close();
+    
+    foreach ($reattempt_dispositions as $disp) {
+        if (isset($disposition_breakdown[$disp['disposition']])) {
+            $disposition_breakdown[$disp['disposition']] += $disp['count'];
+        } else {
+            $disposition_breakdown[$disp['disposition']] = $disp['count'];
+        }
+    }
+}
+
+// Convert to array format with percentages
+$total_dispositions = array_sum($disposition_breakdown);
+$disposition_breakdown_formatted = [];
+foreach ($disposition_breakdown as $disposition => $count) {
+    $percentage = $total_dispositions > 0 ? round(($count / $total_dispositions) * 100, 1) : 0;
+    $disposition_breakdown_formatted[] = [
+        'disposition' => $disposition,
+        'count' => $count,
+        'percentage' => $percentage
+    ];
+}
+
+// Sort by count descending
+usort($disposition_breakdown_formatted, function($a, $b) {
+    return $b['count'] - $a['count'];
+});
+
+$disposition_breakdown = array_slice($disposition_breakdown_formatted, 0, 10);
 
 $conn->close();
 ?>
@@ -159,43 +244,63 @@ $conn->close();
 
         <!-- Key Performance Metrics -->
         <div class="row mb-4">
-            <div class="col-lg-3 col-md-6 mb-3">
+            <div class="col-xl-2 col-lg-4 col-md-6 mb-3">
                 <div class="card performance-card h-100">
                     <div class="card-body text-center">
                         <i class="bi bi-people metric-icon text-primary"></i>
-                        <h3 class="mt-2 mb-1"><?= number_format($stats['total_records_worked']) ?></h3>
+                        <h3 class="mt-2 mb-1"><?= number_format($basic_stats['total_records_worked']) ?></h3>
                         <p class="text-muted mb-0">Records Worked</p>
-                        <small class="text-primary">Total leads handled</small>
+                        <small class="text-primary">Current calls</small>
                     </div>
                 </div>
             </div>
-            <div class="col-lg-3 col-md-6 mb-3">
+            <div class="col-xl-2 col-lg-4 col-md-6 mb-3">
                 <div class="card performance-card h-100">
                     <div class="card-body text-center">
                         <i class="bi bi-telephone metric-icon text-success"></i>
                         <h3 class="mt-2 mb-1"><?= number_format($stats['total_attempts']) ?></h3>
                         <p class="text-muted mb-0">Total Attempts</p>
-                        <small class="text-success">Calls made</small>
+                        <small class="text-success">All calls made</small>
                     </div>
                 </div>
             </div>
-            <div class="col-lg-3 col-md-6 mb-3">
+            <div class="col-xl-2 col-lg-4 col-md-6 mb-3">
+                <div class="card performance-card h-100">
+                    <div class="card-body text-center">
+                        <i class="bi bi-check-circle metric-icon text-info"></i>
+                        <h3 class="mt-2 mb-1"><?= $basic_stats['total_attempts'] > 0 ? round(($stats['connected_calls'] / $basic_stats['total_attempts']) * 100, 1) : 0 ?>%</h3>
+                        <p class="text-muted mb-0">Connected</p>
+                        <small class="text-info"><?= $stats['connected_calls'] ?> calls</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-2 col-lg-4 col-md-6 mb-3">
                 <div class="card performance-card h-100">
                     <div class="card-body text-center">
                         <i class="bi bi-trophy metric-icon text-warning"></i>
                         <h3 class="mt-2 mb-1"><?= $positive_rate ?>%</h3>
                         <p class="text-muted mb-0">Success Rate</p>
-                        <small class="text-warning">Positive outcomes</small>
+                        <small class="text-warning"><?= $stats['positive_outcomes'] ?> positive</small>
                     </div>
                 </div>
             </div>
-            <div class="col-lg-3 col-md-6 mb-3">
+            <div class="col-xl-2 col-lg-4 col-md-6 mb-3">
                 <div class="card performance-card h-100">
                     <div class="card-body text-center">
-                        <i class="bi bi-arrow-repeat metric-icon text-info"></i>
-                        <h3 class="mt-2 mb-1"><?= number_format($stats['reattempts_made']) ?></h3>
-                        <p class="text-muted mb-0">Re-attempts</p>
-                        <small class="text-info">Follow-up calls</small>
+                        <i class="bi bi-arrow-repeat metric-icon text-secondary"></i>
+                        <h3 class="mt-2 mb-1"><?= number_format($reattempt_stats['reattempt_records']) ?></h3>
+                        <p class="text-muted mb-0">Follow-up Records</p>
+                        <small class="text-secondary">Re-attempted</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-2 col-lg-4 col-md-6 mb-3">
+                <div class="card performance-card h-100">
+                    <div class="card-body text-center">
+                        <i class="bi bi-clock-history metric-icon text-danger"></i>
+                        <h3 class="mt-2 mb-1"><?= number_format($stats['follow_up_required']) ?></h3>
+                        <p class="text-muted mb-0">Pending Follow-up</p>
+                        <small class="text-danger">Need callback</small>
                     </div>
                 </div>
             </div>

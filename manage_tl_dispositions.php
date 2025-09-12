@@ -25,7 +25,7 @@ if ($_POST) {
         } else {
             // Create new disposition
             $stmt = $conn->prepare("INSERT INTO team_leader_dispositions (disposition_name, description, bucket_id, created_by) VALUES (?, ?, ?, ?)");
-            $createdBy = 'SUPER'; // Use 'SUPER' for superadmin created dispositions
+            $createdBy = 'SA001'; // Use superadmin's admin_id
             $stmt->bind_param("ssis", $dispositionName, $description, $bucketId, $createdBy);
             
             if ($stmt->execute()) {

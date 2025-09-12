@@ -19,7 +19,7 @@ $selected_product = $_GET['product_code'] ?? '';
 $callers_sql = "
     SELECT c.finqy_id, c.caller_name 
     FROM callers c 
-    JOIN admin_caller_mapping acm ON c.finqy_id COLLATE utf8mb4_unicode_ci = acm.finqy_id COLLATE utf8mb4_unicode_ci 
+    JOIN admin_caller_mapping acm ON CAST(c.finqy_id AS CHAR) = CAST(acm.finqy_id AS CHAR) 
     WHERE acm.admin_id = ? AND c.is_active = 1 
     ORDER BY c.caller_name
 ";
@@ -79,7 +79,7 @@ $overall_stats_sql = "
         SUM(CASE WHEN ch.disposition IN ('Follow Up', 'Busy', 'No Response') THEN 1 ELSE 0 END) as follow_up_required,
         SUM(CASE WHEN ch.attempt_number > 1 THEN 1 ELSE 0 END) as total_reattempts
     FROM call_history ch
-    JOIN file_batches fb ON ch.batch_id COLLATE utf8mb4_unicode_ci = fb.id COLLATE utf8mb4_unicode_ci
+    JOIN file_batches fb ON CAST(ch.batch_id AS CHAR) = CAST(fb.id AS CHAR)
     $where_clause
 ";
 
@@ -106,13 +106,12 @@ $caller_performance_sql = "
         MAX(c.caller_name) as caller_name,
         COUNT(DISTINCT ch.original_record_id) as records_worked,
         COUNT(ch.id) as total_attempts,
-        AVG(ch.attempt_number) as avg_attempts,
         SUM(CASE WHEN ch.disposition IN ('Interested', 'Callback', 'Hot Lead') THEN 1 ELSE 0 END) as positive_outcomes,
         ROUND((SUM(CASE WHEN ch.disposition IN ('Interested', 'Callback', 'Hot Lead') THEN 1 ELSE 0 END) / COUNT(ch.id)) * 100, 1) as success_rate,
         SUM(CASE WHEN ch.attempt_number > 1 THEN 1 ELSE 0 END) as reattempts_made
     FROM call_history ch
-    JOIN file_batches fb ON ch.batch_id COLLATE utf8mb4_unicode_ci = fb.id COLLATE utf8mb4_unicode_ci
-    LEFT JOIN callers c ON ch.finqy_id COLLATE utf8mb4_unicode_ci = c.finqy_id COLLATE utf8mb4_unicode_ci
+    JOIN file_batches fb ON CAST(ch.batch_id AS CHAR) = CAST(fb.id AS CHAR)
+    LEFT JOIN callers c ON CAST(ch.finqy_id AS CHAR) = CAST(c.finqy_id AS CHAR)
     $where_clause
     GROUP BY ch.finqy_id
     ORDER BY success_rate DESC, total_attempts DESC
@@ -142,10 +141,10 @@ $redistribution_sql = "
         MAX(ch.attempt_date) as last_attempt,
         GROUP_CONCAT(DISTINCT ch.disposition ORDER BY ch.attempt_date) as disposition_history
     FROM final_call_logs fcl
-    JOIN file_batches fb ON fcl.batch_id COLLATE utf8mb4_unicode_ci = fb.id COLLATE utf8mb4_unicode_ci
-    LEFT JOIN callers oc ON fcl.original_caller_id COLLATE utf8mb4_unicode_ci = oc.finqy_id COLLATE utf8mb4_unicode_ci
-    LEFT JOIN callers lc ON fcl.last_updated_by COLLATE utf8mb4_unicode_ci = lc.finqy_id COLLATE utf8mb4_unicode_ci
-    LEFT JOIN call_history ch ON fcl.id COLLATE utf8mb4_unicode_ci = ch.original_record_id COLLATE utf8mb4_unicode_ci
+    JOIN file_batches fb ON CAST(fcl.batch_id AS CHAR) = CAST(fb.id AS CHAR)
+    LEFT JOIN callers oc ON CAST(fcl.original_caller_id AS CHAR) = CAST(oc.finqy_id AS CHAR)
+    LEFT JOIN callers lc ON CAST(fcl.last_updated_by AS CHAR) = CAST(lc.finqy_id AS CHAR)
+    LEFT JOIN call_history ch ON CAST(fcl.id AS CHAR) = CAST(ch.original_record_id AS CHAR)
     WHERE fb.admin_id = ? AND fcl.redistribution_count > 0
     GROUP BY fcl.id, fcl.mobile_no, fcl.name, fcl.redistribution_count
     ORDER BY fcl.redistribution_count DESC, last_attempt DESC
@@ -171,7 +170,7 @@ $reattempt_analysis_sql = "
         SUM(CASE WHEN ch.disposition IN ('Interested', 'Callback', 'Hot Lead') THEN 1 ELSE 0 END) as successful,
         ROUND((SUM(CASE WHEN ch.disposition IN ('Interested', 'Callback', 'Hot Lead') THEN 1 ELSE 0 END) / COUNT(*)) * 100, 1) as success_rate
     FROM call_history ch
-    JOIN file_batches fb ON ch.batch_id COLLATE utf8mb4_unicode_ci = fb.id COLLATE utf8mb4_unicode_ci
+    JOIN file_batches fb ON CAST(ch.batch_id AS CHAR) = CAST(fb.id AS CHAR)
     $where_clause
     GROUP BY ch.attempt_number
     ORDER BY ch.attempt_number
@@ -342,7 +341,6 @@ $conn->close();
                                                     <th>Records</th>
                                                     <th>Attempts</th>
                                                     <th>Success Rate</th>
-                                                    <th>Avg Attempts</th>
                                                     <th>Re-attempts</th>
                                                 </tr>
                                             </thead>
@@ -359,7 +357,6 @@ $conn->close();
                                                             <?= $perf['success_rate'] ?>%
                                                         </span>
                                                     </td>
-                                                    <td><?= number_format($perf['avg_attempts'], 1) ?></td>
                                                     <td><?= number_format($perf['reattempts_made']) ?></td>
                                                 </tr>
                                                 <?php endforeach; ?>
