@@ -150,7 +150,7 @@ function logViewAction($leaderId, $leadId, $action, $conn) {
         $sessionId = session_id();
         
         $stmt = $conn->prepare("
-            INSERT INTO team_leader_view_logs 
+            INSERT INTO lv_team_leader_view_logs 
             (leader_id, lead_id, action, ip_address, user_agent, session_id, timestamp) 
             VALUES (?, ?, ?, ?, ?, ?, NOW())
         ");
@@ -164,11 +164,11 @@ function logViewAction($leaderId, $leadId, $action, $conn) {
 }
 
 /**
- * Create team_leader_view_logs table if it doesn't exist
+ * Create lv_team_leader_view_logs table if it doesn't exist
  * @param mysqli $conn Database connection
  */
 function ensureViewLogsTable($conn) {
-    $sql = "CREATE TABLE IF NOT EXISTS team_leader_view_logs (
+    $sql = "CREATE TABLE IF NOT EXISTS lv_team_leader_view_logs (
         id INT AUTO_INCREMENT PRIMARY KEY,
         leader_id VARCHAR(50) NOT NULL,
         lead_id VARCHAR(50) NOT NULL,

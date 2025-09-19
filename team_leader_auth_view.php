@@ -53,7 +53,7 @@ try {
     // Check for rate limiting - max 10 view requests per 5 minutes
     $stmt = $conn->prepare("
         SELECT COUNT(*) as request_count 
-        FROM team_leader_view_logs 
+        FROM lv_team_leader_view_logs 
         WHERE leader_id = ? 
         AND action = 'view_request' 
         AND timestamp > DATE_SUB(NOW(), INTERVAL 5 MINUTE)
@@ -72,8 +72,8 @@ try {
     // Verify the lead exists and belongs to this team leader's admin
     $stmt = $conn->prepare("
         SELECT fcl.id, fcl.name, fcl.mobile_no 
-        FROM final_call_logs fcl
-        JOIN admin_caller_mapping acm ON fcl.finqy_id = acm.finqy_id
+        FROM lv_final_call_logs fcl
+        JOIN lv_admin_caller_mapping acm ON fcl.finqy_id = acm.finqy_id
         WHERE fcl.id = ? AND acm.admin_id = ? AND fcl.disposition = 'Interested'
     ");
     $stmt->bind_param("ss", $leadId, $_SESSION['admin_id']);

@@ -15,7 +15,7 @@ if ($_POST) {
         $bucketId = $_POST['bucket_id'] ? $_POST['bucket_id'] : null;
         
         // Check if disposition already exists
-        $stmt = $conn->prepare("SELECT id FROM team_leader_dispositions WHERE disposition_name = ?");
+        $stmt = $conn->prepare("SELECT id FROM lv_team_leader_dispositions WHERE disposition_name = ?");
         $stmt->bind_param("s", $dispositionName);
         $stmt->execute();
         
@@ -24,7 +24,7 @@ if ($_POST) {
             $messageType = "danger";
         } else {
             // Create new disposition
-            $stmt = $conn->prepare("INSERT INTO team_leader_dispositions (disposition_name, description, bucket_id, created_by) VALUES (?, ?, ?, ?)");
+            $stmt = $conn->prepare("INSERT INTO lv_team_leader_dispositions (disposition_name, description, bucket_id, created_by) VALUES (?, ?, ?, ?)");
             $createdBy = 'SA001'; // Use superadmin's admin_id
             $stmt->bind_param("ssis", $dispositionName, $description, $bucketId, $createdBy);
             
@@ -43,7 +43,7 @@ if ($_POST) {
         $dispositionId = $_POST['disposition_id'];
         $newStatus = $_POST['new_status'];
         
-        $stmt = $conn->prepare("UPDATE team_leader_dispositions SET is_active = ? WHERE id = ?");
+        $stmt = $conn->prepare("UPDATE lv_team_leader_dispositions SET is_active = ? WHERE id = ?");
         $stmt->bind_param("ii", $newStatus, $dispositionId);
         
         if ($stmt->execute()) {
@@ -64,9 +64,9 @@ $stmt = $conn->prepare("
     SELECT d.*, 
            db.bucket_name, 
            db.has_calendar_enabled,
-           (SELECT COUNT(*) FROM team_leader_actions WHERE new_disposition = d.disposition_name) as usage_count
-    FROM team_leader_dispositions d
-    LEFT JOIN disposition_buckets db ON d.bucket_id = db.id
+           (SELECT COUNT(*) FROM lv_team_leader_actions WHERE new_disposition = d.disposition_name) as usage_count
+    FROM lv_team_leader_dispositions d
+    LEFT JOIN lv_disposition_buckets db ON d.bucket_id = db.id
     ORDER BY d.created_at DESC
 ");
 $stmt->execute();
@@ -78,7 +78,7 @@ $stmt->close();
 
 // Get all active buckets for dropdown
 $buckets = [];
-$stmt = $conn->prepare("SELECT id, bucket_name, has_calendar_enabled FROM disposition_buckets WHERE is_active = 1 ORDER BY bucket_name");
+$stmt = $conn->prepare("SELECT id, bucket_name, has_calendar_enabled FROM lv_disposition_buckets WHERE is_active = 1 ORDER BY bucket_name");
 $stmt->execute();
 $result = $stmt->get_result();
 while ($row = $result->fetch_assoc()) {
@@ -92,8 +92,8 @@ $stmt = $conn->prepare("
     SELECT 
         COUNT(*) as total_dispositions,
         SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END) as active_dispositions,
-        (SELECT COUNT(*) FROM team_leader_actions) as total_actions_taken
-    FROM team_leader_dispositions
+        (SELECT COUNT(*) FROM lv_team_leader_actions) as total_actions_taken
+    FROM lv_team_leader_dispositions
 ");
 $stmt->execute();
 $stats = $stmt->get_result()->fetch_assoc();

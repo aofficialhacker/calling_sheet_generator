@@ -11,8 +11,8 @@ $followup_query = "
         COUNT(CASE WHEN DATE_ADD(fcl.processed_at, INTERVAL fcl.follow_day DAY) = CURDATE() THEN 1 END) as followups_due_today,
         COUNT(CASE WHEN DATE_ADD(fcl.processed_at, INTERVAL fcl.follow_day DAY) < CURDATE() THEN 1 END) as overdue_followups,
         COUNT(CASE WHEN DATE_ADD(fcl.processed_at, INTERVAL fcl.follow_day DAY) BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 7 DAY) THEN 1 END) as upcoming_followups
-    FROM final_call_logs fcl 
-    JOIN file_batches fb ON fcl.batch_id = fb.id 
+    FROM lv_final_call_logs fcl 
+    JOIN lv_file_batches fb ON fcl.batch_id = fb.id 
     WHERE fb.admin_id = ? 
     AND fcl.disposition IS NOT NULL 
     AND fcl.follow_day IS NOT NULL 
@@ -65,9 +65,9 @@ $team_query = "
         COUNT(*) as total_calls,
         SUM(CASE WHEN dc.category = 'connected' THEN 1 ELSE 0 END) as connected_calls,
         SUM(CASE WHEN disposition IN ('Interested', 'Call Back', 'More Info') THEN 1 ELSE 0 END) as conversions
-    FROM final_call_logs fcl 
-    JOIN file_batches fb ON fcl.batch_id = fb.id 
-    LEFT JOIN disposition_codes dc ON fcl.disposition = dc.description AND dc.is_active = 1
+    FROM lv_final_call_logs fcl 
+    JOIN lv_file_batches fb ON fcl.batch_id = fb.id 
+    LEFT JOIN lv_disposition_codes dc ON fcl.disposition = dc.description AND dc.is_active = 1
     $where_clause
 ";
 
@@ -85,8 +85,8 @@ $conversion_rate = $team_metrics['total_calls'] > 0 ?
 // First get total count for percentage calculation
 $total_count_query = "
     SELECT COUNT(*) as total_count
-    FROM final_call_logs fcl 
-    JOIN file_batches fb ON fcl.batch_id = fb.id 
+    FROM lv_final_call_logs fcl 
+    JOIN lv_file_batches fb ON fcl.batch_id = fb.id 
     $where_clause AND fcl.processed_at IS NOT NULL
 ";
 
@@ -104,8 +104,8 @@ $disposition_query = "
     SELECT 
         disposition, 
         COUNT(*) as count
-    FROM final_call_logs fcl 
-    JOIN file_batches fb ON fcl.batch_id = fb.id 
+    FROM lv_final_call_logs fcl 
+    JOIN lv_file_batches fb ON fcl.batch_id = fb.id 
     $where_clause AND fcl.processed_at IS NOT NULL AND disposition IS NOT NULL AND disposition != ''
     GROUP BY disposition 
     ORDER BY count DESC
@@ -139,9 +139,9 @@ $connectivity_query = "
             ELSE 'Not Connected'
         END as connectivity_status,
         COUNT(*) as count
-    FROM final_call_logs fcl 
-    JOIN file_batches fb ON fcl.batch_id = fb.id 
-    LEFT JOIN disposition_codes dc ON fcl.disposition = dc.description AND dc.is_active = 1
+    FROM lv_final_call_logs fcl 
+    JOIN lv_file_batches fb ON fcl.batch_id = fb.id 
+    LEFT JOIN lv_disposition_codes dc ON fcl.disposition = dc.description AND dc.is_active = 1
     $where_clause
     GROUP BY connectivity_status 
     ORDER BY count DESC
@@ -161,9 +161,9 @@ $connected_disposition_query = "
     SELECT 
         COALESCE(disposition, 'No Disposition') as disposition, 
         COUNT(*) as count
-    FROM final_call_logs fcl 
-    JOIN file_batches fb ON fcl.batch_id = fb.id 
-    LEFT JOIN disposition_codes dc ON fcl.disposition = dc.description AND dc.is_active = 1
+    FROM lv_final_call_logs fcl 
+    JOIN lv_file_batches fb ON fcl.batch_id = fb.id 
+    LEFT JOIN lv_disposition_codes dc ON fcl.disposition = dc.description AND dc.is_active = 1
     $where_clause AND dc.category = 'connected'
     GROUP BY COALESCE(disposition, 'No Disposition')
     HAVING count > 0
@@ -184,9 +184,9 @@ $not_connected_disposition_query = "
     SELECT 
         COALESCE(disposition, 'No Disposition') as disposition, 
         COUNT(*) as count
-    FROM final_call_logs fcl 
-    JOIN file_batches fb ON fcl.batch_id = fb.id 
-    LEFT JOIN disposition_codes dc ON fcl.disposition = dc.description AND dc.is_active = 1
+    FROM lv_final_call_logs fcl 
+    JOIN lv_file_batches fb ON fcl.batch_id = fb.id 
+    LEFT JOIN lv_disposition_codes dc ON fcl.disposition = dc.description AND dc.is_active = 1
     $where_clause AND (dc.category != 'connected' OR dc.category IS NULL)
     GROUP BY COALESCE(disposition, 'No Disposition')
     HAVING count > 0
@@ -212,11 +212,11 @@ $telecaller_query = "
         SUM(CASE WHEN fcl.disposition IN ('Interested', 'Call Back', 'More Info') THEN 1 ELSE 0 END) as conversions,
         ROUND((SUM(CASE WHEN dc.category = 'connected' THEN 1 ELSE 0 END) * 100.0 / COUNT(fcl.id)), 2) as connected_rate,
         ROUND((SUM(CASE WHEN fcl.disposition IN ('Interested', 'Call Back', 'More Info') THEN 1 ELSE 0 END) * 100.0 / COUNT(fcl.id)), 2) as conversion_rate
-    FROM callers c
-    JOIN admin_caller_mapping acm ON c.finqy_id = acm.finqy_id
-    JOIN final_call_logs fcl ON c.finqy_id = fcl.finqy_id
-    JOIN file_batches fb ON fcl.batch_id = fb.id
-    LEFT JOIN disposition_codes dc ON fcl.disposition = dc.description AND dc.is_active = 1
+    FROM lv_callers c
+    JOIN lv_admin_caller_mapping acm ON c.finqy_id = acm.finqy_id
+    JOIN lv_final_call_logs fcl ON c.finqy_id = fcl.finqy_id
+    JOIN lv_file_batches fb ON fcl.batch_id = fb.id
+    LEFT JOIN lv_disposition_codes dc ON fcl.disposition = dc.description AND dc.is_active = 1
     $where_clause
     GROUP BY c.finqy_id, c.caller_name
     ORDER BY conversion_rate DESC, conversions DESC
@@ -239,9 +239,9 @@ $slot_query = "
         SUM(CASE WHEN dc.category = 'connected' THEN 1 ELSE 0 END) as connected_calls,
         SUM(CASE WHEN disposition IN ('Interested', 'Call Back', 'More Info') THEN 1 ELSE 0 END) as conversions,
         ROUND((SUM(CASE WHEN disposition IN ('Interested', 'Call Back', 'More Info') THEN 1 ELSE 0 END) * 100.0 / COUNT(*)), 2) as conversion_rate
-    FROM final_call_logs fcl 
-    JOIN file_batches fb ON fcl.batch_id = fb.id 
-    LEFT JOIN disposition_codes dc ON fcl.disposition = dc.description AND dc.is_active = 1
+    FROM lv_final_call_logs fcl 
+    JOIN lv_file_batches fb ON fcl.batch_id = fb.id 
+    LEFT JOIN lv_disposition_codes dc ON fcl.disposition = dc.description AND dc.is_active = 1
     $where_clause AND slot IS NOT NULL
     GROUP BY slot 
     ORDER BY conversion_rate DESC, slot
@@ -259,9 +259,9 @@ $unit_query = "
         COUNT(fcl.id) as leads_provided,
         SUM(CASE WHEN fcl.disposition IN ('Interested', 'Call Back', 'More Info') THEN 1 ELSE 0 END) as conversions,
         ROUND((SUM(CASE WHEN fcl.disposition IN ('Interested', 'Call Back', 'More Info') THEN 1 ELSE 0 END) * 100.0 / COUNT(fcl.id)), 2) as conversion_rate
-    FROM vendors v
-    JOIN file_batches fb ON v.vendor_id = fb.vendor_id
-    JOIN final_call_logs fcl ON fb.id = fcl.batch_id
+    FROM lv_vendors v
+    JOIN lv_file_batches fb ON v.vendor_id = fb.vendor_id
+    JOIN lv_final_call_logs fcl ON fb.id = fcl.batch_id
     WHERE fb.admin_id = ? AND fcl.processed_at IS NOT NULL
     GROUP BY v.vendor_id, v.vendor_name
     HAVING leads_provided > 0
@@ -278,8 +278,8 @@ $unit_insights = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 // Get filter options - only callers assigned to this admin
 $callers_query = "
     SELECT c.finqy_id, c.caller_name 
-    FROM callers c
-    JOIN admin_caller_mapping acm ON c.finqy_id = acm.finqy_id
+    FROM lv_callers c
+    JOIN lv_admin_caller_mapping acm ON c.finqy_id = acm.finqy_id
     WHERE acm.admin_id = ? AND c.is_active = 1
     ORDER BY c.caller_name
 ";

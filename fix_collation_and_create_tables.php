@@ -33,29 +33,29 @@ try {
     $conn->query("SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci");
     echo "<div class='success'>✓ Session collation set to utf8mb4_unicode_ci</div>";
     
-    // Step 3: Check if call_history table exists
+    // Step 3: Check if lv_call_history table exists
     echo "<h3>Step 3: Checking Tables</h3>";
-    $table_check = $conn->query("SHOW TABLES LIKE 'call_history'");
+    $table_check = $conn->query("SHOW TABLES LIKE 'lv_call_history'");
     
     if ($table_check && $table_check->num_rows > 0) {
-        echo "<div class='info'>call_history table already exists</div>";
+        echo "<div class='info'>lv_call_history table already exists</div>";
         
         // Check and fix table collation
-        $table_info = $conn->query("SELECT TABLE_COLLATION FROM information_schema.TABLES WHERE TABLE_SCHEMA = 'caller_sheet3' AND TABLE_NAME = 'call_history'")->fetch_row();
-        echo "<div class='info'>call_history table collation: {$table_info[0]}</div>";
+        $table_info = $conn->query("SELECT TABLE_COLLATION FROM information_schema.TABLES WHERE TABLE_SCHEMA = 'caller_sheet3' AND TABLE_NAME = 'lv_call_history'")->fetch_row();
+        echo "<div class='info'>lv_call_history table collation: {$table_info[0]}</div>";
         
         if ($table_info[0] !== 'utf8mb4_unicode_ci') {
             echo "<div class='info'>Fixing table collation...</div>";
-            $conn->query("ALTER TABLE call_history CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
-            echo "<div class='success'>✓ call_history table collation fixed</div>";
+            $conn->query("ALTER TABLE lv_call_history CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+            echo "<div class='success'>✓ lv_call_history table collation fixed</div>";
         }
         
     } else {
-        echo "<div class='info'>Creating call_history table...</div>";
+        echo "<div class='info'>Creating lv_call_history table...</div>";
         
-        // Create call_history table with proper collation
+        // Create lv_call_history table with proper collation
         $create_table_sql = "
-        CREATE TABLE call_history (
+        CREATE TABLE lv_call_history (
             id INT AUTO_INCREMENT PRIMARY KEY,
             original_record_id VARCHAR(50) NOT NULL COLLATE utf8mb4_unicode_ci,
             finqy_id VARCHAR(50) NOT NULL COLLATE utf8mb4_unicode_ci,
@@ -75,7 +75,7 @@ try {
         ";
         
         if ($conn->query($create_table_sql)) {
-            echo "<div class='success'>✓ call_history table created successfully</div>";
+            echo "<div class='success'>✓ lv_call_history table created successfully</div>";
         } else {
             echo "<div class='error'>❌ Error creating table: " . $conn->error . "</div>";
         }
@@ -84,7 +84,7 @@ try {
     // Step 4: Check and fix all related tables' collation
     echo "<h3>Step 4: Checking Related Tables</h3>";
     
-    $tables_to_fix = ['final_call_logs', 'file_batches', 'callers'];
+    $tables_to_fix = ['lv_final_call_logs', 'lv_file_batches', 'callers'];
     
     foreach ($tables_to_fix as $table) {
         $table_info = $conn->query("SELECT TABLE_COLLATION FROM information_schema.TABLES WHERE TABLE_SCHEMA = 'caller_sheet3' AND TABLE_NAME = '$table'");
@@ -104,7 +104,7 @@ try {
         }
     }
     
-    // Step 5: Add missing columns to final_call_logs if they don't exist
+    // Step 5: Add missing columns to lv_final_call_logs if they don't exist
     echo "<h3>Step 5: Adding Missing Tracking Columns</h3>";
     
     $tracking_columns = [
@@ -118,9 +118,9 @@ try {
     ];
     
     foreach ($tracking_columns as $column => $definition) {
-        $column_check = $conn->query("SHOW COLUMNS FROM final_call_logs LIKE '$column'");
+        $column_check = $conn->query("SHOW COLUMNS FROM lv_final_call_logs LIKE '$column'");
         if ($column_check->num_rows == 0) {
-            $add_column_sql = "ALTER TABLE final_call_logs ADD COLUMN $column $definition";
+            $add_column_sql = "ALTER TABLE lv_final_call_logs ADD COLUMN $column $definition";
             if ($conn->query($add_column_sql)) {
                 echo "<div class='success'>✓ Added column: $column</div>";
             } else {
@@ -137,7 +137,7 @@ try {
     // Test query with proper collation
     $test_query = "
         SELECT COUNT(*) as total_records
-        FROM final_call_logs fcl
+        FROM lv_final_call_logs fcl
         WHERE fcl.processed_at IS NOT NULL
     ";
     

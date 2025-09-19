@@ -25,7 +25,7 @@ try {
     // Step 1: Ensure database structure is correct
     echo "<h3>Step 1: Database Structure</h3>";
     
-    // Add missing columns to final_call_logs if they don't exist
+    // Add missing columns to lv_final_call_logs if they don't exist
     $structure_updates = [
         "total_attempts INT DEFAULT 0",
         "data_backup_confirmed BOOLEAN DEFAULT FALSE",
@@ -35,7 +35,7 @@ try {
     foreach ($structure_updates as $column_def) {
         $column_name = explode(' ', $column_def)[0];
         try {
-            $conn->query("ALTER TABLE final_call_logs ADD COLUMN $column_def");
+            $conn->query("ALTER TABLE lv_final_call_logs ADD COLUMN $column_def");
             echo "<div class='success'>✓ Added column: $column_name</div>";
         } catch (Exception $e) {
             echo "<div class='info'>ℹ Column $column_name already exists or not needed</div>";
@@ -46,7 +46,7 @@ try {
     echo "<h3>Step 2: Emergency Data Backup</h3>";
     
     $backup_query = "
-        INSERT IGNORE INTO call_history (
+        INSERT IGNORE INTO lv_call_history (
             original_record_id, finqy_id, attempt_number, batch_id,
             slot, disposition, connectivity, attempt_date,
             is_original_attempt, data_source
@@ -55,8 +55,8 @@ try {
             fcl.id, fcl.finqy_id, 1, fcl.batch_id,
             fcl.slot, fcl.disposition, fcl.connectivity, fcl.processed_at,
             TRUE, 'emergency_backup'
-        FROM final_call_logs fcl
-        LEFT JOIN call_history ch ON fcl.id = ch.original_record_id
+        FROM lv_final_call_logs fcl
+        LEFT JOIN lv_call_history ch ON fcl.id = ch.original_record_id
         WHERE fcl.processed_at IS NOT NULL 
         AND fcl.finqy_id IS NOT NULL
         AND ch.original_record_id IS NULL
@@ -70,7 +70,7 @@ try {
         
         // Update tracking fields
         $conn->query("
-            UPDATE final_call_logs 
+            UPDATE lv_final_call_logs 
             SET data_backup_confirmed = TRUE, last_backup_at = NOW(), total_attempts = 1
             WHERE processed_at IS NOT NULL AND finqy_id IS NOT NULL AND data_backup_confirmed = FALSE
         ");
@@ -100,9 +100,9 @@ try {
     echo "<h3>Step 4: Verification</h3>";
     
     $verification_checks = [
-        'call_history table exists' => $conn->query("SHOW TABLES LIKE 'call_history'")->num_rows > 0,
-        'Data preservation columns exist' => $conn->query("SHOW COLUMNS FROM final_call_logs LIKE 'total_attempts'")->num_rows > 0,
-        'Historical data present' => $conn->query("SELECT COUNT(*) FROM call_history")->fetch_row()[0] > 0,
+        'lv_call_history table exists' => $conn->query("SHOW TABLES LIKE 'lv_call_history'")->num_rows > 0,
+        'Data preservation columns exist' => $conn->query("SHOW COLUMNS FROM lv_final_call_logs LIKE 'total_attempts'")->num_rows > 0,
+        'Historical data present' => $conn->query("SELECT COUNT(*) FROM lv_call_history")->fetch_row()[0] > 0,
         'Enhanced save file active' => file_exists('save_final_log.php')
     ];
     

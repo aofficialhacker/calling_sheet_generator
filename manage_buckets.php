@@ -15,7 +15,7 @@ if ($_POST) {
         $hasCalendar = isset($_POST['has_calendar_enabled']) ? 1 : 0;
         
         // Check if bucket already exists
-        $stmt = $conn->prepare("SELECT id FROM disposition_buckets WHERE bucket_name = ?");
+        $stmt = $conn->prepare("SELECT id FROM lv_disposition_buckets WHERE bucket_name = ?");
         $stmt->bind_param("s", $bucketName);
         $stmt->execute();
         
@@ -24,7 +24,7 @@ if ($_POST) {
             $messageType = "danger";
         } else {
             // Create new bucket
-            $stmt = $conn->prepare("INSERT INTO disposition_buckets (bucket_name, description, has_calendar_enabled, created_by) VALUES (?, ?, ?, ?)");
+            $stmt = $conn->prepare("INSERT INTO lv_disposition_buckets (bucket_name, description, has_calendar_enabled, created_by) VALUES (?, ?, ?, ?)");
             $createdBy = 'SUPER';
             $stmt->bind_param("ssis", $bucketName, $description, $hasCalendar, $createdBy);
             
@@ -46,7 +46,7 @@ if ($_POST) {
         $hasCalendar = isset($_POST['has_calendar_enabled']) ? 1 : 0;
         
         // Check if another bucket with same name exists (excluding current)
-        $stmt = $conn->prepare("SELECT id FROM disposition_buckets WHERE bucket_name = ? AND id != ?");
+        $stmt = $conn->prepare("SELECT id FROM lv_disposition_buckets WHERE bucket_name = ? AND id != ?");
         $stmt->bind_param("si", $bucketName, $bucketId);
         $stmt->execute();
         
@@ -54,7 +54,7 @@ if ($_POST) {
             $message = "Another bucket with this name already exists.";
             $messageType = "danger";
         } else {
-            $stmt = $conn->prepare("UPDATE disposition_buckets SET bucket_name = ?, description = ?, has_calendar_enabled = ? WHERE id = ?");
+            $stmt = $conn->prepare("UPDATE lv_disposition_buckets SET bucket_name = ?, description = ?, has_calendar_enabled = ? WHERE id = ?");
             $stmt->bind_param("ssii", $bucketName, $description, $hasCalendar, $bucketId);
             
             if ($stmt->execute()) {
@@ -72,7 +72,7 @@ if ($_POST) {
         $bucketId = $_POST['bucket_id'];
         $newStatus = $_POST['new_status'];
         
-        $stmt = $conn->prepare("UPDATE disposition_buckets SET is_active = ? WHERE id = ?");
+        $stmt = $conn->prepare("UPDATE lv_disposition_buckets SET is_active = ? WHERE id = ?");
         $stmt->bind_param("ii", $newStatus, $bucketId);
         
         if ($stmt->execute()) {
@@ -89,9 +89,9 @@ if ($_POST) {
 // Get all buckets with statistics
 $buckets = [];
 
-// First check if follow_up_schedules table exists
+// First check if lv_follow_up_schedules table exists
 $tableExists = false;
-$checkTable = $conn->query("SHOW TABLES LIKE 'follow_up_schedules'");
+$checkTable = $conn->query("SHOW TABLES LIKE 'lv_follow_up_schedules'");
 if ($checkTable && $checkTable->num_rows > 0) {
     $tableExists = true;
 }
@@ -104,9 +104,9 @@ if ($tableExists) {
                COUNT(DISTINCT CASE WHEN tld.is_active = 1 THEN tld.id END) as active_dispositions,
                COUNT(DISTINCT fs.id) as scheduled_followups,
                COUNT(DISTINCT CASE WHEN fs.status = 'scheduled' THEN fs.id END) as pending_followups
-        FROM disposition_buckets db
-        LEFT JOIN team_leader_dispositions tld ON db.id = tld.bucket_id
-        LEFT JOIN follow_up_schedules fs ON db.id = fs.bucket_id
+        FROM lv_disposition_buckets db
+        LEFT JOIN lv_team_leader_dispositions tld ON db.id = tld.bucket_id
+        LEFT JOIN lv_follow_up_schedules fs ON db.id = fs.bucket_id
         GROUP BY db.id, db.bucket_name, db.description, db.has_calendar_enabled, db.created_by, db.created_at, db.updated_at, db.is_active
         ORDER BY db.created_at DESC
     ";
@@ -118,8 +118,8 @@ if ($tableExists) {
                COUNT(DISTINCT CASE WHEN tld.is_active = 1 THEN tld.id END) as active_dispositions,
                0 as scheduled_followups,
                0 as pending_followups
-        FROM disposition_buckets db
-        LEFT JOIN team_leader_dispositions tld ON db.id = tld.bucket_id
+        FROM lv_disposition_buckets db
+        LEFT JOIN lv_team_leader_dispositions tld ON db.id = tld.bucket_id
         GROUP BY db.id, db.bucket_name, db.description, db.has_calendar_enabled, db.created_by, db.created_at, db.updated_at, db.is_active
         ORDER BY db.created_at DESC
     ";
@@ -135,7 +135,7 @@ if ($stmt) {
     $stmt->close();
 } else {
     // Fallback: basic query without joins
-    $stmt = $conn->prepare("SELECT * FROM disposition_buckets ORDER BY created_at DESC");
+    $stmt = $conn->prepare("SELECT * FROM lv_disposition_buckets ORDER BY created_at DESC");
     if ($stmt) {
         $stmt->execute();
         $result = $stmt->get_result();
@@ -159,8 +159,8 @@ if ($tableExists) {
             COUNT(*) as total_buckets,
             SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END) as active_buckets,
             SUM(CASE WHEN has_calendar_enabled = 1 THEN 1 ELSE 0 END) as calendar_enabled_buckets,
-            (SELECT COUNT(*) FROM follow_up_schedules WHERE status = 'scheduled') as total_scheduled_followups
-        FROM disposition_buckets
+            (SELECT COUNT(*) FROM lv_follow_up_schedules WHERE status = 'scheduled') as total_scheduled_followups
+        FROM lv_disposition_buckets
     ");
 } else {
     $stmt = $conn->prepare("
@@ -169,7 +169,7 @@ if ($tableExists) {
             SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END) as active_buckets,
             SUM(CASE WHEN has_calendar_enabled = 1 THEN 1 ELSE 0 END) as calendar_enabled_buckets,
             0 as total_scheduled_followups
-        FROM disposition_buckets
+        FROM lv_disposition_buckets
     ");
 }
 

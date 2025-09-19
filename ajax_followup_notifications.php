@@ -37,10 +37,10 @@ try {
                        fcl.mobile_no as customer_mobile,
                        db.bucket_name,
                        TIMESTAMPDIFF(MINUTE, NOW(), fs.follow_up_datetime) as minutes_until_due
-                FROM follow_up_schedules fs
-                JOIN final_call_logs fcl ON fs.lead_id = fcl.id
-                JOIN disposition_buckets db ON fs.bucket_id = db.id
-                LEFT JOIN notification_read_status nrs ON nrs.leader_id = fs.leader_id AND nrs.schedule_id = fs.schedule_id
+                FROM lv_follow_up_schedules fs
+                JOIN lv_final_call_logs fcl ON fs.lead_id = fcl.id
+                JOIN lv_disposition_buckets db ON fs.bucket_id = db.id
+                LEFT JOIN lv_notification_read_status nrs ON nrs.leader_id = fs.leader_id AND nrs.schedule_id = fs.schedule_id
                 WHERE fs.leader_id = ? 
                 AND fs.status = 'scheduled'
                 AND (fs.follow_up_datetime <= NOW() OR fs.follow_up_datetime <= DATE_ADD(NOW(), INTERVAL 8 HOUR))
@@ -85,7 +85,7 @@ try {
                     COUNT(*) as total_today,
                     COUNT(CASE WHEN follow_up_datetime < NOW() THEN 1 END) as overdue_today,
                     COUNT(CASE WHEN follow_up_datetime BETWEEN NOW() AND DATE_ADD(NOW(), INTERVAL 1 HOUR) THEN 1 END) as due_next_hour
-                FROM follow_up_schedules 
+                FROM lv_follow_up_schedules 
                 WHERE leader_id = ? 
                 AND status = 'scheduled'
                 AND DATE(follow_up_datetime) = CURDATE()
@@ -119,7 +119,7 @@ try {
             
             // Update the follow-up status
             $stmt = $conn->prepare("
-                UPDATE follow_up_schedules 
+                UPDATE lv_follow_up_schedules 
                 SET status = ?, 
                     remarks = CONCAT(IFNULL(remarks, ''), '\n[', NOW(), '] Quick update: ', ?, IF(? != '', CONCAT(' - ', ?), ''))
                 WHERE id = ? AND leader_id = ?
@@ -143,10 +143,10 @@ try {
         } elseif ($action === 'mark_all_read') {
             // Mark all current notifications as read
             $stmt = $conn->prepare("
-                INSERT IGNORE INTO notification_read_status (leader_id, schedule_id)
+                INSERT IGNORE INTO lv_notification_read_status (leader_id, schedule_id)
                 SELECT fs.leader_id, fs.schedule_id
-                FROM follow_up_schedules fs
-                LEFT JOIN notification_read_status nrs ON nrs.leader_id = fs.leader_id AND nrs.schedule_id = fs.schedule_id
+                FROM lv_follow_up_schedules fs
+                LEFT JOIN lv_notification_read_status nrs ON nrs.leader_id = fs.leader_id AND nrs.schedule_id = fs.schedule_id
                 WHERE fs.leader_id = ? 
                 AND fs.status = 'scheduled'
                 AND (fs.follow_up_datetime <= NOW() OR fs.follow_up_datetime <= DATE_ADD(NOW(), INTERVAL 8 HOUR))
@@ -174,7 +174,7 @@ try {
             
             // Update the follow-up time
             $stmt = $conn->prepare("
-                UPDATE follow_up_schedules 
+                UPDATE lv_follow_up_schedules 
                 SET follow_up_datetime = DATE_ADD(follow_up_datetime, INTERVAL ? MINUTE),
                     remarks = CONCAT(IFNULL(remarks, ''), '\n[', NOW(), '] Snoozed for ', ?, ' minutes')
                 WHERE id = ? AND leader_id = ? AND status = 'scheduled'

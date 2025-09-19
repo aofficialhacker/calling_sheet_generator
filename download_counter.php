@@ -41,7 +41,7 @@ class DownloadCounter {
             $callerId = empty($callerId) ? null : $callerId;
             
             $stmt = $this->conn->prepare("
-                INSERT INTO download_tracking 
+                INSERT INTO lv_download_tracking 
                 (admin_id, disposition, batch_id, product_code, caller_id, download_count, first_download_at, last_download_at)
                 VALUES (?, ?, ?, ?, ?, 1, NOW(), NOW())
                 ON DUPLICATE KEY UPDATE 
@@ -63,10 +63,10 @@ class DownloadCounter {
      */
     public function getAdminDownloadLimit($adminId) {
         try {
-            // First check superadmin-set limits in admin_download_limits table
+            // First check superadmin-set limits in lv_admin_download_limits table
             $stmt = $this->conn->prepare("
                 SELECT download_limit 
-                FROM admin_download_limits 
+                FROM lv_admin_download_limits 
                 WHERE admin_id = ?
             ");
             
@@ -78,10 +78,10 @@ class DownloadCounter {
                 return $result['download_limit'];
             }
             
-            // Fallback to admin_users table for backward compatibility
+            // Fallback to lv_admin_users table for backward compatibility
             $stmt = $this->conn->prepare("
-                SELECT download_limit 
-                FROM admin_users 
+                SELECT download_limit
+                FROM lv_admin_users
                 WHERE admin_id = ?
             ");
             
@@ -109,7 +109,7 @@ class DownloadCounter {
             
             $stmt = $this->conn->prepare("
                 SELECT SUM(download_count) as total_downloads
-                FROM download_tracking 
+                FROM lv_download_tracking 
                 WHERE admin_id = ? AND disposition = ? 
                 AND (batch_id = ? OR (batch_id IS NULL AND ? IS NULL))
                 AND (product_code = ? OR (product_code IS NULL AND ? IS NULL))
@@ -143,8 +143,8 @@ class DownloadCounter {
                 SELECT dt.disposition, dt.batch_id, dt.product_code, dt.caller_id,
                        dt.download_count, au.download_limit,
                        (au.download_limit - dt.download_count) as remaining
-                FROM download_tracking dt
-                JOIN admin_users au ON dt.admin_id = au.admin_id
+                FROM lv_download_tracking dt
+                JOIN lv_admin_users au ON dt.admin_id = au.admin_id
                 WHERE dt.admin_id = ?
                 ORDER BY dt.last_download_at DESC
             ");
@@ -185,7 +185,7 @@ class DownloadCounter {
             
             $stmt = $this->conn->prepare("
                 SELECT batch_id 
-                FROM download_tracking 
+                FROM lv_download_tracking 
                 WHERE admin_id = ? AND disposition = ? 
                 AND download_count >= ? 
                 AND batch_id IS NOT NULL
@@ -216,14 +216,14 @@ class DownloadCounter {
         try {
             $this->conn->begin_transaction();
             
-            // Update admin_users table
-            $stmt1 = $this->conn->prepare("UPDATE admin_users SET download_limit = ? WHERE admin_id = ?");
+            // Update lv_admin_users table
+            $stmt1 = $this->conn->prepare("UPDATE lv_admin_users SET download_limit = ? WHERE admin_id = ?");
             $stmt1->bind_param("is", $newLimit, $adminId);
             $stmt1->execute();
             
-            // Update admin_download_limits table
+            // Update lv_admin_download_limits table
             $stmt2 = $this->conn->prepare("
-                INSERT INTO admin_download_limits (admin_id, download_limit, set_by_superadmin, notes)
+                INSERT INTO lv_admin_download_limits (admin_id, download_limit, set_by_superadmin, notes)
                 VALUES (?, ?, ?, ?)
                 ON DUPLICATE KEY UPDATE 
                     download_limit = VALUES(download_limit),

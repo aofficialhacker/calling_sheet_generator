@@ -2,8 +2,8 @@
 /**
  * Connectivity Backfill Script
  * 
- * This script fixes existing records in final_call_logs that have blank/NULL connectivity values
- * by populating them based on the disposition's category from disposition_codes table.
+ * This script fixes existing records in lv_final_call_logs that have blank/NULL connectivity values
+ * by populating them based on the disposition's category from lv_disposition_codes table.
  * 
  * Usage: 
  *   Command Line: php fix_connectivity_backfill.php [--dry-run] [--limit=N]
@@ -56,7 +56,7 @@ $conn = getDBConnection();
 
 // Build disposition category mapping
 echo "Building disposition category mapping...\n";
-$dispositions = $conn->query("SELECT code, description, category FROM disposition_codes WHERE is_active = 1");
+$dispositions = $conn->query("SELECT code, description, category FROM lv_disposition_codes WHERE is_active = 1");
 $DISPOSITION_CATEGORY_MAP = [];
 $category_counts = ['connected' => 0, 'not_connected' => 0];
 
@@ -74,8 +74,8 @@ $limit_clause = $limit ? "LIMIT $limit" : "";
 $find_query = "
     SELECT fcl.id, fcl.disposition, fcl.connectivity,
            dc.category
-    FROM final_call_logs fcl
-    LEFT JOIN disposition_codes dc ON fcl.disposition = dc.description AND dc.is_active = 1
+    FROM lv_final_call_logs fcl
+    LEFT JOIN lv_disposition_codes dc ON fcl.disposition = dc.description AND dc.is_active = 1
     WHERE (fcl.connectivity IS NULL OR fcl.connectivity = '')
     AND fcl.disposition IS NOT NULL 
     AND fcl.disposition != ''
@@ -136,7 +136,7 @@ if ($dry_run) {
         // Update records that should have connectivity = 'Yes'
         if (count($updates['Yes']) > 0) {
             $ids_yes = "'" . implode("','", $updates['Yes']) . "'";
-            $update_yes_sql = "UPDATE final_call_logs SET connectivity = 'Yes' WHERE id IN ($ids_yes)";
+            $update_yes_sql = "UPDATE lv_final_call_logs SET connectivity = 'Yes' WHERE id IN ($ids_yes)";
             if ($conn->query($update_yes_sql)) {
                 $updated_yes = $conn->affected_rows;
                 $total_updated += $updated_yes;
@@ -149,7 +149,7 @@ if ($dry_run) {
         // Update records that should have connectivity = 'No'  
         if (count($updates['No']) > 0) {
             $ids_no = "'" . implode("','", $updates['No']) . "'";
-            $update_no_sql = "UPDATE final_call_logs SET connectivity = 'No' WHERE id IN ($ids_no)";
+            $update_no_sql = "UPDATE lv_final_call_logs SET connectivity = 'No' WHERE id IN ($ids_no)";
             if ($conn->query($update_no_sql)) {
                 $updated_no = $conn->affected_rows;
                 $total_updated += $updated_no;
@@ -166,7 +166,7 @@ if ($dry_run) {
         echo "\nFinal connectivity statistics:\n";
         $final_stats = $conn->query("
             SELECT connectivity, COUNT(*) as count 
-            FROM final_call_logs 
+            FROM lv_final_call_logs 
             WHERE processed_at IS NOT NULL
             GROUP BY connectivity 
             ORDER BY count DESC

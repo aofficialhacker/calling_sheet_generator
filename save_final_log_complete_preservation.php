@@ -14,7 +14,7 @@ if ($isAjax) {
 $conn = getDBConnection();
 
 // Fetch disposition map from database for conversion
-$dispositions = $conn->query("SELECT code, description FROM disposition_codes WHERE is_active = 1");
+$dispositions = $conn->query("SELECT code, description FROM lv_disposition_codes WHERE is_active = 1");
 $DISPOSITION_MAP = [];
 while($row = $dispositions->fetch_assoc()) {
     $DISPOSITION_MAP[$row['code']] = $row['description'];
@@ -40,7 +40,7 @@ function preserveAllCurrentData($conn, $record_id, $finqy_id) {
         SELECT id, slot, disposition, connectivity, finqy_id, processed_at, 
                total_attempts, first_attempt_date, batch_id,
                original_caller_id, last_updated_by
-        FROM final_call_logs 
+        FROM lv_final_call_logs 
         WHERE id = ?
     ");
     $current_stmt->bind_param("s", $record_id);
@@ -58,7 +58,7 @@ function preserveAllCurrentData($conn, $record_id, $finqy_id) {
         
         // Create COMPLETE backup of current state
         $preserve_stmt = $conn->prepare("
-            INSERT INTO call_history (
+            INSERT INTO lv_call_history (
                 original_record_id, finqy_id, attempt_number, batch_id,
                 slot, disposition, connectivity, attempt_date,
                 is_original_attempt, data_source, notes
@@ -106,13 +106,13 @@ function preserveAllCurrentData($conn, $record_id, $finqy_id) {
  */
 function createNewAttemptEntry($conn, $record_id, $finqy_id, $attempt_number, $new_data) {
     $new_attempt_stmt = $conn->prepare("
-        INSERT INTO call_history (
+        INSERT INTO lv_call_history (
             original_record_id, finqy_id, attempt_number, batch_id,
             slot, disposition, connectivity, attempt_date,
             is_original_attempt, data_source
         )
         SELECT ?, ?, ?, batch_id, ?, ?, ?, NOW(), ?, 'upload'
-        FROM final_call_logs WHERE id = ?
+        FROM lv_final_call_logs WHERE id = ?
     ");
     
     $is_original = $attempt_number == 1;
@@ -190,7 +190,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['json_results']) && iss
                 }
                 
                 // STEP 2: UPDATE CURRENT STATE with complete tracking
-                $update_sql = "UPDATE final_call_logs 
+                $update_sql = "UPDATE lv_final_call_logs 
                                SET slot = ?, disposition = ?, connectivity = ?, 
                                    finqy_id = ?, processed_at = NOW(),
                                    last_updated_by = ?, last_attempt_date = NOW(),

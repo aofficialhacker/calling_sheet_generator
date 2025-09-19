@@ -2,7 +2,7 @@
 require_once 'db_config.php';
 
 $conn = getDBConnection();
-$result = $conn->query('SELECT COUNT(*) as total FROM final_call_logs');
+$result = $conn->query('SELECT COUNT(*) as total FROM lv_final_call_logs');
 $total = $result->fetch_assoc()['total'];
 
 echo "Total records available: $total\n";

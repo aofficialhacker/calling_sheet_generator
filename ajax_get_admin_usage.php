@@ -29,11 +29,11 @@ try {
                fb.original_filename, fb.product_code as batch_product,
                c.name as caller_name,
                p.product_name
-        FROM download_tracking dt
-        JOIN admin_users au ON dt.admin_id = au.admin_id
-        LEFT JOIN file_batches fb ON dt.batch_id = fb.id
-        LEFT JOIN callers c ON dt.caller_id = c.caller_id
-        LEFT JOIN products p ON dt.product_code = p.product_code
+        FROM lv_download_tracking dt
+        JOIN lv_admin_users au ON dt.admin_id = au.admin_id
+        LEFT JOIN lv_file_batches fb ON dt.batch_id = fb.id
+        LEFT JOIN lv_callers c ON dt.caller_id = c.caller_id
+        LEFT JOIN lv_products p ON dt.product_code = p.product_code
         WHERE dt.admin_id = ?
         ORDER BY dt.last_download_at DESC
     ");

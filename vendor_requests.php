@@ -13,7 +13,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
     
     if ($requestId && in_array($action, ['approve', 'reject'])) {
         // Get request details
-        $stmt = $conn->prepare("SELECT admin_id, vendor_name, is_additional FROM vendor_requests WHERE id = ? AND status = 'pending'");
+        $stmt = $conn->prepare("SELECT admin_id, vendor_name, is_additional FROM lv_vendor_requests WHERE id = ? AND status = 'pending'");
         $stmt->bind_param("i", $requestId);
         $stmt->execute();
         $result = $stmt->get_result();
@@ -32,7 +32,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
                     }
                     
                     // Create vendor
-                    $vendorStmt = $conn->prepare("INSERT INTO vendors (vendor_id, vendor_name, admin_id, is_approved) VALUES (?, ?, ?, 1)");
+                    $vendorStmt = $conn->prepare("INSERT INTO lv_vendors (vendor_id, vendor_name, admin_id, is_approved) VALUES (?, ?, ?, 1)");
                     $vendorStmt->bind_param("sss", $vendorId, $request['vendor_name'], $request['admin_id']);
                     $vendorStmt->execute();
                     $vendorStmt->close();
@@ -45,7 +45,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
                 }
                 
                 // Update request status
-                $updateStmt = $conn->prepare("UPDATE vendor_requests SET status = ?, processed_at = NOW(), processed_by = ? WHERE id = ?");
+                $updateStmt = $conn->prepare("UPDATE lv_vendor_requests SET status = ?, processed_at = NOW(), processed_by = ? WHERE id = ?");
                 $updateStmt->bind_param("sii", $newStatus, $_SESSION['superadmin_id'], $requestId);
                 $updateStmt->execute();
                 $updateStmt->close();
@@ -65,9 +65,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
 // Fetch pending requests
 $pendingRequests = $conn->query("
     SELECT vr.*, au.name as admin_name, au.admin_id as admin_code,
-           (SELECT COUNT(*) FROM vendor_requests WHERE admin_id = vr.admin_id) as total_admin_requests
-    FROM vendor_requests vr
-    JOIN admin_users au ON vr.admin_id = au.admin_id
+           (SELECT COUNT(*) FROM lv_vendor_requests WHERE admin_id = vr.admin_id) as total_admin_requests
+    FROM lv_vendor_requests vr
+    JOIN lv_admin_users au ON vr.admin_id = au.admin_id
     WHERE vr.status = 'pending'
     ORDER BY vr.requested_at DESC
 ");
@@ -77,10 +77,10 @@ $processedRequests = $conn->query("
     SELECT vr.*, au.name as admin_name, au.admin_id as admin_code,
            sau.name as processed_by_name,
            v.vendor_id
-    FROM vendor_requests vr
-    JOIN admin_users au ON vr.admin_id = au.admin_id
-    LEFT JOIN admin_users sau ON vr.processed_by = sau.id
-    LEFT JOIN vendors v ON v.vendor_name = vr.vendor_name AND v.admin_id = vr.admin_id
+    FROM lv_vendor_requests vr
+    JOIN lv_admin_users au ON vr.admin_id = au.admin_id
+    LEFT JOIN lv_admin_users sau ON vr.processed_by = sau.id
+    LEFT JOIN lv_vendors v ON v.vendor_name = vr.vendor_name AND v.admin_id = vr.admin_id
     WHERE vr.status != 'pending'
     ORDER BY vr.processed_at DESC
     LIMIT 50

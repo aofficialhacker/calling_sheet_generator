@@ -13,7 +13,7 @@ $conn = getDBConnection();
 $finqy_id = $_SESSION['finqy_id'];
 
 // Get caller details
-$caller_stmt = $conn->prepare("SELECT caller_name FROM callers WHERE finqy_id = ?");
+$caller_stmt = $conn->prepare("SELECT caller_name FROM lv_callers WHERE finqy_id = ?");
 if ($caller_stmt === false) {
     $caller_name = 'Unknown Caller';
 } else {
@@ -24,7 +24,7 @@ if ($caller_stmt === false) {
     $caller_stmt->close();
 }
 
-// Get basic performance statistics from final_call_logs (current work)
+// Get basic performance statistics from lv_final_call_logs (current work)
 $basic_stats_sql = "
     SELECT 
         COUNT(*) as total_records_worked,
@@ -33,7 +33,7 @@ $basic_stats_sql = "
         SUM(CASE WHEN disposition IN ('Not Interested', 'DND', 'Wrong Number', 'Invalid') THEN 1 ELSE 0 END) as negative_outcomes,
         SUM(CASE WHEN disposition IN ('Follow Up', 'Busy', 'No Response', 'Callback') THEN 1 ELSE 0 END) as follow_up_required,
         SUM(CASE WHEN connectivity IN ('Y', 'Yes') THEN 1 ELSE 0 END) as connected_calls
-    FROM final_call_logs 
+    FROM lv_final_call_logs 
     WHERE finqy_id = ? 
     AND ((disposition IS NOT NULL AND disposition != '') OR (connectivity IS NOT NULL AND connectivity != ''))
 ";
@@ -48,7 +48,7 @@ if ($basic_stats_stmt === false) {
     $basic_stats_stmt->close();
 }
 
-// Get re-attempt performance statistics from call_history (follow-up attempts)
+// Get re-attempt performance statistics from lv_call_history (follow-up attempts)
 $reattempt_stats_sql = "
     SELECT 
         COUNT(DISTINCT ch.original_record_id) as reattempt_records,
@@ -56,7 +56,7 @@ $reattempt_stats_sql = "
         AVG(ch.attempt_number) as avg_attempts_per_record,
         SUM(CASE WHEN ch.attempt_number > 1 THEN 1 ELSE 0 END) as reattempts_made,
         SUM(CASE WHEN ch.disposition IN ('Interested', 'Callback', 'Hot Lead') THEN 1 ELSE 0 END) as reattempt_positive
-    FROM call_history ch
+    FROM lv_call_history ch
     WHERE ch.finqy_id = ?
 ";
 
@@ -95,7 +95,7 @@ $reattempt_performance_sql = "
         COUNT(*) as attempts,
         SUM(CASE WHEN ch.disposition IN ('Interested', 'Callback', 'Hot Lead') THEN 1 ELSE 0 END) as successful,
         ROUND((SUM(CASE WHEN ch.disposition IN ('Interested', 'Callback', 'Hot Lead') THEN 1 ELSE 0 END) / COUNT(*)) * 100, 1) as success_rate
-    FROM call_history ch
+    FROM lv_call_history ch
     WHERE ch.finqy_id = ?
     GROUP BY ch.attempt_number
     ORDER BY ch.attempt_number
@@ -117,8 +117,8 @@ $basic_disposition_sql = "
     SELECT 
         disposition,
         COUNT(*) as count,
-        'final_call_logs' as source
-    FROM final_call_logs 
+        'lv_final_call_logs' as source
+    FROM lv_final_call_logs 
     WHERE finqy_id = ? 
     AND disposition IS NOT NULL AND disposition != ''
     GROUP BY disposition
@@ -128,8 +128,8 @@ $reattempt_disposition_sql = "
     SELECT 
         disposition,
         COUNT(*) as count,
-        'call_history' as source
-    FROM call_history 
+        'lv_call_history' as source
+    FROM lv_call_history 
     WHERE finqy_id = ?
     AND disposition IS NOT NULL AND disposition != ''
     GROUP BY disposition

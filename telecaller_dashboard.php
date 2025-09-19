@@ -13,7 +13,7 @@ if (!$finqyId) {
 $conn = getDBConnection();
 
 // Get telecaller information
-$caller_query = "SELECT caller_name, mobile_no FROM callers WHERE finqy_id = ?";
+$caller_query = "SELECT caller_name, mobile_no FROM lv_callers WHERE finqy_id = ?";
 $stmt = $conn->prepare($caller_query);
 $stmt->bind_param('s', $finqyId);
 $stmt->execute();
@@ -52,7 +52,7 @@ $today_query = "
         COUNT(*) as calls_made,
         SUM(CASE WHEN connectivity IN ('Y', 'Yes') THEN 1 ELSE 0 END) as connected_calls,
         SUM(CASE WHEN disposition IN ('Interested', 'Call Back', 'More Info') THEN 1 ELSE 0 END) as conversions
-    FROM final_call_logs fcl 
+    FROM lv_final_call_logs fcl 
     WHERE fcl.finqy_id = ? AND DATE(fcl.processed_at) = CURDATE() AND fcl.processed_at IS NOT NULL
 ";
 
@@ -75,7 +75,7 @@ $slot_query = "
         SUM(CASE WHEN connectivity IN ('Y', 'Yes') THEN 1 ELSE 0 END) as connected_calls,
         SUM(CASE WHEN disposition IN ('Interested', 'Call Back', 'More Info') THEN 1 ELSE 0 END) as conversions,
         ROUND((SUM(CASE WHEN disposition IN ('Interested', 'Call Back', 'More Info') THEN 1 ELSE 0 END) * 100.0 / COUNT(*)), 2) as conversion_rate
-    FROM final_call_logs fcl 
+    FROM lv_final_call_logs fcl 
     $where_clause AND fcl.processed_at IS NOT NULL AND slot IS NOT NULL
     GROUP BY slot
     ORDER BY CAST(slot AS UNSIGNED)
@@ -107,7 +107,7 @@ $connectivity_query = "
             ELSE 'Not Connected'
         END as connectivity_status,
         COUNT(*) as count
-    FROM final_call_logs fcl 
+    FROM lv_final_call_logs fcl 
     $where_clause
     GROUP BY connectivity_status 
     ORDER BY count DESC
@@ -124,7 +124,7 @@ $connected_disposition_query = "
     SELECT 
         COALESCE(disposition, 'No Disposition') as disposition, 
         COUNT(*) as count
-    FROM final_call_logs fcl 
+    FROM lv_final_call_logs fcl 
     $where_clause AND connectivity IN ('Y', 'Yes') AND disposition IS NOT NULL AND disposition != ''
     GROUP BY COALESCE(disposition, 'No Disposition')
     HAVING count > 0
@@ -142,7 +142,7 @@ $not_connected_disposition_query = "
     SELECT 
         COALESCE(disposition, 'No Disposition') as disposition, 
         COUNT(*) as count
-    FROM final_call_logs fcl 
+    FROM lv_final_call_logs fcl 
     $where_clause AND (connectivity IN ('N', 'No') OR connectivity IS NULL OR connectivity = '') AND disposition IS NOT NULL AND disposition != ''
     GROUP BY COALESCE(disposition, 'No Disposition')
     HAVING count > 0
@@ -164,10 +164,10 @@ $team_ranking_query = "
         COUNT(fcl.id) as calls_made,
         SUM(CASE WHEN fcl.disposition IN ('Interested', 'Call Back', 'More Info') THEN 1 ELSE 0 END) as conversions,
         ROUND((SUM(CASE WHEN fcl.disposition IN ('Interested', 'Call Back', 'More Info') THEN 1 ELSE 0 END) * 100.0 / COUNT(fcl.id)), 2) as conversion_rate
-    FROM callers c
-    JOIN admin_caller_mapping acm ON c.finqy_id = acm.finqy_id
-    LEFT JOIN final_call_logs fcl ON c.finqy_id = fcl.finqy_id
-    WHERE acm.admin_id = (SELECT admin_id FROM admin_caller_mapping WHERE finqy_id = ? LIMIT 1) 
+    FROM lv_callers c
+    JOIN lv_admin_caller_mapping acm ON c.finqy_id = acm.finqy_id
+    LEFT JOIN lv_final_call_logs fcl ON c.finqy_id = fcl.finqy_id
+    WHERE acm.admin_id = (SELECT admin_id FROM lv_admin_caller_mapping WHERE finqy_id = ? LIMIT 1) 
         AND ((fcl.disposition IS NOT NULL AND fcl.disposition != '') OR (fcl.connectivity IS NOT NULL AND fcl.connectivity != ''))
         AND fcl.processed_at IS NOT NULL
         AND DATE(fcl.processed_at) BETWEEN ? AND ?

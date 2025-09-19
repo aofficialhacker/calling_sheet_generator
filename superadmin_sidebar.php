@@ -7,7 +7,7 @@ $sidebar_conn = getDBConnection();
 
 // Get pending vendor requests count
 $pending_requests_count = 0;
-$stmt = $sidebar_conn->prepare("SELECT COUNT(*) as count FROM vendor_requests WHERE status = 'pending'");
+$stmt = $sidebar_conn->prepare("SELECT COUNT(*) as count FROM lv_vendor_requests WHERE status = 'pending'");
 $stmt->execute();
 $result = $stmt->get_result();
 if ($result) {

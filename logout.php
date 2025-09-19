@@ -8,7 +8,7 @@ $type = $_GET['type'] ?? '';
 // Clear active session ID for team leaders
 if ($type === 'team_leader' && isset($_SESSION['leader_id'])) {
     $conn = getDBConnection();
-    $stmt = $conn->prepare("UPDATE team_leaders SET active_session_id = NULL WHERE leader_id = ?");
+    $stmt = $conn->prepare("UPDATE lv_team_leaders SET active_session_id = NULL WHERE leader_id = ?");
     $stmt->bind_param("s", $_SESSION['leader_id']);
     $stmt->execute();
     $stmt->close();

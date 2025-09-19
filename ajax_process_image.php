@@ -10,25 +10,25 @@ require_once 'db_config.php'; // Use centralized db config
  */
 function investigateMissingRecord($conn, $record_id) {
     $investigation = [
-        'found_in_call_history' => false,
+        'found_in_lv_call_history' => false,
         'found_in_other_tables' => false,
         'possible_batch_mismatch' => false,
         'suggestions' => []
     ];
     
-    // Check if record exists in call_history table
-    $history_stmt = $conn->prepare("SELECT COUNT(*) as count FROM call_history WHERE original_record_id = ?");
+    // Check if record exists in lv_call_history table
+    $history_stmt = $conn->prepare("SELECT COUNT(*) as count FROM lv_call_history WHERE original_record_id = ?");
     if ($history_stmt) {
         $history_stmt->bind_param("s", $record_id);
         $history_stmt->execute();
         $history_result = $history_stmt->get_result()->fetch_assoc();
-        $investigation['found_in_call_history'] = $history_result['count'] > 0;
+        $investigation['found_in_lv_call_history'] = $history_result['count'] > 0;
         $history_stmt->close();
     }
     
     // Check for similar record IDs (possible batch mismatch)
     $batch_prefix = substr($record_id, 0, -3); // Remove last 3 digits
-    $similar_stmt = $conn->prepare("SELECT COUNT(*) as count FROM final_call_logs WHERE id LIKE ?");
+    $similar_stmt = $conn->prepare("SELECT COUNT(*) as count FROM lv_final_call_logs WHERE id LIKE ?");
     if ($similar_stmt) {
         $pattern = $batch_prefix . '%';
         $similar_stmt->bind_param("s", $pattern);
@@ -39,13 +39,13 @@ function investigateMissingRecord($conn, $record_id) {
     }
     
     // Generate suggestions based on findings
-    if ($investigation['found_in_call_history']) {
-        $investigation['suggestions'][] = "Record exists in call_history - may have been processed previously";
+    if ($investigation['found_in_lv_call_history']) {
+        $investigation['suggestions'][] = "Record exists in lv_call_history - may have been processed previously";
     }
     if ($investigation['possible_batch_mismatch']) {
         $investigation['suggestions'][] = "Similar records found - check if correct batch was uploaded";
     }
-    if (!$investigation['found_in_call_history'] && !$investigation['possible_batch_mismatch']) {
+    if (!$investigation['found_in_lv_call_history'] && !$investigation['possible_batch_mismatch']) {
         $investigation['suggestions'][] = "Record may not have been imported during batch upload";
     }
     
@@ -153,7 +153,7 @@ if (move_uploaded_file($_FILES['markedSheet']['tmp_name'], $targetFile)) {
     $conn = getDBConnection();
 
     // --- CHANGE: Prepare statement to fetch customer details using the record ID ---
-    $stmt = $conn->prepare("SELECT name, mobile_no FROM final_call_logs WHERE id = ?");
+    $stmt = $conn->prepare("SELECT name, mobile_no FROM lv_final_call_logs WHERE id = ?");
     if ($stmt === false) {
         echo json_encode(['success' => false, 'message' => 'Database query preparation failed.']);
         exit();
@@ -198,7 +198,7 @@ if (move_uploaded_file($_FILES['markedSheet']['tmp_name'], $targetFile)) {
                         'slot' => $parsed_data['slot'] ?? 'N/A',
                         'investigation' => $investigation_result
                     ];
-                    error_log("MISSING RECORD: $record_id not found in final_call_logs table - OCR extracted but DB lookup failed. Investigation: " . json_encode($investigation_result));
+                    error_log("MISSING RECORD: $record_id not found in lv_final_call_logs table - OCR extracted but DB lookup failed. Investigation: " . json_encode($investigation_result));
                 }
             }
         }

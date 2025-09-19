@@ -70,8 +70,8 @@ try {
     echo "<h3>✅ Test 3: Current Data Status</h3>";
     
     // Simple query without joins to avoid errors
-    $final_logs_count = $conn->query("SELECT COUNT(*) FROM final_call_logs")->fetch_row()[0];
-    echo "<div class='info'>• Total records in final_call_logs: " . number_format($final_logs_count) . "</div>";
+    $final_logs_count = $conn->query("SELECT COUNT(*) FROM lv_final_call_logs")->fetch_row()[0];
+    echo "<div class='info'>• Total records in lv_final_call_logs: " . number_format($final_logs_count) . "</div>";
     
     if ($tables_check && $tables_check->num_rows > 0) {
         $history_count = $conn->query("SELECT COUNT(*) FROM call_history")->fetch_row()[0];

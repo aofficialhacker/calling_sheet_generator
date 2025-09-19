@@ -14,13 +14,13 @@ if (empty($leadId)) {
 // Validate lead and get details
 $stmt = $conn->prepare("
     SELECT fcl.id, fcl.name, fcl.mobile_no, tla.new_disposition, p.product_name, c.caller_name
-    FROM final_call_logs fcl
-    JOIN team_leader_actions tla ON fcl.id = tla.lead_id
-    JOIN file_batches b ON fcl.batch_id = b.id
-    JOIN products p ON b.product_code = p.product_code
-    JOIN callers c ON fcl.finqy_id = c.finqy_id
-    JOIN team_leader_dispositions tld ON tla.new_disposition = tld.disposition_name
-    JOIN disposition_buckets db ON tld.bucket_id = db.id
+    FROM lv_final_call_logs fcl
+    JOIN lv_team_leader_actions tla ON fcl.id = tla.lead_id
+    JOIN lv_file_batches b ON fcl.batch_id = b.id
+    JOIN lv_products p ON b.product_code = p.product_code
+    JOIN lv_callers c ON fcl.finqy_id = c.finqy_id
+    JOIN lv_team_leader_dispositions tld ON tla.new_disposition = tld.disposition_name
+    JOIN lv_disposition_buckets db ON tld.bucket_id = db.id
     WHERE fcl.id = ? AND tla.leader_id = ? AND db.bucket_name = 'Interested'
 ");
 $stmt->bind_param("ss", $leadId, $leaderId);

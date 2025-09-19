@@ -48,7 +48,7 @@ $adminId = $_SESSION['admin_id'];
 // Get caller name for PDF title if caller filter is applied
 $callerName = null;
 if ($caller_id) {
-    $callerStmt = $conn->prepare("SELECT caller_name FROM callers WHERE finqy_id = ?");
+    $callerStmt = $conn->prepare("SELECT caller_name FROM lv_callers WHERE finqy_id = ?");
     $callerStmt->bind_param("s", $caller_id);
     $callerStmt->execute();
     $callerResult = $callerStmt->get_result()->fetch_assoc();
@@ -109,7 +109,7 @@ if (isset($_GET['disposition'])) {
 }
 
 // --- Disposition Codes & Legends ---------------------------------------
-$dispResult = $conn->query("SELECT code, description, category FROM disposition_codes WHERE is_active = 1 ORDER BY category, CAST(code AS UNSIGNED), code");
+$dispResult = $conn->query("SELECT code, description, category FROM lv_disposition_codes WHERE is_active = 1 ORDER BY category, CAST(code AS UNSIGNED), code");
 $dispositionList = [];
 $dispLegendY = []; $dispLegendN = [];
 while ($d = $dispResult->fetch_assoc()) {
@@ -127,7 +127,7 @@ $slotLegend = "SLOTS: 1 (10-11a) | 2 (11a-12p) | 3 (12-1p) | 4 (1-2p) | 5 (2-3p)
 $followUpLegend = "FOLLOW-UP: Follow_Day (1-9 days) | Follow_Slot (1-8 time slots)";
 
 // --- Query Build --------------------------------------------------------
-$baseSql = "FROM final_call_logs fcl JOIN file_batches fb ON fcl.batch_id = fb.id ";
+$baseSql = "FROM lv_final_call_logs fcl JOIN lv_file_batches fb ON fcl.batch_id = fb.id ";
 $whereClauses = ["fb.admin_id = ?"];
 $params = [$adminId]; $types = 's';
 
@@ -168,8 +168,8 @@ if ($followup_from_date && $followup_to_date) {
     // Debug: Show what follow-up dates are being calculated
     $debugQuery = "SELECT fcl.id, fcl.processed_at, fcl.follow_day, 
                    DATE_ADD(fcl.processed_at, INTERVAL COALESCE(fcl.follow_day, 1) DAY) as calculated_followup_date 
-                   FROM final_call_logs fcl 
-                   JOIN file_batches fb ON fcl.batch_id = fb.id 
+                   FROM lv_final_call_logs fcl 
+                   JOIN lv_file_batches fb ON fcl.batch_id = fb.id 
                    WHERE fb.admin_id = ? AND fcl.follow_day IS NOT NULL 
                    ORDER BY calculated_followup_date LIMIT 10";
     $debugStmt = $conn->prepare($debugQuery);
@@ -196,7 +196,7 @@ if (!empty($excluded_batches)) {
 }
 
 // Exclude blocked numbers from PDF generation
-$whereClauses[] = "fcl.mobile_no NOT IN (SELECT mobile_no FROM blocklist_numbers WHERE admin_id = ?)";
+$whereClauses[] = "fcl.mobile_no NOT IN (SELECT mobile_no FROM lv_blocklist_numbers WHERE admin_id = ?)";
 $params[] = $adminId;
 $types .= 's';
 debugLog("Added blocklist filtering for admin: " . $adminId);

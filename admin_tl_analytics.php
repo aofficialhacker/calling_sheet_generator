@@ -19,8 +19,8 @@ $performance_view = $_GET['view'] ?? 'overview';
 // Get admin's team leaders for filter
 $tls_sql = "
     SELECT tl.leader_id, tl.leader_name, tl.finqy_id, c.caller_name 
-    FROM team_leaders tl 
-    LEFT JOIN callers c ON tl.finqy_id = c.finqy_id
+    FROM lv_team_leaders tl 
+    LEFT JOIN lv_callers c ON tl.finqy_id = c.finqy_id
     WHERE tl.admin_id = ? AND tl.is_active = 1 
     ORDER BY tl.leader_name
 ";
@@ -33,8 +33,8 @@ $tls_stmt->close();
 // Get available dispositions for filter
 $dispositions_sql = "
     SELECT DISTINCT tla.new_disposition 
-    FROM team_leader_actions tla 
-    JOIN team_leaders tl ON tla.leader_id = tl.leader_id 
+    FROM lv_team_leader_actions tla 
+    JOIN lv_team_leaders tl ON tla.leader_id = tl.leader_id 
     WHERE tl.admin_id = ? AND tla.action_date >= DATE_SUB(NOW(), INTERVAL 90 DAY)
     ORDER BY tla.new_disposition
 ";
@@ -72,36 +72,36 @@ $where_clause = "WHERE " . implode(" AND ", $where_conditions);
 // Admin's team leader summary - Fixed to avoid Cartesian product
 $summary_sql = "
     SELECT 
-        (SELECT COUNT(DISTINCT tl.leader_id) FROM team_leaders tl WHERE tl.admin_id = ? AND tl.is_active = 1) as total_team_leaders,
+        (SELECT COUNT(DISTINCT tl.leader_id) FROM lv_team_leaders tl WHERE tl.admin_id = ? AND tl.is_active = 1) as total_team_leaders,
         
         (SELECT COUNT(DISTINCT tll.leader_id) 
-         FROM team_leader_logins tll 
-         JOIN team_leaders tl ON tll.leader_id = tl.leader_id 
+         FROM lv_team_leader_logins tll 
+         JOIN lv_team_leaders tl ON tll.leader_id = tl.leader_id 
          WHERE tl.admin_id = ? AND tl.is_active = 1 AND tll.login_time >= DATE_SUB(NOW(), INTERVAL 1 DAY)) as active_today,
         
         (SELECT COUNT(DISTINCT tll.leader_id) 
-         FROM team_leader_logins tll 
-         JOIN team_leaders tl ON tll.leader_id = tl.leader_id 
+         FROM lv_team_leader_logins tll 
+         JOIN lv_team_leaders tl ON tll.leader_id = tl.leader_id 
          WHERE tl.admin_id = ? AND tl.is_active = 1 AND tll.login_time >= DATE_SUB(NOW(), INTERVAL 7 DAY)) as active_this_week,
         
         (SELECT COUNT(*) 
-         FROM team_leader_logins tll 
-         JOIN team_leaders tl ON tll.leader_id = tl.leader_id 
+         FROM lv_team_leader_logins tll 
+         JOIN lv_team_leaders tl ON tll.leader_id = tl.leader_id 
          WHERE tl.admin_id = ? AND tl.is_active = 1 AND tll.login_status = 'success' AND DATE(tll.login_time) = CURDATE()) as successful_logins_today,
         
         (SELECT COUNT(*) 
-         FROM team_leader_logins tll 
-         JOIN team_leaders tl ON tll.leader_id = tl.leader_id 
+         FROM lv_team_leader_logins tll 
+         JOIN lv_team_leaders tl ON tll.leader_id = tl.leader_id 
          WHERE tl.admin_id = ? AND tl.is_active = 1 AND tll.login_status = 'failed' AND DATE(tll.login_time) = CURDATE()) as failed_logins_today,
         
         (SELECT COUNT(*) 
-         FROM team_leader_actions tla 
-         JOIN team_leaders tl ON tla.leader_id = tl.leader_id 
+         FROM lv_team_leader_actions tla 
+         JOIN lv_team_leaders tl ON tla.leader_id = tl.leader_id 
          WHERE tl.admin_id = ? AND tl.is_active = 1 AND tla.action_date >= CURDATE()) as actions_today,
         
         (SELECT COUNT(*) 
-         FROM team_leader_view_logs tvl 
-         JOIN team_leaders tl ON tvl.leader_id = tl.leader_id 
+         FROM lv_team_leader_view_logs tvl 
+         JOIN lv_team_leaders tl ON tvl.leader_id = tl.leader_id 
          WHERE tl.admin_id = ? AND tl.is_active = 1 AND tvl.timestamp >= CURDATE()) as data_accesses_today
 ";
 
@@ -133,27 +133,27 @@ $individual_performance_sql = "
         COUNT(tla.id) as total_actions,
         COUNT(CASE WHEN tla.new_disposition IN (
             SELECT tld.disposition_name 
-            FROM team_leader_dispositions tld 
-            JOIN disposition_buckets db ON tld.bucket_id = db.id 
+            FROM lv_team_leader_dispositions tld 
+            JOIN lv_disposition_buckets db ON tld.bucket_id = db.id 
             WHERE db.bucket_name = 'Interested' AND tld.is_active = 1
         ) THEN 1 END) as payment_conversions,
         COUNT(CASE WHEN tla.new_disposition IN ('Interested - Proceed to Payment', 'Need More Information', 'Call Back Later') THEN 1 END) as positive_outcomes,
         COUNT(CASE WHEN tla.new_disposition = 'Not Interested' THEN 1 END) as not_interested,
         ROUND((COUNT(CASE WHEN tla.new_disposition IN (
             SELECT tld.disposition_name 
-            FROM team_leader_dispositions tld 
-            JOIN disposition_buckets db ON tld.bucket_id = db.id 
+            FROM lv_team_leader_dispositions tld 
+            JOIN lv_disposition_buckets db ON tld.bucket_id = db.id 
             WHERE db.bucket_name = 'Interested' AND tld.is_active = 1
         ) THEN 1 END) / NULLIF(COUNT(tla.id), 0)) * 100, 1) as conversion_rate,
         ROUND((COUNT(CASE WHEN tla.new_disposition IN ('Interested - Proceed to Payment', 'Need More Information', 'Call Back Later') THEN 1 END) / NULLIF(COUNT(tla.id), 0)) * 100, 1) as positive_rate,
         COUNT(DISTINCT DATE(tla.action_date)) as active_days,
         MAX(tla.action_date) as last_activity,
         (SELECT COUNT(DISTINCT DATE(tll.login_time)) 
-         FROM team_leader_logins tll 
+         FROM lv_team_leader_logins tll 
          WHERE tll.leader_id = tl.leader_id AND tll.login_time >= DATE_SUB(NOW(), INTERVAL 7 DAY)) as login_days_week
-    FROM team_leaders tl
-    LEFT JOIN callers c ON tl.finqy_id = c.finqy_id
-    LEFT JOIN team_leader_actions tla ON tl.leader_id = tla.leader_id AND tla.action_date >= DATE_SUB(NOW(), INTERVAL ? DAY)
+    FROM lv_team_leaders tl
+    LEFT JOIN lv_callers c ON tl.finqy_id = c.finqy_id
+    LEFT JOIN lv_team_leader_actions tla ON tl.leader_id = tla.leader_id AND tla.action_date >= DATE_SUB(NOW(), INTERVAL ? DAY)
     WHERE tl.admin_id = ? AND tl.is_active = 1
     " . ($selected_rm ? "AND tl.leader_id = '$selected_rm'" : "") . "
     GROUP BY tl.leader_id, tl.leader_name, c.caller_name
@@ -178,8 +178,8 @@ $trends_sql = "
         DATE(tla.action_date) as action_date,
         tla.new_disposition,
         COUNT(*) as count
-    FROM team_leader_actions tla
-    JOIN team_leaders tl ON tla.leader_id = tl.leader_id
+    FROM lv_team_leader_actions tla
+    JOIN lv_team_leaders tl ON tla.leader_id = tl.leader_id
     $where_clause
     GROUP BY DATE(tla.action_date), tla.new_disposition
     ORDER BY action_date DESC
@@ -209,9 +209,9 @@ $activities_sql = "
         tla.remarks,
         tla.ip_address,
         tla.lead_id
-    FROM team_leader_actions tla
-    JOIN team_leaders tl ON tla.leader_id = tl.leader_id
-    LEFT JOIN final_call_logs fcl ON tla.lead_id = fcl.id
+    FROM lv_team_leader_actions tla
+    JOIN lv_team_leaders tl ON tla.leader_id = tl.leader_id
+    LEFT JOIN lv_final_call_logs fcl ON tla.lead_id = fcl.id
     $where_clause
     ORDER BY tla.action_date DESC
     LIMIT 50
@@ -255,12 +255,12 @@ $benchmarks_sql = "
             COUNT(tla.id) as total_actions,
             COUNT(CASE WHEN tla.new_disposition IN (
                 SELECT tld.disposition_name 
-                FROM team_leader_dispositions tld 
-                JOIN disposition_buckets db ON tld.bucket_id = db.id 
+                FROM lv_team_leader_dispositions tld 
+                JOIN lv_disposition_buckets db ON tld.bucket_id = db.id 
                 WHERE db.bucket_name = 'Interested' AND tld.is_active = 1
             ) THEN 1 END) as payment_conversions
-        FROM team_leaders tl
-        LEFT JOIN team_leader_actions tla ON tl.leader_id = tla.leader_id AND tla.action_date >= DATE_SUB(NOW(), INTERVAL ? DAY)
+        FROM lv_team_leaders tl
+        LEFT JOIN lv_team_leader_actions tla ON tl.leader_id = tla.leader_id AND tla.action_date >= DATE_SUB(NOW(), INTERVAL ? DAY)
         WHERE tl.admin_id = ? AND tl.is_active = 1
         GROUP BY tl.leader_id
     ) as perf_data

@@ -15,7 +15,7 @@ if ($_POST && isset($_POST['update_status'])) {
     $remarks = trim($_POST['remarks']);
     
     $stmt = $conn->prepare("
-        UPDATE follow_up_schedules 
+        UPDATE lv_follow_up_schedules 
         SET status = ?, remarks = CONCAT(IFNULL(remarks, ''), '\n[', NOW(), '] Status: ', ?, IF(? != '', CONCAT(' - ', ?), ''))
         WHERE id = ? AND leader_id = ?
     ");
@@ -42,7 +42,7 @@ if ($_POST && isset($_POST['reschedule'])) {
     
     if (strtotime($newDatetime) > (time() + 60)) {
         $stmt = $conn->prepare("
-            UPDATE follow_up_schedules 
+            UPDATE lv_follow_up_schedules 
             SET follow_up_datetime = ?, 
                 remarks = CONCAT(IFNULL(remarks, ''), '\n[', NOW(), '] Rescheduled to: ', ?, IF(? != '', CONCAT(' - ', ?), ''))
             WHERE id = ? AND leader_id = ?
@@ -106,11 +106,11 @@ $stmt = $conn->prepare("
            db.bucket_name,
            p.product_name,
            b.original_filename
-    FROM follow_up_schedules fs
-    JOIN final_call_logs fcl ON fs.lead_id = fcl.id
-    JOIN disposition_buckets db ON fs.bucket_id = db.id
-    JOIN file_batches b ON fcl.batch_id = b.id
-    JOIN products p ON b.product_code = p.product_code
+    FROM lv_follow_up_schedules fs
+    JOIN lv_final_call_logs fcl ON fs.lead_id = fcl.id
+    JOIN lv_disposition_buckets db ON fs.bucket_id = db.id
+    JOIN lv_file_batches b ON fcl.batch_id = b.id
+    JOIN lv_products p ON b.product_code = p.product_code
     WHERE $whereClause
     ORDER BY fs.follow_up_datetime ASC
 ");
@@ -136,7 +136,7 @@ $stmt = $conn->prepare("
         COUNT(CASE WHEN status = 'scheduled' AND follow_up_datetime < NOW() THEN 1 END) as overdue,
         COUNT(CASE WHEN DATE(follow_up_datetime) = CURDATE() AND status = 'scheduled' THEN 1 END) as due_today,
         COUNT(CASE WHEN DATE(follow_up_datetime) = DATE_ADD(CURDATE(), INTERVAL 1 DAY) AND status = 'scheduled' THEN 1 END) as due_tomorrow
-    FROM follow_up_schedules 
+    FROM lv_follow_up_schedules 
     WHERE leader_id = ?
 ");
 $stmt->bind_param("s", $leaderId);

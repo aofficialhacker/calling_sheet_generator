@@ -82,15 +82,15 @@ echo "<h2>✅ Complete Data Preservation Solution</h2>";
 
 echo "<div class='solution'>";
 echo "<h4>🎯 Enhanced Approach: Triple-Layer Data Protection</h4>";
-echo "<strong>Layer 1:</strong> call_history table stores EVERY attempt with ALL fields<br>";
-echo "<strong>Layer 2:</strong> final_call_logs shows CURRENT state + tracks original caller<br>";
+echo "<strong>Layer 1:</strong> lv_call_history table stores EVERY attempt with ALL fields<br>";
+echo "<strong>Layer 2:</strong> lv_final_call_logs shows CURRENT state + tracks original caller<br>";
 echo "<strong>Layer 3:</strong> PDF generation can show ORIGINAL, CURRENT, or BLANK data based on mode";
 echo "</div>";
 
 echo "<h4>📋 Implementation Components</h4>";
 
 $components = [
-    'Enhanced call_history table' => 'Store ALL marked fields for every attempt (slot, disposition, connectivity, notes, timestamps)',
+    'Enhanced lv_call_history table' => 'Store ALL marked fields for every attempt (slot, disposition, connectivity, notes, timestamps)',
     'Smart upload detection' => 'Detect re-attempts vs redistributions and preserve ALL previous data',
     'Flexible PDF generation' => 'Generate PDFs with ORIGINAL data, CURRENT data, or BLANK fields based on admin choice',
     'Complete audit trail' => 'Track every single change to every field by every caller',
@@ -110,9 +110,9 @@ echo "</div>";
 echo "<div class='section'>";
 echo "<h2>🗄️ Enhanced Database Design</h2>";
 
-echo "<h4>Updated call_history Table Structure</h4>";
+echo "<h4>Updated lv_call_history Table Structure</h4>";
 echo "<div class='code-block'>";
-echo "CREATE TABLE call_history (
+echo "CREATE TABLE lv_call_history (
     id INT AUTO_INCREMENT PRIMARY KEY,
     original_record_id VARCHAR(50) NOT NULL,
     finqy_id VARCHAR(50) NOT NULL,
@@ -142,10 +142,10 @@ echo "CREATE TABLE call_history (
 );";
 echo "</div>";
 
-echo "<h4>Enhanced final_call_logs Tracking</h4>";
+echo "<h4>Enhanced lv_final_call_logs Tracking</h4>";
 echo "<div class='code-block'>";
-echo "-- Additional tracking fields in final_call_logs
-ALTER TABLE final_call_logs ADD COLUMN:
+echo "-- Additional tracking fields in lv_final_call_logs
+ALTER TABLE lv_final_call_logs ADD COLUMN:
 - original_data_preserved BOOLEAN DEFAULT TRUE  -- Confirms original data is in history
 - last_preserved_at DATETIME                    -- When data was last backed up to history
 - data_integrity_hash VARCHAR(255)              -- Hash to verify no data corruption
@@ -162,7 +162,7 @@ echo "<h2>🚀 Implementation Priority & Action Plan</h2>";
 
 echo "<h4>🔥 CRITICAL (Immediate Action Required)</h4>";
 echo "<ol>";
-echo "<li><strong>Update call_history table</strong> to store ALL marked fields (slot, disposition, connectivity, notes, etc.)</li>";
+echo "<li><strong>Update lv_call_history table</strong> to store ALL marked fields (slot, disposition, connectivity, notes, etc.)</li>";
 echo "<li><strong>Enhance save_final_log.php</strong> to preserve ALL data before any update</li>";
 echo "<li><strong>Create backup mechanism</strong> that runs BEFORE any data modification</li>";
 echo "<li><strong>Test data recovery</strong> to ensure no information can ever be lost</li>";
@@ -183,15 +183,15 @@ echo "<div class='section'>";
 echo "<h2>🔍 Current Data Preservation Status</h2>";
 
 try {
-    // Check if we have any data in call_history
-    $history_check = $conn->query("SELECT COUNT(*) as count FROM call_history");
+    // Check if we have any data in lv_call_history
+    $history_check = $conn->query("SELECT COUNT(*) as count FROM lv_call_history");
     $history_count = $history_check->fetch_assoc()['count'];
     
     if ($history_count > 0) {
         echo "<div class='success'>✅ Call history tracking is active: {$history_count} attempts recorded</div>";
         
         // Check what fields are being preserved
-        $sample = $conn->query("SELECT * FROM call_history ORDER BY attempt_date DESC LIMIT 1")->fetch_assoc();
+        $sample = $conn->query("SELECT * FROM lv_call_history ORDER BY attempt_date DESC LIMIT 1")->fetch_assoc();
         if ($sample) {
             echo "<h4>Sample Preserved Data:</h4>";
             echo "<ul>";
@@ -209,10 +209,10 @@ try {
     // Check for any data that might have been lost
     $lost_data_check = $conn->query("
         SELECT COUNT(*) as potentially_lost 
-        FROM final_call_logs 
+        FROM lv_final_call_logs 
         WHERE finqy_id IS NOT NULL 
         AND processed_at IS NOT NULL 
-        AND id NOT IN (SELECT DISTINCT original_record_id FROM call_history WHERE original_record_id IS NOT NULL)
+        AND id NOT IN (SELECT DISTINCT original_record_id FROM lv_call_history WHERE original_record_id IS NOT NULL)
     ");
     $potentially_lost = $lost_data_check->fetch_assoc()['potentially_lost'];
     

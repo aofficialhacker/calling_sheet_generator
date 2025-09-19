@@ -7,9 +7,9 @@ $adminId = $_SESSION['admin_id'];
 
 // Fetch batches created by this admin with allocation chain info
 $batches_sql = "SELECT b.id, b.product_code, b.original_batch_id, p.product_name,
-                (SELECT COUNT(*) FROM final_call_logs WHERE batch_id = b.id) as record_count
-                FROM file_batches b
-                JOIN products p ON b.product_code = p.product_code
+                (SELECT COUNT(*) FROM lv_final_call_logs WHERE batch_id = b.id) as record_count
+                FROM lv_file_batches b
+                JOIN lv_products p ON b.product_code = p.product_code
                 WHERE b.admin_id = ?
                 ORDER BY b.upload_time DESC";
 $stmt = $conn->prepare($batches_sql);
@@ -25,7 +25,7 @@ foreach ($batches_data as $batch) {
         // Find the root batch
         $root = $batch['original_batch_id'];
         while (true) {
-            $checkStmt = $conn->prepare("SELECT original_batch_id FROM file_batches WHERE id = ?");
+            $checkStmt = $conn->prepare("SELECT original_batch_id FROM lv_file_batches WHERE id = ?");
             $checkStmt->bind_param("s", $root);
             $checkStmt->execute();
             $parentResult = $checkStmt->get_result()->fetch_assoc();
@@ -46,7 +46,7 @@ foreach ($batches_data as $batch) {
 }
 
 // Fetch all active products for the modal dropdown
-$products_sql = "SELECT id, product_code, product_name FROM products WHERE is_active = 1";
+$products_sql = "SELECT id, product_code, product_name FROM lv_products WHERE is_active = 1";
 $all_products = $conn->query($products_sql)->fetch_all(MYSQLI_ASSOC);
 
 // Function to get available products for allocation
@@ -55,7 +55,7 @@ function getAvailableProducts($batchId, $currentProductCode, $allProducts, $allo
     
     // Get the root batch for this batch
     $root = $batchId;
-    $checkStmt = $conn->prepare("SELECT original_batch_id FROM file_batches WHERE id = ?");
+    $checkStmt = $conn->prepare("SELECT original_batch_id FROM lv_file_batches WHERE id = ?");
     $checkStmt->bind_param("s", $batchId);
     $checkStmt->execute();
     $batchInfo = $checkStmt->get_result()->fetch_assoc();
@@ -64,7 +64,7 @@ function getAvailableProducts($batchId, $currentProductCode, $allProducts, $allo
     if ($batchInfo && $batchInfo['original_batch_id']) {
         $root = $batchInfo['original_batch_id'];
         while (true) {
-            $checkStmt = $conn->prepare("SELECT original_batch_id FROM file_batches WHERE id = ?");
+            $checkStmt = $conn->prepare("SELECT original_batch_id FROM lv_file_batches WHERE id = ?");
             $checkStmt->bind_param("s", $root);
             $checkStmt->execute();
             $parentResult = $checkStmt->get_result()->fetch_assoc();
@@ -97,11 +97,11 @@ function getAvailableProducts($batchId, $currentProductCode, $allProducts, $allo
         // Check if there are any unique mobile numbers for this product
         $checkSql = "
             SELECT COUNT(DISTINCT fcl1.mobile_no) as unique_count
-            FROM final_call_logs fcl1
+            FROM lv_final_call_logs fcl1
             WHERE fcl1.batch_id = ?
             AND NOT EXISTS (
-                SELECT 1 FROM final_call_logs fcl2
-                INNER JOIN file_batches fb ON fcl2.batch_id = fb.id
+                SELECT 1 FROM lv_final_call_logs fcl2
+                INNER JOIN lv_file_batches fb ON fcl2.batch_id = fb.id
                 WHERE fcl2.mobile_no = fcl1.mobile_no
                 AND fb.product_code = ?
                 AND fb.admin_id = ?

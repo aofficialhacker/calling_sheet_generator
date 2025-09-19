@@ -3,7 +3,7 @@ require_once 'db_config.php';
 
 // Get a sample batch_id
 $conn = getDBConnection();
-$result = $conn->query("SELECT id FROM file_batches ORDER BY upload_time DESC LIMIT 1");
+$result = $conn->query("SELECT id FROM lv_file_batches ORDER BY upload_time DESC LIMIT 1");
 if ($result && $row = $result->fetch_assoc()) {
     $batch_id = $row['id'];
     $_GET['batch_id'] = $batch_id;

@@ -10,7 +10,7 @@ echo "<html><head><title>Suresh Admin Data Check</title></head><body>";
 echo "<h1>Data Check for suresh.negi@finqy.ai</h1>";
 
 // Find the admin record
-$admin_query = "SELECT admin_id, username, email, is_active FROM admin_users WHERE email = 'suresh.negi@finqy.ai' OR username LIKE '%suresh%'";
+$admin_query = "SELECT admin_id, username, email, is_active FROM lv_admin_users WHERE email = 'suresh.negi@finqy.ai' OR username LIKE '%suresh%'";
 $admin_result = $conn->query($admin_query);
 
 if ($admin_result && $admin_result->num_rows > 0) {
@@ -37,19 +37,19 @@ if ($admin_result && $admin_result->num_rows > 0) {
         $adminId = $suresh_admin['admin_id'];
         echo "<p><strong>Using Admin ID:</strong> {$adminId}</p>";
         
-        // Check vendors for this admin
+        // Check lv_vendors for this admin
         echo "<h2>2. Vendors for Admin {$adminId}</h2>";
-        $vendor_query = "SELECT vendor_id, vendor_name, is_approved FROM vendors WHERE admin_id = ? ORDER BY vendor_id";
+        $vendor_query = "SELECT vendor_id, vendor_name, is_approved FROM lv_vendors WHERE admin_id = ? ORDER BY vendor_id";
         $vendor_stmt = $conn->prepare($vendor_query);
         $vendor_stmt->bind_param("s", $adminId);
         $vendor_stmt->execute();
-        $vendors = $vendor_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+        $lv_vendors = $vendor_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
         $vendor_stmt->close();
         
-        if (count($vendors) > 0) {
+        if (count($lv_vendors) > 0) {
             echo "<table border='1' style='border-collapse: collapse;'>";
             echo "<tr><th>Vendor ID</th><th>Vendor Name</th><th>Approved</th></tr>";
-            foreach ($vendors as $vendor) {
+            foreach ($lv_vendors as $vendor) {
                 echo "<tr>";
                 echo "<td>" . htmlspecialchars($vendor['vendor_id']) . "</td>";
                 echo "<td>" . htmlspecialchars($vendor['vendor_name']) . "</td>";
@@ -63,7 +63,7 @@ if ($admin_result && $admin_result->num_rows > 0) {
         
         // Check file batches for this admin
         echo "<h2>3. File Batches for Admin {$adminId}</h2>";
-        $batch_query = "SELECT id, vendor_id, product_code, original_filename, upload_time FROM file_batches WHERE admin_id = ? ORDER BY upload_time DESC LIMIT 20";
+        $batch_query = "SELECT id, vendor_id, product_code, original_filename, upload_time FROM lv_file_batches WHERE admin_id = ? ORDER BY upload_time DESC LIMIT 20";
         $batch_stmt = $conn->prepare($batch_query);
         $batch_stmt->bind_param("s", $adminId);
         $batch_stmt->execute();
@@ -96,8 +96,8 @@ if ($admin_result && $admin_result->num_rows > 0) {
                 COUNT(DISTINCT fcl.batch_id) as batches_with_logs,
                 SUM(CASE WHEN fcl.status = 'fresh' THEN 1 ELSE 0 END) as fresh_records,
                 SUM(CASE WHEN fcl.status != 'fresh' THEN 1 ELSE 0 END) as processed_records
-            FROM final_call_logs fcl 
-            JOIN file_batches fb ON fcl.batch_id = fb.id 
+            FROM lv_final_call_logs fcl 
+            JOIN lv_file_batches fb ON fcl.batch_id = fb.id 
             WHERE fb.admin_id = ?
         ";
         $logs_stmt = $conn->prepare($logs_query);
@@ -124,9 +124,9 @@ if ($admin_result && $admin_result->num_rows > 0) {
                 COUNT(DISTINCT fb.id) as batches_uploaded,
                 COALESCE(COUNT(fcl.id), 0) as records_received,
                 COALESCE(SUM(CASE WHEN fcl.status != 'fresh' THEN 1 ELSE 0 END), 0) as records_processed
-            FROM file_batches fb
-            LEFT JOIN vendors v ON fb.vendor_id = v.vendor_id AND v.admin_id = fb.admin_id
-            LEFT JOIN final_call_logs fcl ON fb.id = fcl.batch_id
+            FROM lv_file_batches fb
+            LEFT JOIN lv_vendors v ON fb.vendor_id = v.vendor_id AND v.admin_id = fb.admin_id
+            LEFT JOIN lv_final_call_logs fcl ON fb.id = fcl.batch_id
             WHERE fb.admin_id = ? AND (v.is_approved = 1 OR v.is_approved IS NULL)
             GROUP BY COALESCE(v.vendor_id, fb.vendor_id), COALESCE(v.vendor_name, fb.vendor_id), DATE_FORMAT(fb.upload_time, '%Y-%m')
             ORDER BY month_year DESC, batches_uploaded DESC
@@ -167,7 +167,7 @@ if ($admin_result && $admin_result->num_rows > 0) {
             echo "<h4>Solutions:</h4>";
             echo "<ol>";
             echo "<li><strong>Upload batches:</strong> Use the batch upload functionality in the admin panel</li>";
-            echo "<li><strong>Create vendors first:</strong> Set up vendors before uploading batches</li>";
+            echo "<li><strong>Create lv_vendors first:</strong> Set up lv_vendors before uploading batches</li>";
             echo "<li><strong>Check upload permissions:</strong> Ensure the admin can access upload features</li>";
             echo "</ol>";
             echo "</div>";

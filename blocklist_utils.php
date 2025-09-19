@@ -11,7 +11,7 @@ function isMobileNumberBlocked($admin_id, $mobile_no) {
     $clean_mobile = preg_replace('/\D/', '', $mobile_no);
     
     // Check if number exists in blocklist
-    $stmt = $conn->prepare("SELECT COUNT(*) as count FROM blocklist_numbers WHERE admin_id = ? AND mobile_no = ?");
+    $stmt = $conn->prepare("SELECT COUNT(*) as count FROM lv_blocklist_numbers WHERE admin_id = ? AND mobile_no = ?");
     $stmt->bind_param("ss", $admin_id, $clean_mobile);
     $stmt->execute();
     $result = $stmt->get_result()->fetch_assoc();
@@ -31,7 +31,7 @@ function addToBlocklist($admin_id, $mobile_no, $created_by, $batch_id = null, $n
     $clean_mobile = preg_replace('/\D/', '', $mobile_no);
     
     // Insert with ON DUPLICATE KEY UPDATE to handle duplicates
-    $stmt = $conn->prepare("INSERT INTO blocklist_numbers (admin_id, mobile_no, created_by, batch_id, notes) 
+    $stmt = $conn->prepare("INSERT INTO lv_blocklist_numbers (admin_id, mobile_no, created_by, batch_id, notes) 
                            VALUES (?, ?, ?, ?, ?) 
                            ON DUPLICATE KEY UPDATE 
                            upload_date = CURRENT_TIMESTAMP, 
@@ -52,7 +52,7 @@ function removeFromBlocklist($admin_id, $mobile_no) {
     
     $clean_mobile = preg_replace('/\D/', '', $mobile_no);
     
-    $stmt = $conn->prepare("DELETE FROM blocklist_numbers WHERE admin_id = ? AND mobile_no = ?");
+    $stmt = $conn->prepare("DELETE FROM lv_blocklist_numbers WHERE admin_id = ? AND mobile_no = ?");
     $stmt->bind_param("ss", $admin_id, $clean_mobile);
     $success = $stmt->execute();
     $affected = $conn->affected_rows;
@@ -69,7 +69,7 @@ function getBlocklistNumbers($admin_id, $limit = 100, $offset = 0, $search = nul
     $conn = getDBConnection();
     
     $sql = "SELECT id, mobile_no, batch_id, upload_date, created_by, notes 
-            FROM blocklist_numbers 
+            FROM lv_blocklist_numbers 
             WHERE admin_id = ?";
     $params = [$admin_id];
     $types = "s";
@@ -117,7 +117,7 @@ function getBlocklistNumbers($admin_id, $limit = 100, $offset = 0, $search = nul
 function getBlocklistCount($admin_id, $search = null) {
     $conn = getDBConnection();
     
-    $sql = "SELECT COUNT(*) as count FROM blocklist_numbers WHERE admin_id = ?";
+    $sql = "SELECT COUNT(*) as count FROM lv_blocklist_numbers WHERE admin_id = ?";
     $params = [$admin_id];
     $types = "s";
     
@@ -158,7 +158,7 @@ function getBlocklistCount($admin_id, $search = null) {
 function deleteBlocklistBatch($admin_id, $batch_id) {
     $conn = getDBConnection();
     
-    $stmt = $conn->prepare("DELETE FROM blocklist_numbers WHERE admin_id = ? AND batch_id = ?");
+    $stmt = $conn->prepare("DELETE FROM lv_blocklist_numbers WHERE admin_id = ? AND batch_id = ?");
     $stmt->bind_param("ss", $admin_id, $batch_id);
     $success = $stmt->execute();
     $affected = $conn->affected_rows;
@@ -178,7 +178,7 @@ function getBlocklistStats($admin_id) {
                            COUNT(*) as total_blocked,
                            COUNT(DISTINCT batch_id) as total_batches,
                            MAX(upload_date) as latest_upload
-                           FROM blocklist_numbers 
+                           FROM lv_blocklist_numbers 
                            WHERE admin_id = ?");
     
     if ($stmt === false) {
@@ -232,7 +232,7 @@ function filterBlockedNumbers($admin_id, $mobile_numbers) {
     // Create placeholders for IN clause
     $placeholders = str_repeat('?,', count($clean_numbers) - 1) . '?';
     
-    $sql = "SELECT mobile_no FROM blocklist_numbers 
+    $sql = "SELECT mobile_no FROM lv_blocklist_numbers 
             WHERE admin_id = ? AND mobile_no IN ({$placeholders})";
     
     $stmt = $conn->prepare($sql);

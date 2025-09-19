@@ -14,7 +14,7 @@ if ($isAjax) {
 $conn = getDBConnection();
 
 // Fetch disposition map from database for conversion
-$dispositions = $conn->query("SELECT code, description FROM disposition_codes WHERE is_active = 1");
+$dispositions = $conn->query("SELECT code, description FROM lv_disposition_codes WHERE is_active = 1");
 $DISPOSITION_MAP = [];
 while($row = $dispositions->fetch_assoc()) {
     $DISPOSITION_MAP[$row['code']] = $row['description'];
@@ -36,7 +36,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['json_results']) && iss
         try {
             // --- FIX: The SQL query now uses 'id = ?' as the sole condition in the WHERE clause. ---
             // This is more direct and reliable than using the mobile number.
-            $update_sql = "UPDATE final_call_logs 
+            $update_sql = "UPDATE lv_final_call_logs 
                            SET connectivity = ?, disposition = ?, slot = ?, finqy_id = ?, processed_at = NOW() 
                            WHERE id = ?";
             

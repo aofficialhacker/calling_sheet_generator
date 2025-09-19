@@ -23,7 +23,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         }
         
         // Simplified query - just check username first
-        $stmt = $conn->prepare("SELECT id, password, name, username, designation, is_active FROM admin_users WHERE username = ?");
+        $stmt = $conn->prepare("SELECT id, password, name, username, designation, is_active FROM lv_admin_users WHERE username = ?");
         $stmt->bind_param("s", $username);
         $stmt->execute();
         $result = $stmt->get_result();
@@ -46,7 +46,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     
                     // Auto-upgrade to hashed password for security
                     $hashed_password = password_hash($password, PASSWORD_DEFAULT);
-                    $update_stmt = $conn->prepare("UPDATE admin_users SET password = ? WHERE id = ?");
+                    $update_stmt = $conn->prepare("UPDATE lv_admin_users SET password = ? WHERE id = ?");
                     $update_stmt->bind_param("si", $hashed_password, $user['id']);
                     $update_stmt->execute();
                     $update_stmt->close();
@@ -57,7 +57,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     
                     // Force password update to secure hash
                     $hashed_password = password_hash($password, PASSWORD_DEFAULT);
-                    $update_stmt = $conn->prepare("UPDATE admin_users SET password = ? WHERE id = ?");
+                    $update_stmt = $conn->prepare("UPDATE lv_admin_users SET password = ? WHERE id = ?");
                     $update_stmt->bind_param("si", $hashed_password, $user['id']);
                     $update_stmt->execute();
                     $update_stmt->close();

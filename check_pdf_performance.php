@@ -10,7 +10,7 @@ try {
     echo "✓ Database connection successful\n";
     
     // Check record counts
-    $result = $conn->query("SELECT COUNT(*) as total FROM final_call_logs");
+    $result = $conn->query("SELECT COUNT(*) as total FROM lv_final_call_logs");
     if ($result) {
         $total = $result->fetch_assoc()['total'];
         echo "✓ Total records in system: " . number_format($total) . "\n";

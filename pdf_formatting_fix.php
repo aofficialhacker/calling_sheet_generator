@@ -47,8 +47,8 @@ echo "</div>";
 // Get available batches for testing
 $result = $conn->query("
     SELECT fb.id, fb.original_filename, COUNT(fcl.id) as record_count 
-    FROM file_batches fb 
-    LEFT JOIN final_call_logs fcl ON fb.id = fcl.batch_id 
+    FROM lv_file_batches fb 
+    LEFT JOIN lv_final_call_logs fcl ON fb.id = fcl.batch_id 
     WHERE fb.admin_id = '{$adminId}'
     GROUP BY fb.id 
     HAVING record_count > 0

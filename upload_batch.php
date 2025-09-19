@@ -105,7 +105,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && (isset($_FILES['customerFile']) || i
         }
         
         // Fetch product code
-        $prodStmt = $conn->prepare("SELECT product_code FROM products WHERE id = ?");
+        $prodStmt = $conn->prepare("SELECT product_code FROM lv_products WHERE id = ?");
         $prodStmt->bind_param("i", $productId);
         $prodStmt->execute();
         $productCode = $prodStmt->get_result()->fetch_assoc()['product_code'];
@@ -232,13 +232,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && (isset($_FILES['customerFile']) || i
         $batch_id = generateBatchId($productCode, $vendorId, $adminId, $conn);
 
         // Create batch entry
-        $batch_stmt = $conn->prepare("INSERT INTO file_batches (id, admin_id, vendor_id, product_code, original_filename) VALUES (?, ?, ?, ?, ?)");
+        $batch_stmt = $conn->prepare("INSERT INTO lv_file_batches (id, admin_id, vendor_id, product_code, original_filename) VALUES (?, ?, ?, ?, ?)");
         $batch_stmt->bind_param("sssss", $batch_id, $adminId, $vendorId, $productCode, $originalFileName);
         $batch_stmt->execute();
         $batch_stmt->close();
 
         // Insert all valid records
-        $sql = "INSERT INTO final_call_logs (id, mobile_no, batch_id, status, title, name, policy_number, pan, dob, age, expiry, address, city, state, country, pincode, plan, premium, sum_insured, extra_data) 
+        $sql = "INSERT INTO lv_final_call_logs (id, mobile_no, batch_id, status, title, name, policy_number, pan, dob, age, expiry, address, city, state, country, pincode, plan, premium, sum_insured, extra_data) 
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $conn->prepare($sql);
         if ($stmt === false) { throw new Exception("Prepare failed (INSERT): " . $conn->error); }
@@ -298,13 +298,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && (isset($_FILES['customerFile']) || i
 // --- Fetch data for form dropdowns ---
 $conn = getDBConnection();
 $adminId = $_SESSION['admin_id'];
-$vendors = $conn->query("SELECT vendor_id, vendor_name FROM vendors WHERE admin_id = '{$adminId}' AND is_approved = 1 ORDER BY vendor_id");
-$products = $conn->query("SELECT id, product_name FROM products WHERE is_active = 1 ORDER BY product_name");
+$lv_vendors = $conn->query("SELECT vendor_id, vendor_name FROM lv_vendors WHERE admin_id = '{$adminId}' AND is_approved = 1 ORDER BY vendor_id");
+$products = $conn->query("SELECT id, product_name FROM lv_products WHERE is_active = 1 ORDER BY product_name");
 
 // Dispositions removed - moved to view batch page
 
 // Check vendor request count for this admin
-$requestCountStmt = $conn->prepare("SELECT COUNT(*) as request_count FROM vendor_requests WHERE admin_id = ?");
+$requestCountStmt = $conn->prepare("SELECT COUNT(*) as request_count FROM lv_vendor_requests WHERE admin_id = ?");
 $requestCountStmt->bind_param("s", $adminId);
 $requestCountStmt->execute();
 $requestCount = $requestCountStmt->get_result()->fetch_assoc()['request_count'];
@@ -434,7 +434,7 @@ function formatDateString($value): string {
                                     <div class="input-group">
                                         <select class="form-select" id="vendor_id" name="vendor_id" required>
                                             <option value="">-- Select a Unit --</option>
-                                            <?php while($row = $vendors->fetch_assoc()): ?>
+                                            <?php while($row = $lv_vendors->fetch_assoc()): ?>
                                                 <option value="<?= htmlspecialchars($row['vendor_id']) ?>"><?= htmlspecialchars($row['vendor_id']) ?> (<?= htmlspecialchars($row['vendor_name']) ?>)</option>
                                             <?php endwhile; ?>
                                         </select>

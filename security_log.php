@@ -32,9 +32,9 @@ if (!isset($input['type']) || !isset($input['userId'])) {
 try {
     $conn = getDBConnection();
     
-    // Create security_violations table if it doesn't exist
+    // Create lv_security_violations table if it doesn't exist
     $createTableSQL = "
-        CREATE TABLE IF NOT EXISTS security_violations (
+        CREATE TABLE IF NOT EXISTS lv_security_violations (
             id INT AUTO_INCREMENT PRIMARY KEY,
             user_id VARCHAR(50) NOT NULL,
             session_id VARCHAR(100),
@@ -77,7 +77,7 @@ try {
     
     // Insert the violation log
     $stmt = $conn->prepare("
-        INSERT INTO security_violations 
+        INSERT INTO lv_security_violations 
         (user_id, session_id, violation_type, violation_details, ip_address, user_agent, page_url, severity)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     ");

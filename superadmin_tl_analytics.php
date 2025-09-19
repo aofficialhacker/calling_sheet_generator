@@ -16,7 +16,7 @@ $selected_tl = $_GET['tl_id'] ?? '';
 $activity_type = $_GET['activity_type'] ?? '';
 
 // Get all admins for filter
-$admins_sql = "SELECT admin_id, name as admin_name FROM admin_users WHERE designation != 'superadmin' ORDER BY name";
+$admins_sql = "SELECT admin_id, name as admin_name FROM lv_admin_users WHERE designation != 'superadmin' ORDER BY name";
 $admins_stmt = $conn->prepare($admins_sql);
 if ($admins_stmt === false) {
     error_log("Admins SQL Error: " . $conn->error);
@@ -30,18 +30,18 @@ if ($admins_stmt === false) {
 // Get all team leaders for filter
 $tls_sql = "
     SELECT tl.leader_id, tl.leader_name, tl.admin_id, au.name as admin_name 
-    FROM team_leaders tl 
-    JOIN admin_users au ON tl.admin_id = au.admin_id 
+    FROM lv_team_leaders tl 
+    JOIN lv_admin_users au ON tl.admin_id = au.admin_id 
     WHERE tl.is_active = 1 
     ORDER BY au.name, tl.leader_name
 ";
 $tls_stmt = $conn->prepare($tls_sql);
 if ($tls_stmt === false) {
     error_log("Team Leaders SQL Error: " . $conn->error);
-    $team_leaders = [];
+    $lv_team_leaders = [];
 } else {
     $tls_stmt->execute();
-    $team_leaders = $tls_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $lv_team_leaders = $tls_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
     $tls_stmt->close();
 }
 
@@ -73,16 +73,16 @@ $where_clause = !empty($where_conditions) ? "WHERE " . implode(" AND ", $where_c
 // System-wide statistics
 $stats_sql = "
     SELECT 
-        COUNT(DISTINCT tl.leader_id) as total_team_leaders,
+        COUNT(DISTINCT tl.leader_id) as total_lv_team_leaders,
         COUNT(DISTINCT tl.admin_id) as active_admins,
         COUNT(DISTINCT CASE WHEN tll.login_time >= DATE_SUB(NOW(), INTERVAL 7 DAY) THEN tl.leader_id END) as active_this_week,
         COUNT(DISTINCT CASE WHEN tll.login_time >= DATE_SUB(NOW(), INTERVAL 1 DAY) THEN tl.leader_id END) as active_today,
         COUNT(CASE WHEN tll.login_status = 'success' AND DATE(tll.login_time) = CURDATE() THEN 1 END) as successful_logins_today,
         COUNT(CASE WHEN tll.login_status = 'failed' AND DATE(tll.login_time) = CURDATE() THEN 1 END) as failed_logins_today,
-        (SELECT COUNT(*) FROM team_leader_actions WHERE DATE(action_date) = CURDATE()) as actions_today,
-        (SELECT COUNT(*) FROM team_leader_view_logs WHERE DATE(timestamp) = CURDATE()) as data_accesses_today
-    FROM team_leaders tl
-    LEFT JOIN team_leader_logins tll ON tl.leader_id = tll.leader_id
+        (SELECT COUNT(*) FROM lv_team_leader_actions WHERE DATE(action_date) = CURDATE()) as actions_today,
+        (SELECT COUNT(*) FROM lv_team_leader_view_logs WHERE DATE(timestamp) = CURDATE()) as data_accesses_today
+    FROM lv_team_leaders tl
+    LEFT JOIN lv_team_leader_logins tll ON tl.leader_id = tll.leader_id
     WHERE tl.is_active = 1
 ";
 
@@ -90,7 +90,7 @@ $stats_stmt = $conn->prepare($stats_sql);
 if ($stats_stmt === false) {
     error_log("System Stats SQL Error: " . $conn->error);
     $system_stats = [
-        'total_team_leaders' => 0,
+        'total_lv_team_leaders' => 0,
         'active_admins' => 0,
         'active_this_week' => 0,
         'active_today' => 0,
@@ -115,9 +115,9 @@ $top_performers_sql = "
         COUNT(CASE WHEN tla.new_disposition = 'Interested - Proceed to Payment' THEN 1 END) as payment_conversions,
         COUNT(CASE WHEN tla.new_disposition IN ('Interested - Proceed to Payment', 'Need More Information') THEN 1 END) as positive_outcomes,
         ROUND((COUNT(CASE WHEN tla.new_disposition = 'Interested - Proceed to Payment' THEN 1 END) / NULLIF(COUNT(tla.id), 0)) * 100, 1) as conversion_rate
-    FROM team_leaders tl
-    JOIN admin_users au ON tl.admin_id = au.admin_id
-    LEFT JOIN team_leader_actions tla ON tl.leader_id = tla.leader_id AND tla.action_date >= DATE_SUB(NOW(), INTERVAL ? DAY)
+    FROM lv_team_leaders tl
+    JOIN lv_admin_users au ON tl.admin_id = au.admin_id
+    LEFT JOIN lv_team_leader_actions tla ON tl.leader_id = tla.leader_id AND tla.action_date >= DATE_SUB(NOW(), INTERVAL ? DAY)
     WHERE tl.is_active = 1
     GROUP BY tl.leader_id, tl.leader_name, au.name
     HAVING total_actions > 0
@@ -142,9 +142,9 @@ $disposition_sql = "
     SELECT 
         tla.new_disposition,
         COUNT(*) as count,
-        ROUND((COUNT(*) / (SELECT COUNT(*) FROM team_leader_actions WHERE action_date >= DATE_SUB(NOW(), INTERVAL ? DAY))) * 100, 1) as percentage
-    FROM team_leader_actions tla
-    JOIN team_leaders tl ON tla.leader_id = tl.leader_id
+        ROUND((COUNT(*) / (SELECT COUNT(*) FROM lv_team_leader_actions WHERE action_date >= DATE_SUB(NOW(), INTERVAL ? DAY))) * 100, 1) as percentage
+    FROM lv_team_leader_actions tla
+    JOIN lv_team_leaders tl ON tla.leader_id = tl.leader_id
     WHERE tla.action_date >= DATE_SUB(NOW(), INTERVAL ? DAY)
     " . ($selected_admin ? "AND tl.admin_id = '$selected_admin'" : "") . "
     " . ($selected_tl ? "AND tl.leader_id = '$selected_tl'" : "") . "
@@ -171,28 +171,28 @@ $admin_performance_sql = "
         au.name as admin_name,
         
         (SELECT COUNT(DISTINCT tl.leader_id) 
-         FROM team_leaders tl 
-         WHERE tl.admin_id = au.admin_id AND tl.is_active = 1) as team_leaders_count,
+         FROM lv_team_leaders tl 
+         WHERE tl.admin_id = au.admin_id AND tl.is_active = 1) as lv_team_leaders_count,
         
         (SELECT COUNT(*) 
-         FROM team_leader_actions tla 
-         JOIN team_leaders tl ON tla.leader_id = tl.leader_id 
+         FROM lv_team_leader_actions tla 
+         JOIN lv_team_leaders tl ON tla.leader_id = tl.leader_id 
          WHERE tl.admin_id = au.admin_id AND tla.action_date >= DATE_SUB(NOW(), INTERVAL ? DAY)) as total_actions,
         
         (SELECT COUNT(*) 
-         FROM team_leader_actions tla 
-         JOIN team_leaders tl ON tla.leader_id = tl.leader_id 
+         FROM lv_team_leader_actions tla 
+         JOIN lv_team_leaders tl ON tla.leader_id = tl.leader_id 
          WHERE tl.admin_id = au.admin_id AND tla.action_date >= DATE_SUB(NOW(), INTERVAL ? DAY) AND tla.new_disposition = 'Interested - Proceed to Payment') as conversions,
         
-        ROUND((SELECT COUNT(*) FROM team_leader_actions tla JOIN team_leaders tl ON tla.leader_id = tl.leader_id WHERE tl.admin_id = au.admin_id AND tla.action_date >= DATE_SUB(NOW(), INTERVAL ? DAY) AND tla.new_disposition = 'Interested - Proceed to Payment') / 
-              NULLIF((SELECT COUNT(*) FROM team_leader_actions tla JOIN team_leaders tl ON tla.leader_id = tl.leader_id WHERE tl.admin_id = au.admin_id AND tla.action_date >= DATE_SUB(NOW(), INTERVAL ? DAY)), 0) * 100, 1) as conversion_rate,
+        ROUND((SELECT COUNT(*) FROM lv_team_leader_actions tla JOIN lv_team_leaders tl ON tla.leader_id = tl.leader_id WHERE tl.admin_id = au.admin_id AND tla.action_date >= DATE_SUB(NOW(), INTERVAL ? DAY) AND tla.new_disposition = 'Interested - Proceed to Payment') / 
+              NULLIF((SELECT COUNT(*) FROM lv_team_leader_actions tla JOIN lv_team_leaders tl ON tla.leader_id = tl.leader_id WHERE tl.admin_id = au.admin_id AND tla.action_date >= DATE_SUB(NOW(), INTERVAL ? DAY)), 0) * 100, 1) as conversion_rate,
         
         (SELECT COUNT(DISTINCT tll.leader_id) 
-         FROM team_leader_logins tll 
-         JOIN team_leaders tl ON tll.leader_id = tl.leader_id 
+         FROM lv_team_leader_logins tll 
+         JOIN lv_team_leaders tl ON tll.leader_id = tl.leader_id 
          WHERE tl.admin_id = au.admin_id AND tll.login_time >= DATE_SUB(NOW(), INTERVAL 7 DAY)) as active_this_week
     
-    FROM admin_users au
+    FROM lv_admin_users au
     WHERE au.designation != 'superadmin'
     ORDER BY conversion_rate DESC, total_actions DESC
 ";
@@ -218,9 +218,9 @@ $security_events_sql = "
         tll.login_status,
         tll.login_time,
         tll.user_agent
-    FROM team_leader_logins tll
-    JOIN team_leaders tl ON tll.leader_id = tl.leader_id
-    JOIN admin_users au ON tl.admin_id = au.admin_id
+    FROM lv_team_leader_logins tll
+    JOIN lv_team_leaders tl ON tll.leader_id = tl.leader_id
+    JOIN lv_admin_users au ON tl.admin_id = au.admin_id
     WHERE tll.login_time >= DATE_SUB(NOW(), INTERVAL 7 DAY)
     " . ($selected_admin ? "AND tl.admin_id = '$selected_admin'" : "") . "
     ORDER BY tll.login_time DESC
@@ -319,7 +319,7 @@ $conn->close();
                                 <div class="d-flex justify-content-between align-items-center">
                                     <div>
                                         <h6 class="card-title text-white-50">Total RMs</h6>
-                                        <h2 class="mb-0"><?= $system_stats['total_team_leaders'] ?></h2>
+                                        <h2 class="mb-0"><?= $system_stats['total_lv_team_leaders'] ?></h2>
                                         <small>across <?= $system_stats['active_admins'] ?> admins</small>
                                     </div>
                                     <i class="bi bi-people-fill metric-icon"></i>
@@ -401,7 +401,7 @@ $conn->close();
                                 <label class="form-label text-white-50">Relationship Manager</label>
                                 <select name="tl_id" class="form-select">
                                     <option value="">All RMs</option>
-                                    <?php foreach ($team_leaders as $tl): ?>
+                                    <?php foreach ($lv_team_leaders as $tl): ?>
                                         <option value="<?= $tl['leader_id'] ?>" <?= $selected_tl === $tl['leader_id'] ? 'selected' : '' ?>>
                                             <?= htmlspecialchars($tl['leader_name']) ?> (<?= $tl['admin_name'] ?>)
                                         </option>
@@ -559,7 +559,7 @@ $conn->close();
                                                 <br><small class="text-muted"><?= $admin['admin_id'] ?></small>
                                             </td>
                                             <td>
-                                                <span class="badge bg-secondary"><?= $admin['team_leaders_count'] ?></span>
+                                                <span class="badge bg-secondary"><?= $admin['lv_team_leaders_count'] ?></span>
                                             </td>
                                             <td>
                                                 <span class="badge bg-info"><?= $admin['total_actions'] ?></span>

@@ -22,7 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt = $conn->prepare("
             SELECT tl.*, 
                    TIMESTAMPDIFF(HOUR, tl.code_generated_at, NOW()) as hours_since_generation
-            FROM team_leaders tl 
+            FROM lv_team_leaders tl 
             WHERE tl.id = ? AND tl.admin_id = ?
         ");
         $stmt->bind_param("ss", $leaderId, $adminId);
@@ -50,8 +50,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // Get follow-up details and verify it belongs to this team leader
         $stmt = $conn->prepare("
             SELECT fs.*, fcl.name as customer_name, fcl.mobile_no as customer_mobile
-            FROM follow_up_schedules fs
-            JOIN final_call_logs fcl ON fs.lead_id = fcl.id
+            FROM lv_follow_up_schedules fs
+            JOIN lv_final_call_logs fcl ON fs.lead_id = fcl.id
             WHERE fs.id = ? AND fs.leader_id = ?
         ");
         $stmt->bind_param("is", $followUpId, $leaderId);
@@ -70,7 +70,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? 'Unknown';
         
         $stmt = $conn->prepare("
-            INSERT INTO team_leader_view_logs 
+            INSERT INTO lv_team_leader_view_logs 
             (log_id, leader_id, lead_id, follow_up_id, customer_name, mobile_number, view_timestamp, ip_address, user_agent, session_id)
             VALUES (?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?)
         ");

@@ -21,7 +21,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 try {
                     // Use INSERT ... ON DUPLICATE KEY UPDATE to handle both new and existing records
                     $stmt = $conn->prepare("
-                        INSERT INTO admin_download_limits (admin_id, download_limit, created_by)
+                        INSERT INTO lv_admin_download_limits (admin_id, download_limit, created_by)
                         VALUES (?, ?, ?)
                         ON DUPLICATE KEY UPDATE 
                             download_limit = VALUES(download_limit),
@@ -52,11 +52,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 try {
                     // Reset download tracking for specific admin/disposition
                     if ($disposition === 'ALL') {
-                        $stmt = $conn->prepare("DELETE FROM download_tracking WHERE admin_id = ?");
+                        $stmt = $conn->prepare("DELETE FROM lv_download_tracking WHERE admin_id = ?");
                         $stmt->bind_param("s", $adminId);
                         $resetType = "all dispositions";
                     } else {
-                        $stmt = $conn->prepare("DELETE FROM download_tracking WHERE admin_id = ? AND disposition = ?");
+                        $stmt = $conn->prepare("DELETE FROM lv_download_tracking WHERE admin_id = ? AND disposition = ?");
                         $stmt->bind_param("ss", $adminId, $disposition);
                         $resetType = "disposition: " . htmlspecialchars($disposition);
                     }
@@ -90,8 +90,8 @@ try {
                adl.download_limit,
                adl.created_at as limit_set_date,
                adl.updated_at as limit_updated_date
-        FROM admin_users au
-        LEFT JOIN admin_download_limits adl ON au.admin_id = adl.admin_id
+        FROM lv_admin_users au
+        LEFT JOIN lv_admin_download_limits adl ON au.admin_id = adl.admin_id
         WHERE au.is_active = 1
         ORDER BY au.admin_id
     ");
@@ -102,7 +102,7 @@ try {
         // Get download usage summary
         $usageStmt = $conn->prepare("
             SELECT disposition, SUM(download_count) as total_downloads
-            FROM download_tracking 
+            FROM lv_download_tracking 
             WHERE admin_id = ?
             GROUP BY disposition
             ORDER BY total_downloads DESC

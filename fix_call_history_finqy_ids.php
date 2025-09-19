@@ -1,7 +1,7 @@
 <?php
 /**
  * Fix Call History finqy_id Values
- * Updates call_history records that have finqy_id = '0' with correct values from final_call_logs
+ * Updates lv_call_history records that have finqy_id = '0' with correct values from lv_final_call_logs
  */
 
 require_once 'db_config.php';
@@ -15,11 +15,11 @@ echo "<h3>Current Status:</h3>\n";
 $status_query = "SELECT COUNT(*) as total_records, 
                  COUNT(CASE WHEN finqy_id = '0' THEN 1 END) as zero_finqy_ids,
                  COUNT(CASE WHEN finqy_id != '0' AND finqy_id != '' THEN 1 END) as valid_finqy_ids
-                 FROM call_history";
+                 FROM lv_call_history";
 $result = $conn->query($status_query);
 $status = $result->fetch_assoc();
 
-echo "Total call_history records: " . $status['total_records'] . "<br>\n";
+echo "Total lv_call_history records: " . $status['total_records'] . "<br>\n";
 echo "Records with finqy_id = '0': " . $status['zero_finqy_ids'] . "<br>\n";  
 echo "Records with valid finqy_id: " . $status['valid_finqy_ids'] . "<br><br>\n";
 
@@ -28,8 +28,8 @@ if ($status['zero_finqy_ids'] > 0) {
     
     // Get records that need fixing
     $fix_query = "SELECT ch.id, ch.original_record_id, ch.finqy_id as old_finqy_id, fcl.finqy_id as correct_finqy_id
-                  FROM call_history ch
-                  JOIN final_call_logs fcl ON CAST(ch.original_record_id AS CHAR) = CAST(fcl.id AS CHAR)
+                  FROM lv_call_history ch
+                  JOIN lv_final_call_logs fcl ON CAST(ch.original_record_id AS CHAR) = CAST(fcl.id AS CHAR)
                   WHERE ch.finqy_id = '0' AND fcl.finqy_id IS NOT NULL AND fcl.finqy_id != ''";
     
     $result = $conn->query($fix_query);
@@ -40,7 +40,7 @@ if ($status['zero_finqy_ids'] > 0) {
         
         try {
             while ($row = $result->fetch_assoc()) {
-                $update_sql = "UPDATE call_history SET finqy_id = ? WHERE id = ?";
+                $update_sql = "UPDATE lv_call_history SET finqy_id = ? WHERE id = ?";
                 $stmt = $conn->prepare($update_sql);
                 $stmt->bind_param("si", $row['correct_finqy_id'], $row['id']);
                 
@@ -69,18 +69,18 @@ if ($status['zero_finqy_ids'] > 0) {
     $result = $conn->query($status_query);
     $final_status = $result->fetch_assoc();
     
-    echo "Total call_history records: " . $final_status['total_records'] . "<br>\n";
+    echo "Total lv_call_history records: " . $final_status['total_records'] . "<br>\n";
     echo "Records with finqy_id = '0': " . $final_status['zero_finqy_ids'] . "<br>\n";
     echo "Records with valid finqy_id: " . $final_status['valid_finqy_ids'] . "<br>\n";
     
     if ($final_status['zero_finqy_ids'] == 0) {
-        echo "<br><strong style='color: green;'>✅ All call_history records now have valid finqy_id values!</strong><br>\n";
+        echo "<br><strong style='color: green;'>✅ All lv_call_history records now have valid finqy_id values!</strong><br>\n";
     } else {
         echo "<br><strong style='color: orange;'>⚠️ " . $final_status['zero_finqy_ids'] . " records still have finqy_id = '0'</strong><br>\n";
-        echo "These may be records where the original final_call_logs entry has been deleted or has no finqy_id.<br>\n";
+        echo "These may be records where the original lv_final_call_logs entry has been deleted or has no finqy_id.<br>\n";
     }
 } else {
-    echo "<strong style='color: green;'>✅ All call_history records already have valid finqy_id values!</strong><br>\n";
+    echo "<strong style='color: green;'>✅ All lv_call_history records already have valid finqy_id values!</strong><br>\n";
 }
 
 $conn->close();

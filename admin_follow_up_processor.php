@@ -43,16 +43,16 @@ try {
             fb.original_filename as batch_name,
             DATE_ADD(fcl.processed_at, INTERVAL fcl.follow_day DAY) as follow_up_date,
             au.username as admin_name
-        FROM final_call_logs fcl
-        JOIN file_batches fb ON fcl.batch_id = fb.id
-        JOIN admin_users au ON fb.admin_id = au.admin_id
-        LEFT JOIN follow_up_schedules fs ON fcl.id = fs.lead_id
+        FROM lv_final_call_logs fcl
+        JOIN lv_file_batches fb ON fcl.batch_id = fb.id
+        JOIN lv_admin_users au ON fb.admin_id = au.admin_id
+        LEFT JOIN lv_follow_up_schedules fs ON fcl.id = fs.lead_id
         WHERE fcl.follow_day IS NOT NULL 
         AND fcl.follow_day > 0
         AND fcl.processed_at IS NOT NULL
         AND fcl.disposition IS NOT NULL
         AND DATE_ADD(fcl.processed_at, INTERVAL fcl.follow_day DAY) = CURDATE()
-        AND fs.lead_id IS NULL  -- Not already in follow_up_schedules
+        AND fs.lead_id IS NULL  -- Not already in lv_follow_up_schedules
         ORDER BY fb.admin_id, fcl.processed_at
     ");
     
@@ -94,7 +94,7 @@ try {
             
             // Create follow-up schedule record for admin tracking
             $stmt = $conn->prepare("
-                INSERT INTO follow_up_schedules (
+                INSERT INTO lv_follow_up_schedules (
                     schedule_id, lead_id, leader_id, disposition_name, bucket_id,
                     follow_up_datetime, status, remarks
                 ) VALUES (?, ?, ?, ?, 1, ?, 'scheduled', 'Auto-created from telecaller follow-up data')
@@ -117,7 +117,7 @@ try {
                 $notificationTime = date('Y-m-d H:i:s', strtotime($followUpDatetime . ' -30 minutes')); // 30 minutes before
                 
                 $stmt2 = $conn->prepare("
-                    INSERT INTO follow_up_notifications (
+                    INSERT INTO lv_follow_up_notifications (
                         id, schedule_id, notification_type, scheduled_time, 
                         status, recipient_email, subject, message
                     ) VALUES (?, ?, 'admin_follow_up', ?, 'pending', ?, ?, ?)
@@ -161,9 +161,9 @@ try {
             COUNT(*) as overdue_count,
             fb.admin_id,
             au.username as admin_name
-        FROM final_call_logs fcl
-        JOIN file_batches fb ON fcl.batch_id = fb.id
-        JOIN admin_users au ON fb.admin_id = au.admin_id
+        FROM lv_final_call_logs fcl
+        JOIN lv_file_batches fb ON fcl.batch_id = fb.id
+        JOIN lv_admin_users au ON fb.admin_id = au.admin_id
         WHERE fcl.follow_day IS NOT NULL 
         AND fcl.follow_day > 0
         AND DATE_ADD(fcl.processed_at, INTERVAL fcl.follow_day DAY) < CURDATE()

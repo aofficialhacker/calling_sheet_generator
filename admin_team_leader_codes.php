@@ -12,7 +12,7 @@ if ($_POST && isset($_POST['refresh_code'])) {
     $leaderId = $_POST['leader_id'];
     
     // Verify this team leader belongs to the current admin
-    $stmt = $conn->prepare("SELECT leader_id FROM team_leaders WHERE leader_id = ? AND admin_id = ? AND is_active = 1");
+    $stmt = $conn->prepare("SELECT leader_id FROM lv_team_leaders WHERE leader_id = ? AND admin_id = ? AND is_active = 1");
     $stmt->bind_param("ss", $leaderId, $adminId);
     $stmt->execute();
     
@@ -39,10 +39,10 @@ $teamLeaders = [];
 $stmt = $conn->prepare("
     SELECT tl.leader_id, tl.leader_name, tl.username, tl.access_code, tl.code_generated_at, 
            tl.last_login, c.caller_name, c.finqy_id,
-           (SELECT COUNT(*) FROM team_leader_actions WHERE leader_id = tl.leader_id) as total_actions,
-           (SELECT COUNT(*) FROM team_leader_logins WHERE leader_id = tl.leader_id AND login_status = 'success' AND login_time > DATE_SUB(NOW(), INTERVAL 24 HOUR)) as today_logins
-    FROM team_leaders tl
-    JOIN callers c ON tl.finqy_id = c.finqy_id
+           (SELECT COUNT(*) FROM lv_team_leader_actions WHERE leader_id = tl.leader_id) as total_actions,
+           (SELECT COUNT(*) FROM lv_team_leader_logins WHERE leader_id = tl.leader_id AND login_status = 'success' AND login_time > DATE_SUB(NOW(), INTERVAL 24 HOUR)) as today_logins
+    FROM lv_team_leaders tl
+    JOIN lv_callers c ON tl.finqy_id = c.finqy_id
     WHERE tl.admin_id = ? AND tl.is_active = 1
     ORDER BY tl.leader_name
 ");
@@ -78,7 +78,7 @@ $stmt = $conn->prepare("
         COUNT(*) as total_active_leaders,
         COUNT(CASE WHEN last_login > DATE_SUB(NOW(), INTERVAL 24 HOUR) THEN 1 END) as logged_in_today,
         COUNT(CASE WHEN access_code IS NOT NULL THEN 1 END) as with_active_codes
-    FROM team_leaders 
+    FROM lv_team_leaders
     WHERE admin_id = ? AND is_active = 1
 ");
 $stmt->bind_param("s", $adminId);

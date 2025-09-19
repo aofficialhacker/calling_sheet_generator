@@ -14,7 +14,7 @@ if ($isAjax) {
 $conn = getDBConnection();
 
 // Fetch disposition map from database for conversion
-$dispositions = $conn->query("SELECT code, description FROM disposition_codes WHERE is_active = 1");
+$dispositions = $conn->query("SELECT code, description FROM lv_disposition_codes WHERE is_active = 1");
 $DISPOSITION_MAP = [];
 while($row = $dispositions->fetch_assoc()) {
     $DISPOSITION_MAP[$row['code']] = $row['description'];
@@ -36,8 +36,8 @@ function isReAttempt($conn, $record_id, $finqy_id) {
     $stmt = $conn->prepare("
         SELECT fcl.finqy_id, fcl.disposition, fcl.slot, fcl.processed_at,
                COUNT(ch.id) as previous_attempts
-        FROM final_call_logs fcl 
-        LEFT JOIN call_history ch ON ch.original_record_id = fcl.id AND ch.finqy_id = ?
+        FROM lv_final_call_logs fcl 
+        LEFT JOIN lv_call_history ch ON ch.original_record_id = fcl.id AND ch.finqy_id = ?
         WHERE fcl.id = ? 
         GROUP BY fcl.id
     ");
@@ -54,7 +54,7 @@ function isReAttempt($conn, $record_id, $finqy_id) {
  */
 function createCallHistoryEntry($conn, $record_id, $finqy_id, $attempt_number, $batch_id, $disposition, $slot, $connectivity, $is_original = false) {
     $stmt = $conn->prepare("
-        INSERT INTO call_history (
+        INSERT INTO lv_call_history (
             original_record_id, finqy_id, attempt_number, batch_id, 
             disposition, slot, connectivity, attempt_date, is_original_attempt
         ) VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), ?)
@@ -68,7 +68,7 @@ function createCallHistoryEntry($conn, $record_id, $finqy_id, $attempt_number, $
  * Get batch_id for a record
  */
 function getBatchId($conn, $record_id) {
-    $stmt = $conn->prepare("SELECT batch_id FROM final_call_logs WHERE id = ?");
+    $stmt = $conn->prepare("SELECT batch_id FROM lv_final_call_logs WHERE id = ?");
     $stmt->bind_param("s", $record_id);
     $stmt->execute();
     $result = $stmt->get_result()->fetch_assoc();
@@ -84,7 +84,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['json_results']) && iss
         $conn->begin_transaction();
         try {
             // Enhanced SQL query to also update tracking fields
-            $update_sql = "UPDATE final_call_logs 
+            $update_sql = "UPDATE lv_final_call_logs 
                            SET connectivity = ?, disposition = ?, slot = ?, finqy_id = ?, processed_at = NOW(),
                                last_updated_by = ?, last_attempt_date = NOW(),
                                original_caller_id = COALESCE(original_caller_id, ?),

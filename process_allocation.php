@@ -18,7 +18,7 @@ try {
     $conn->begin_transaction();
 
     // 1. Get details of the original batch
-    $stmt = $conn->prepare("SELECT vendor_id FROM file_batches WHERE id = ? AND admin_id = ?");
+    $stmt = $conn->prepare("SELECT vendor_id FROM lv_file_batches WHERE id = ? AND admin_id = ?");
     $stmt->bind_param("ss", $original_batch_id, $adminId);
     $stmt->execute();
     $original_batch = $stmt->get_result()->fetch_assoc();
@@ -29,7 +29,7 @@ try {
     $stmt->close();
 
     // 2. Get the product code for the target product
-    $stmt = $conn->prepare("SELECT product_code FROM products WHERE id = ?");
+    $stmt = $conn->prepare("SELECT product_code FROM lv_products WHERE id = ?");
     $stmt->bind_param("i", $target_product_id);
     $stmt->execute();
     $target_product = $stmt->get_result()->fetch_assoc();
@@ -42,11 +42,11 @@ try {
     // 3. Check for duplicate mobile numbers in target product
     $duplicateCheckSql = "
         SELECT COUNT(DISTINCT fcl1.mobile_no) as duplicate_count
-        FROM final_call_logs fcl1
+        FROM lv_final_call_logs fcl1
         WHERE fcl1.batch_id = ?
         AND EXISTS (
-            SELECT 1 FROM final_call_logs fcl2
-            INNER JOIN file_batches fb ON fcl2.batch_id = fb.id
+            SELECT 1 FROM lv_final_call_logs fcl2
+            INNER JOIN lv_file_batches fb ON fcl2.batch_id = fb.id
             WHERE fcl2.mobile_no = fcl1.mobile_no
             AND fb.product_code = ?
             AND fb.admin_id = ?
@@ -60,7 +60,7 @@ try {
     $stmt->close();
 
     // 4. Get total count of records in original batch
-    $stmt = $conn->prepare("SELECT COUNT(*) as total_count FROM final_call_logs WHERE batch_id = ?");
+    $stmt = $conn->prepare("SELECT COUNT(*) as total_count FROM lv_final_call_logs WHERE batch_id = ?");
     $stmt->bind_param("s", $original_batch_id);
     $stmt->execute();
     $totalResult = $stmt->get_result()->fetch_assoc();
@@ -76,8 +76,8 @@ try {
     $new_batch_id = generateBatchId($targetProductCode, $vendorId, $adminId, $conn);
 
     // 6. Insert the new batch record
-    $stmt = $conn->prepare("INSERT INTO file_batches (id, admin_id, vendor_id, product_code, original_batch_id, original_filename) 
-                           SELECT ?, ?, ?, ?, ?, CONCAT('Allocated from ', ?) FROM file_batches WHERE id = ?");
+    $stmt = $conn->prepare("INSERT INTO lv_file_batches (id, admin_id, vendor_id, product_code, original_batch_id, original_filename) 
+                           SELECT ?, ?, ?, ?, ?, CONCAT('Allocated from ', ?) FROM lv_file_batches WHERE id = ?");
     $stmt->bind_param("sssssss", $new_batch_id, $adminId, $vendorId, $targetProductCode, $original_batch_id, $original_batch_id, $original_batch_id);
     $stmt->execute();
     $stmt->close();
@@ -85,11 +85,11 @@ try {
     // 7. Fetch all non-duplicate records from the original batch
     $fetchSql = "
         SELECT fcl.* 
-        FROM final_call_logs fcl
+        FROM lv_final_call_logs fcl
         WHERE fcl.batch_id = ?
         AND NOT EXISTS (
-            SELECT 1 FROM final_call_logs fcl2
-            INNER JOIN file_batches fb ON fcl2.batch_id = fb.id
+            SELECT 1 FROM lv_final_call_logs fcl2
+            INNER JOIN lv_file_batches fb ON fcl2.batch_id = fb.id
             WHERE fcl2.mobile_no = fcl.mobile_no
             AND fb.product_code = ?
             AND fb.admin_id = ?
@@ -102,7 +102,7 @@ try {
     $stmt->close();
 
     // 8. Prepare the statement for inserting new log records
-    $insert_log_sql = "INSERT INTO final_call_logs (id, batch_id, mobile_no, title, name, policy_number, pan, dob, age, expiry, address, city, state, country, pincode, plan, premium, sum_insured, status, extra_data) 
+    $insert_log_sql = "INSERT INTO lv_final_call_logs (id, batch_id, mobile_no, title, name, policy_number, pan, dob, age, expiry, address, city, state, country, pincode, plan, premium, sum_insured, status, extra_data) 
                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
     $insert_stmt = $conn->prepare($insert_log_sql);
 

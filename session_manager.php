@@ -154,7 +154,7 @@ class SessionManager {
         try {
             require_once __DIR__ . '/db_config.php';
             $conn = getDBConnection();
-            $stmt = $conn->prepare("SELECT active_session_id FROM team_leaders WHERE leader_id = ?");
+            $stmt = $conn->prepare("SELECT active_session_id FROM lv_team_leaders WHERE leader_id = ?");
             $stmt->bind_param("s", $_SESSION['leader_id']);
             $stmt->execute();
             $result = $stmt->get_result();

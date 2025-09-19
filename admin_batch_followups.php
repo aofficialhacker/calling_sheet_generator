@@ -8,7 +8,7 @@ $adminId = $_SESSION['admin_id'];
 
 // Check if this is a superadmin
 $isSuperadmin = false;
-$adminCheckQuery = "SELECT designation FROM admin_users WHERE admin_id = ?";
+$adminCheckQuery = "SELECT designation FROM lv_admin_users WHERE admin_id = ?";
 $adminCheckStmt = $conn->prepare($adminCheckQuery);
 if ($adminCheckStmt) {
     $adminCheckStmt->bind_param("s", $adminId);
@@ -84,7 +84,7 @@ $whereClause = implode(' AND ', $whereConditions);
 
 // Build different queries based on user type
 if ($isSuperadmin) {
-    // Superadmin query - no admin_caller_mapping needed
+    // Superadmin query - no lv_admin_caller_mapping needed
     $query = "
         SELECT 
             fcl.id,
@@ -106,9 +106,9 @@ if ($isSuperadmin) {
                 WHEN DATE_ADD(fcl.processed_at, INTERVAL fcl.follow_day DAY) = CURDATE() THEN 'today'
                 ELSE 'pending'
             END as follow_status
-        FROM final_call_logs fcl
-        JOIN file_batches fb ON fcl.batch_id = fb.id
-        LEFT JOIN callers c ON fcl.finqy_id = c.finqy_id
+        FROM lv_final_call_logs fcl
+        JOIN lv_file_batches fb ON fcl.batch_id = fb.id
+        LEFT JOIN lv_callers c ON fcl.finqy_id = c.finqy_id
         WHERE $whereClause
         AND fcl.disposition = 'Follow Up'
         AND fcl.follow_day IS NOT NULL
@@ -116,7 +116,7 @@ if ($isSuperadmin) {
         ORDER BY follow_up_date ASC, fb.original_filename, fcl.name
     ";
 } else {
-    // Regular admin query - with admin_caller_mapping
+    // Regular admin query - with lv_admin_caller_mapping
     $query = "
         SELECT 
             fcl.id,
@@ -138,10 +138,10 @@ if ($isSuperadmin) {
                 WHEN DATE_ADD(fcl.processed_at, INTERVAL fcl.follow_day DAY) = CURDATE() THEN 'today'
                 ELSE 'pending'
             END as follow_status
-        FROM final_call_logs fcl
-        JOIN file_batches fb ON fcl.batch_id = fb.id
-        JOIN admin_caller_mapping acm ON fcl.finqy_id = acm.finqy_id
-        LEFT JOIN callers c ON fcl.finqy_id = c.finqy_id
+        FROM lv_final_call_logs fcl
+        JOIN lv_file_batches fb ON fcl.batch_id = fb.id
+        JOIN lv_admin_caller_mapping acm ON fcl.finqy_id = acm.finqy_id
+        LEFT JOIN lv_callers c ON fcl.finqy_id = c.finqy_id
         WHERE $whereClause
         AND fcl.disposition = 'Follow Up'
         AND fcl.follow_day IS NOT NULL
@@ -176,7 +176,7 @@ if ($isSuperadmin) {
     // For superadmin: show all batches
     $batchQuery = "
         SELECT fb.id, fb.original_filename, fb.product_code, fb.upload_time
-        FROM file_batches fb
+        FROM lv_file_batches fb
         ORDER BY fb.upload_time DESC
     ";
     $batchStmt = $conn->prepare($batchQuery);
@@ -188,7 +188,7 @@ if ($isSuperadmin) {
     // For regular admin: show only their batches
     $batchQuery = "
         SELECT fb.id, fb.original_filename, fb.product_code, fb.upload_time
-        FROM file_batches fb
+        FROM lv_file_batches fb
         WHERE fb.admin_id = ?
         ORDER BY fb.upload_time DESC
     ";
@@ -207,8 +207,8 @@ if ($isSuperadmin) {
     // For superadmin: show all telecallers
     $telecallerQuery = "
         SELECT DISTINCT c.finqy_id, c.caller_name
-        FROM callers c
-        JOIN final_call_logs fcl ON c.finqy_id = fcl.finqy_id
+        FROM lv_callers c
+        JOIN lv_final_call_logs fcl ON c.finqy_id = fcl.finqy_id
         WHERE fcl.disposition = 'Follow Up'
         AND fcl.follow_day IS NOT NULL
         AND fcl.follow_day > 0
@@ -223,9 +223,9 @@ if ($isSuperadmin) {
     // For regular admin: show only their telecallers
     $telecallerQuery = "
         SELECT DISTINCT c.finqy_id, c.caller_name
-        FROM callers c
-        JOIN admin_caller_mapping acm ON c.finqy_id = acm.finqy_id
-        JOIN final_call_logs fcl ON c.finqy_id = fcl.finqy_id
+        FROM lv_callers c
+        JOIN lv_admin_caller_mapping acm ON c.finqy_id = acm.finqy_id
+        JOIN lv_final_call_logs fcl ON c.finqy_id = fcl.finqy_id
         WHERE acm.admin_id = ?
         AND fcl.disposition = 'Follow Up'
         AND fcl.follow_day IS NOT NULL
@@ -251,8 +251,8 @@ if ($isSuperadmin) {
             SUM(CASE WHEN DATE_ADD(fcl.processed_at, INTERVAL fcl.follow_day DAY) < CURDATE() THEN 1 ELSE 0 END) as overdue,
             SUM(CASE WHEN DATE_ADD(fcl.processed_at, INTERVAL fcl.follow_day DAY) = CURDATE() THEN 1 ELSE 0 END) as today,
             SUM(CASE WHEN DATE_ADD(fcl.processed_at, INTERVAL fcl.follow_day DAY) > CURDATE() THEN 1 ELSE 0 END) as pending
-        FROM final_call_logs fcl
-        JOIN file_batches fb ON fcl.batch_id = fb.id
+        FROM lv_final_call_logs fcl
+        JOIN lv_file_batches fb ON fcl.batch_id = fb.id
         WHERE fcl.disposition = 'Follow Up'
         AND fcl.follow_day IS NOT NULL
         AND fcl.follow_day > 0
@@ -270,9 +270,9 @@ if ($isSuperadmin) {
             SUM(CASE WHEN DATE_ADD(fcl.processed_at, INTERVAL fcl.follow_day DAY) < CURDATE() THEN 1 ELSE 0 END) as overdue,
             SUM(CASE WHEN DATE_ADD(fcl.processed_at, INTERVAL fcl.follow_day DAY) = CURDATE() THEN 1 ELSE 0 END) as today,
             SUM(CASE WHEN DATE_ADD(fcl.processed_at, INTERVAL fcl.follow_day DAY) > CURDATE() THEN 1 ELSE 0 END) as pending
-        FROM final_call_logs fcl
-        JOIN file_batches fb ON fcl.batch_id = fb.id
-        JOIN admin_caller_mapping acm ON fcl.finqy_id = acm.finqy_id
+        FROM lv_final_call_logs fcl
+        JOIN lv_file_batches fb ON fcl.batch_id = fb.id
+        JOIN lv_admin_caller_mapping acm ON fcl.finqy_id = acm.finqy_id
         WHERE acm.admin_id = ? 
         AND fcl.disposition = 'Follow Up'
         AND fcl.follow_day IS NOT NULL

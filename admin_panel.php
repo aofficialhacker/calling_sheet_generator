@@ -14,9 +14,9 @@ $perf_sql = "SELECT
                 SUM(CASE WHEN fcl.connectivity = 'Yes' THEN 1 ELSE 0 END) as connected,
                 SUM(CASE WHEN fcl.disposition = 'Interested' THEN 1 ELSE 0 END) as interested,
                 MAX(fcl.processed_at) as last_activity
-             FROM callers c
-             LEFT JOIN admin_caller_mapping acm ON c.finqy_id = acm.finqy_id
-             LEFT JOIN final_call_logs fcl ON c.finqy_id = fcl.finqy_id
+             FROM lv_callers c
+             LEFT JOIN lv_admin_caller_mapping acm ON c.finqy_id = acm.finqy_id
+             LEFT JOIN lv_final_call_logs fcl ON c.finqy_id = fcl.finqy_id
              WHERE acm.admin_id = ?
              GROUP BY c.finqy_id, c.caller_name 
              ORDER BY total_calls DESC";
@@ -33,11 +33,11 @@ $stmt->close();
 
 // 2. Fetch overall stats for this admin
 $stats_sql = "SELECT 
-    (SELECT COUNT(*) FROM admin_caller_mapping WHERE admin_id = ?) as caller_count,
-    (SELECT COUNT(*) FROM file_batches WHERE admin_id = ?) as batch_count,
-    (SELECT COUNT(*) FROM final_call_logs fcl JOIN admin_caller_mapping acm ON fcl.finqy_id = acm.finqy_id WHERE acm.admin_id = ?) as total_records,
-    (SELECT COUNT(*) FROM final_call_logs fcl JOIN admin_caller_mapping acm ON fcl.finqy_id = acm.finqy_id WHERE acm.admin_id = ? AND fcl.connectivity = 'Yes') as total_connected,
-    (SELECT COUNT(*) FROM final_call_logs fcl JOIN admin_caller_mapping acm ON fcl.finqy_id = acm.finqy_id WHERE acm.admin_id = ? AND fcl.disposition = 'Interested') as total_interested
+    (SELECT COUNT(*) FROM lv_admin_caller_mapping WHERE admin_id = ?) as caller_count,
+    (SELECT COUNT(*) FROM lv_file_batches WHERE admin_id = ?) as batch_count,
+    (SELECT COUNT(*) FROM lv_final_call_logs fcl JOIN lv_admin_caller_mapping acm ON fcl.finqy_id = acm.finqy_id WHERE acm.admin_id = ?) as total_records,
+    (SELECT COUNT(*) FROM lv_final_call_logs fcl JOIN lv_admin_caller_mapping acm ON fcl.finqy_id = acm.finqy_id WHERE acm.admin_id = ? AND fcl.connectivity = 'Yes') as total_connected,
+    (SELECT COUNT(*) FROM lv_final_call_logs fcl JOIN lv_admin_caller_mapping acm ON fcl.finqy_id = acm.finqy_id WHERE acm.admin_id = ? AND fcl.disposition = 'Interested') as total_interested
 ";
 $stmt = $conn->prepare($stats_sql);
 $stmt->bind_param("sssss", $adminId, $adminId, $adminId, $adminId, $adminId);
@@ -50,9 +50,9 @@ $connectivity_rate = ($stats['total_records'] > 0) ? ($stats['total_connected'] 
 
 // 3. Fetch recent batch uploads
 $recent_batches_sql = "SELECT b.id, b.original_filename, b.upload_time, p.product_name, 
-                              (SELECT COUNT(*) FROM final_call_logs WHERE batch_id = b.id) as record_count
-                       FROM file_batches b
-                       JOIN products p ON b.product_code = p.product_code
+                              (SELECT COUNT(*) FROM lv_final_call_logs WHERE batch_id = b.id) as record_count
+                       FROM lv_file_batches b
+                       JOIN lv_products p ON b.product_code = p.product_code
                        WHERE b.admin_id = ?
                        ORDER BY b.upload_time DESC
                        LIMIT 5";

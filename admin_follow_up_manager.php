@@ -45,9 +45,9 @@ $query = "
         fb.batch_name,
         c.caller_name,
         DATEDIFF(DATE_ADD(fcl.processed_at, INTERVAL fcl.follow_day DAY), CURDATE()) as days_from_now
-    FROM final_call_logs fcl
-    JOIN file_batches fb ON fcl.batch_id = fb.id
-    LEFT JOIN callers c ON fcl.finqy_id = c.finqy_id
+    FROM lv_final_call_logs fcl
+    JOIN lv_file_batches fb ON fcl.batch_id = fb.id
+    LEFT JOIN lv_callers c ON fcl.finqy_id = c.finqy_id
     WHERE fb.admin_id = ?
     AND fcl.follow_day IS NOT NULL 
     AND fcl.follow_day > 0
@@ -69,8 +69,8 @@ $summaryQuery = "
         COUNT(CASE WHEN DATE_ADD(fcl.processed_at, INTERVAL fcl.follow_day DAY) = CURDATE() THEN 1 END) as today,
         COUNT(CASE WHEN DATE_ADD(fcl.processed_at, INTERVAL fcl.follow_day DAY) = DATE_ADD(CURDATE(), INTERVAL 1 DAY) THEN 1 END) as tomorrow,
         COUNT(CASE WHEN DATE_ADD(fcl.processed_at, INTERVAL fcl.follow_day DAY) BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 7 DAY) THEN 1 END) as this_week
-    FROM final_call_logs fcl
-    JOIN file_batches fb ON fcl.batch_id = fb.id
+    FROM lv_final_call_logs fcl
+    JOIN lv_file_batches fb ON fcl.batch_id = fb.id
     WHERE fb.admin_id = ?
     AND fcl.follow_day IS NOT NULL 
     AND fcl.follow_day > 0

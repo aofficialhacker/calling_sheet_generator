@@ -100,12 +100,12 @@ $query = "
         fs.remarks as 'Remarks',
         fs.created_at as 'Created Time',
         fs.updated_at as 'Last Updated'
-    FROM follow_up_schedules fs
-    JOIN team_leaders tl ON fs.leader_id = tl.leader_id
-    JOIN disposition_buckets db ON fs.bucket_id = db.id
-    JOIN final_call_logs fcl ON fs.lead_id = fcl.id
-    JOIN file_batches b ON fcl.batch_id = b.id
-    JOIN products p ON b.product_code = p.product_code
+    FROM lv_follow_up_schedules fs
+    JOIN lv_team_leaders tl ON fs.leader_id = tl.leader_id
+    JOIN lv_disposition_buckets db ON fs.bucket_id = db.id
+    JOIN lv_final_call_logs fcl ON fs.lead_id = fcl.id
+    JOIN lv_file_batches b ON fcl.batch_id = b.id
+    JOIN lv_products p ON b.product_code = p.product_code
     WHERE $whereClause
     ORDER BY fs.follow_up_datetime DESC
 ";

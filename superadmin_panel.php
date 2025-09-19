@@ -8,32 +8,32 @@ $conn = getDBConnection();
 $stats = [];
 
 // Total admins
-$result = $conn->query("SELECT COUNT(*) as count FROM admin_users WHERE admin_id != 'SUPER'");
+$result = $conn->query("SELECT COUNT(*) as count FROM lv_admin_users WHERE admin_id != 'SUPER'");
 $stats['total_admins'] = $result->fetch_assoc()['count'];
 
 // Active admins
-$result = $conn->query("SELECT COUNT(*) as count FROM admin_users WHERE admin_id != 'SUPER' AND is_active = 1");
+$result = $conn->query("SELECT COUNT(*) as count FROM lv_admin_users WHERE admin_id != 'SUPER' AND is_active = 1");
 $stats['active_admins'] = $result->fetch_assoc()['count'];
 
 // Total callers
-$result = $conn->query("SELECT COUNT(*) as count FROM callers");
+$result = $conn->query("SELECT COUNT(*) as count FROM lv_callers");
 $stats['total_callers'] = $result->fetch_assoc()['count'];
 
 // Total batches uploaded today
-$result = $conn->query("SELECT COUNT(*) as count FROM file_batches WHERE DATE(upload_time) = CURDATE()");
+$result = $conn->query("SELECT COUNT(*) as count FROM lv_file_batches WHERE DATE(upload_time) = CURDATE()");
 $stats['today_batches'] = $result->fetch_assoc()['count'];
 
 // Pending vendor requests
-$result = $conn->query("SELECT COUNT(*) as count FROM vendor_requests WHERE status = 'pending'");
+$result = $conn->query("SELECT COUNT(*) as count FROM lv_vendor_requests WHERE status = 'pending'");
 $stats['pending_requests'] = $result->fetch_assoc()['count'];
 
 // Get recent admin activities
 $recent_activities = $conn->query("
     SELECT au.name, au.admin_id, fb.original_filename, fb.upload_time, 
            COUNT(fcl.id) as records
-    FROM admin_users au
-    JOIN file_batches fb ON au.admin_id = fb.admin_id
-    LEFT JOIN final_call_logs fcl ON fb.id = fcl.batch_id
+    FROM lv_admin_users au
+    JOIN lv_file_batches fb ON au.admin_id = fb.admin_id
+    LEFT JOIN lv_final_call_logs fcl ON fb.id = fcl.batch_id
     WHERE au.admin_id != 'SUPER'
     GROUP BY fb.id
     ORDER BY fb.upload_time DESC

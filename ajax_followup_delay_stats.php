@@ -26,8 +26,8 @@ try {
             COUNT(CASE WHEN DATE(fs.follow_up_datetime) = DATE_ADD(CURDATE(), INTERVAL 1 DAY) AND fs.status = 'scheduled' THEN 1 END) as due_tomorrow,
             ROUND((COUNT(CASE WHEN fs.status = 'completed' THEN 1 END) * 100.0 / NULLIF(COUNT(*), 0)), 2) as completion_rate,
             ROUND((COUNT(CASE WHEN fs.status = 'scheduled' AND fs.follow_up_datetime < NOW() THEN 1 END) * 100.0 / NULLIF(COUNT(*), 0)), 2) as overdue_rate
-        FROM follow_up_schedules fs
-        JOIN team_leaders tl ON fs.leader_id = tl.leader_id
+        FROM lv_follow_up_schedules fs
+        JOIN lv_team_leaders tl ON fs.leader_id = tl.leader_id
         WHERE tl.admin_id = ?
     ");
     $stmt->bind_param("s", $adminId);
@@ -47,8 +47,8 @@ try {
             ROUND((COUNT(CASE WHEN fs.status = 'completed' THEN 1 END) * 100.0 / NULLIF(COUNT(*), 0)), 2) as completion_rate,
             ROUND((COUNT(CASE WHEN fs.status = 'scheduled' AND fs.follow_up_datetime < NOW() THEN 1 END) * 100.0 / NULLIF(COUNT(*), 0)), 2) as overdue_rate,
             COUNT(CASE WHEN DATE(fs.follow_up_datetime) = CURDATE() AND fs.status = 'scheduled' THEN 1 END) as due_today
-        FROM team_leaders tl
-        LEFT JOIN follow_up_schedules fs ON tl.leader_id = fs.leader_id
+        FROM lv_team_leaders tl
+        LEFT JOIN lv_follow_up_schedules fs ON tl.leader_id = fs.leader_id
         WHERE tl.admin_id = ? AND tl.is_active = 1
         GROUP BY tl.leader_id, tl.leader_name
         ORDER BY overdue_followups DESC, avg_delay_minutes DESC
@@ -67,9 +67,9 @@ try {
             COUNT(CASE WHEN fs.status = 'scheduled' AND fs.follow_up_datetime < NOW() THEN 1 END) as overdue_followups,
             ROUND(AVG(CASE WHEN fs.delay_minutes IS NOT NULL THEN fs.delay_minutes END), 2) as avg_delay_minutes,
             ROUND((COUNT(CASE WHEN fs.status = 'completed' THEN 1 END) * 100.0 / NULLIF(COUNT(*), 0)), 2) as completion_rate
-        FROM disposition_buckets db
-        LEFT JOIN follow_up_schedules fs ON db.id = fs.bucket_id
-        LEFT JOIN team_leaders tl ON fs.leader_id = tl.leader_id
+        FROM lv_disposition_buckets db
+        LEFT JOIN lv_follow_up_schedules fs ON db.id = fs.bucket_id
+        LEFT JOIN lv_team_leaders tl ON fs.leader_id = tl.leader_id
         WHERE tl.admin_id = ? OR tl.admin_id IS NULL
         GROUP BY db.id, db.bucket_name
         HAVING total_followups > 0
@@ -96,10 +96,10 @@ try {
             END as severity,
             fs.disposition_name,
             db.bucket_name
-        FROM follow_up_schedules fs
-        JOIN team_leaders tl ON fs.leader_id = tl.leader_id
-        JOIN final_call_logs fcl ON fs.lead_id = fcl.id
-        JOIN disposition_buckets db ON fs.bucket_id = db.id
+        FROM lv_follow_up_schedules fs
+        JOIN lv_team_leaders tl ON fs.leader_id = tl.leader_id
+        JOIN lv_final_call_logs fcl ON fs.lead_id = fcl.id
+        JOIN lv_disposition_buckets db ON fs.bucket_id = db.id
         WHERE tl.admin_id = ? AND fs.status = 'scheduled' AND fs.follow_up_datetime < NOW()
         ORDER BY fs.follow_up_datetime ASC
         LIMIT 10
@@ -117,8 +117,8 @@ try {
             COUNT(CASE WHEN fs.status = 'completed' THEN 1 END) as completed,
             COUNT(CASE WHEN fs.status = 'scheduled' AND fs.follow_up_datetime < NOW() THEN 1 END) as overdue,
             ROUND(AVG(CASE WHEN fs.delay_minutes IS NOT NULL THEN fs.delay_minutes END), 2) as avg_delay
-        FROM follow_up_schedules fs
-        JOIN team_leaders tl ON fs.leader_id = tl.leader_id
+        FROM lv_follow_up_schedules fs
+        JOIN lv_team_leaders tl ON fs.leader_id = tl.leader_id
         WHERE tl.admin_id = ? 
         AND DATE(fs.follow_up_datetime) >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
         AND DATE(fs.follow_up_datetime) <= CURDATE()

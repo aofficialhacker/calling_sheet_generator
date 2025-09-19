@@ -47,7 +47,7 @@ if ($_POST) {
         $userAgent = $_SERVER['HTTP_USER_AGENT'];
         
         // Get leader details
-        $stmt = $conn->prepare("SELECT * FROM team_leaders WHERE username = ? AND is_active = 1");
+        $stmt = $conn->prepare("SELECT * FROM lv_team_leaders WHERE username = ? AND is_active = 1");
         $stmt->bind_param("s", $username);
         $stmt->execute();
         $result = $stmt->get_result();
@@ -63,7 +63,7 @@ if ($_POST) {
                 
                 if ($hoursDiff > 24) {
                     // Clear stale session
-                    $stmt = $conn->prepare("UPDATE team_leaders SET active_session_id = NULL WHERE leader_id = ?");
+                    $stmt = $conn->prepare("UPDATE lv_team_leaders SET active_session_id = NULL WHERE leader_id = ?");
                     if ($stmt) {
                         $stmt->bind_param("s", $leader['leader_id']);
                         $stmt->execute();
@@ -73,7 +73,7 @@ if ($_POST) {
             }
             
             // Check for too many failed attempts (max 5 attempts per hour)
-            $stmt = $conn->prepare("SELECT COUNT(*) as failed_count FROM team_leader_logins 
+            $stmt = $conn->prepare("SELECT COUNT(*) as failed_count FROM lv_team_leader_logins 
                                    WHERE leader_id = ? AND login_status = 'failed' 
                                    AND login_time > DATE_SUB(NOW(), INTERVAL 1 HOUR)");
             $stmt->bind_param("s", $leader['leader_id']);
@@ -91,7 +91,7 @@ if ($_POST) {
                         // Check if already logged in from another device
                         if (!empty($leader['active_session_id'])) {
                             // Log failed login attempt due to multi-device
-                            $stmt = $conn->prepare("INSERT INTO team_leader_logins (leader_id, ip_address, user_agent, login_status) VALUES (?, ?, ?, 'failed - multi-device')");
+                            $stmt = $conn->prepare("INSERT INTO lv_team_leader_logins (leader_id, ip_address, user_agent, login_status) VALUES (?, ?, ?, 'failed - multi-device')");
                             if ($stmt) {
                                 $stmt->bind_param("sss", $leader['leader_id'], $ipAddress, $userAgent);
                                 $stmt->execute();
@@ -105,14 +105,14 @@ if ($_POST) {
                             $sessionId = session_id();
                             
                             // Update login info and set active session ID
-                            $stmt = $conn->prepare("UPDATE team_leaders SET last_login = NOW(), active_session_id = ?, login_attempts = 0 WHERE leader_id = ?");
+                            $stmt = $conn->prepare("UPDATE lv_team_leaders SET last_login = NOW(), active_session_id = ?, login_attempts = 0 WHERE leader_id = ?");
                             if ($stmt) {
                                 $stmt->bind_param("ss", $sessionId, $leader['leader_id']);
                                 $stmt->execute();
                             }
                             
                             // Log successful login
-                            $stmt = $conn->prepare("INSERT INTO team_leader_logins (leader_id, ip_address, user_agent, login_status, session_id) VALUES (?, ?, ?, 'success', ?)");
+                            $stmt = $conn->prepare("INSERT INTO lv_team_leader_logins (leader_id, ip_address, user_agent, login_status, session_id) VALUES (?, ?, ?, 'success', ?)");
                             if ($stmt) {
                                 $stmt->bind_param("ssss", $leader['leader_id'], $ipAddress, $userAgent, $sessionId);
                                 $stmt->execute();
@@ -131,7 +131,7 @@ if ($_POST) {
                         }
                     } else {
                         // Log failed login attempt
-                        $stmt = $conn->prepare("INSERT INTO team_leader_logins (leader_id, ip_address, user_agent, login_status) VALUES (?, ?, ?, 'failed')");
+                        $stmt = $conn->prepare("INSERT INTO lv_team_leader_logins (leader_id, ip_address, user_agent, login_status) VALUES (?, ?, ?, 'failed')");
                         if ($stmt) {
                             $stmt->bind_param("sss", $leader['leader_id'], $ipAddress, $userAgent);
                             $stmt->execute();
@@ -142,7 +142,7 @@ if ($_POST) {
                     }
                 } else {
                     // Log failed login attempt
-                    $stmt = $conn->prepare("INSERT INTO team_leader_logins (leader_id, ip_address, user_agent, login_status) VALUES (?, ?, ?, 'failed')");
+                    $stmt = $conn->prepare("INSERT INTO lv_team_leader_logins (leader_id, ip_address, user_agent, login_status) VALUES (?, ?, ?, 'failed')");
                     if ($stmt) {
                         $stmt->bind_param("sss", $leader['leader_id'], $ipAddress, $userAgent);
                         $stmt->execute();

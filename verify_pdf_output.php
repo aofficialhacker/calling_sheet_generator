@@ -8,7 +8,7 @@ if (session_status() == PHP_SESSION_NONE) {
 
 if (!isset($_SESSION['admin_id'])) {
     $conn = getDBConnection();
-    $result = $conn->query("SELECT admin_id FROM admin_users LIMIT 1");
+    $result = $conn->query("SELECT admin_id FROM lv_admin_users LIMIT 1");
     if ($result && $row = $result->fetch_assoc()) {
         $_SESSION['admin_id'] = $row['admin_id'];
         $_SESSION['role'] = 'admin';
@@ -41,8 +41,8 @@ try {
     // Get test batch
     $result = $conn->query("
         SELECT fb.id, COUNT(fcl.id) as record_count 
-        FROM file_batches fb 
-        LEFT JOIN final_call_logs fcl ON fb.id = fcl.batch_id 
+        FROM lv_file_batches fb 
+        LEFT JOIN lv_final_call_logs fcl ON fb.id = fcl.batch_id 
         GROUP BY fb.id 
         HAVING record_count > 0 
         ORDER BY record_count ASC 
@@ -110,7 +110,7 @@ try {
         echo "<pre style='background: #f8f9fa; padding: 10px; border: 1px solid #ddd; font-family: monospace;'>";
         
         // Generate expected disposition grid
-        $dispResult = $conn->query("SELECT code FROM disposition_codes WHERE is_active = 1 ORDER BY code LIMIT 12");
+        $dispResult = $conn->query("SELECT code FROM lv_disposition_codes WHERE is_active = 1 ORDER BY code LIMIT 12");
         $dispositions = [];
         while ($d = $dispResult->fetch_assoc()) {
             $dispositions[] = str_pad($d['code'], 2, '0', STR_PAD_LEFT);
@@ -243,8 +243,8 @@ try {
         // Get larger batch if available
         $largeResult = $conn->query("
             SELECT fb.id, COUNT(fcl.id) as record_count 
-            FROM file_batches fb 
-            LEFT JOIN final_call_logs fcl ON fb.id = fcl.batch_id 
+            FROM lv_file_batches fb 
+            LEFT JOIN lv_final_call_logs fcl ON fb.id = fcl.batch_id 
             GROUP BY fb.id 
             HAVING record_count > 500 
             ORDER BY record_count DESC 

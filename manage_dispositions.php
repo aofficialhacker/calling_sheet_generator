@@ -15,7 +15,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
             $category = $_POST['category'] ?? '';
             
             if ($code && $description && $category) {
-                $stmt = $conn->prepare("INSERT INTO disposition_codes (code, description, category, created_by) VALUES (?, ?, ?, ?)");
+                $stmt = $conn->prepare("INSERT INTO lv_disposition_codes (code, description, category, created_by) VALUES (?, ?, ?, ?)");
                 $stmt->bind_param("sssi", $code, $description, $category, $_SESSION['superadmin_id']);
                 
                 if ($stmt->execute()) {
@@ -34,7 +34,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
             $currentStatus = $_POST['current_status'] ?? 0;
             $newStatus = $currentStatus ? 0 : 1;
             
-            $stmt = $conn->prepare("UPDATE disposition_codes SET is_active = ? WHERE id = ?");
+            $stmt = $conn->prepare("UPDATE lv_disposition_codes SET is_active = ? WHERE id = ?");
             $stmt->bind_param("ii", $newStatus, $dispositionId);
             
             if ($stmt->execute()) {
@@ -50,8 +50,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
 $dispositions = $conn->query("
     SELECT dc.*, 
            COUNT(DISTINCT fcl.id) as usage_count
-    FROM disposition_codes dc
-    LEFT JOIN final_call_logs fcl ON dc.description = fcl.disposition
+    FROM lv_disposition_codes dc
+    LEFT JOIN lv_final_call_logs fcl ON dc.description = fcl.disposition
     GROUP BY dc.id
     ORDER BY dc.category, dc.code
 ");

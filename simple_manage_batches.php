@@ -17,21 +17,21 @@ try {
     echo "<p><strong>Admin ID:</strong> " . htmlspecialchars($adminId) . "</p>";
     
     // Test database connection
-    $test_query = $conn->query("SELECT COUNT(*) as count FROM admin_users WHERE admin_id = '$adminId'");
+    $test_query = $conn->query("SELECT COUNT(*) as count FROM lv_admin_users WHERE admin_id = '$adminId'");
     if ($test_query) {
         $admin_exists = $test_query->fetch_assoc()['count'];
         echo "<p><strong>Admin exists in DB:</strong> " . ($admin_exists ? 'Yes' : 'No') . "</p>";
     }
     
     // Test batch query
-    $batch_query = $conn->query("SELECT COUNT(*) as count FROM file_batches WHERE admin_id = '$adminId'");
+    $batch_query = $conn->query("SELECT COUNT(*) as count FROM lv_file_batches WHERE admin_id = '$adminId'");
     if ($batch_query) {
         $batch_count = $batch_query->fetch_assoc()['count'];
         echo "<p><strong>Batches found:</strong> $batch_count</p>";
     }
     
     // Get actual batches
-    $stmt = $conn->prepare("SELECT id, original_filename, product_code FROM file_batches WHERE admin_id = ? LIMIT 5");
+    $stmt = $conn->prepare("SELECT id, original_filename, product_code FROM lv_file_batches WHERE admin_id = ? LIMIT 5");
     $stmt->bind_param("s", $adminId);
     $stmt->execute();
     $result = $stmt->get_result();

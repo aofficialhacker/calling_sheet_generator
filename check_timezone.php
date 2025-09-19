@@ -34,7 +34,7 @@ if ($timeDiff != 0) {
 
 // Test with a sample team leader
 echo "<h3>Sample Access Code Test:</h3>";
-$stmt = $conn->prepare("SELECT leader_id, access_code, code_generated_at FROM team_leaders WHERE access_code IS NOT NULL LIMIT 1");
+$stmt = $conn->prepare("SELECT leader_id, access_code, code_generated_at FROM lv_team_leaders WHERE access_code IS NOT NULL LIMIT 1");
 $stmt->execute();
 $result = $stmt->get_result();
 

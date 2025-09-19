@@ -93,12 +93,12 @@ $query = "
                 END
             ELSE NULL
         END as overdue_severity
-    FROM follow_up_schedules fs
-    JOIN team_leaders tl ON fs.leader_id = tl.leader_id
-    JOIN disposition_buckets db ON fs.bucket_id = db.id
-    JOIN final_call_logs fcl ON fs.lead_id = fcl.id
-    JOIN file_batches b ON fcl.batch_id = b.id
-    JOIN products p ON b.product_code = p.product_code
+    FROM lv_follow_up_schedules fs
+    JOIN lv_team_leaders tl ON fs.leader_id = tl.leader_id
+    JOIN lv_disposition_buckets db ON fs.bucket_id = db.id
+    JOIN lv_final_call_logs fcl ON fs.lead_id = fcl.id
+    JOIN lv_file_batches b ON fcl.batch_id = b.id
+    JOIN lv_products p ON b.product_code = p.product_code
     WHERE $whereClause
     ORDER BY fs.$sortBy $sortOrder
     LIMIT $limit OFFSET $offset
@@ -121,12 +121,12 @@ if ($stmt === false) {
 // Get total count for pagination
 $countQuery = "
     SELECT COUNT(*) as total
-    FROM follow_up_schedules fs
-    JOIN team_leaders tl ON fs.leader_id = tl.leader_id
-    JOIN disposition_buckets db ON fs.bucket_id = db.id
-    JOIN final_call_logs fcl ON fs.lead_id = fcl.id
-    JOIN file_batches b ON fcl.batch_id = b.id
-    JOIN products p ON b.product_code = p.product_code
+    FROM lv_follow_up_schedules fs
+    JOIN lv_team_leaders tl ON fs.leader_id = tl.leader_id
+    JOIN lv_disposition_buckets db ON fs.bucket_id = db.id
+    JOIN lv_final_call_logs fcl ON fs.lead_id = fcl.id
+    JOIN lv_file_batches b ON fcl.batch_id = b.id
+    JOIN lv_products p ON b.product_code = p.product_code
     WHERE $whereClause
 ";
 
@@ -149,7 +149,7 @@ if (!isset($totalCount)) {
 $teamLeaders = [];
 $leadersQuery = "
     SELECT tl.leader_id, tl.leader_name 
-    FROM team_leaders tl 
+    FROM lv_team_leaders tl 
     WHERE tl.admin_id = ? AND tl.is_active = 1 
     ORDER BY tl.leader_name
 ";
@@ -170,7 +170,7 @@ if ($stmt) {
 $buckets = [];
 $bucketsQuery = "
     SELECT id, bucket_name 
-    FROM disposition_buckets 
+    FROM lv_disposition_buckets 
     WHERE is_active = 1 
     ORDER BY bucket_name
 ";
@@ -200,8 +200,8 @@ $statsQuery = "
         COUNT(CASE WHEN DATE(fs.follow_up_datetime) = CURDATE() AND fs.status = 'scheduled' THEN 1 END) as due_today,
         ROUND((COUNT(CASE WHEN fs.status = 'completed' THEN 1 END) * 100.0 / NULLIF(COUNT(*), 0)), 2) as completion_rate,
         ROUND((COUNT(CASE WHEN fs.status = 'scheduled' AND fs.follow_up_datetime < NOW() THEN 1 END) * 100.0 / NULLIF(COUNT(*), 0)), 2) as overdue_rate
-    FROM follow_up_schedules fs
-    JOIN team_leaders tl ON fs.leader_id = tl.leader_id
+    FROM lv_follow_up_schedules fs
+    JOIN lv_team_leaders tl ON fs.leader_id = tl.leader_id
     WHERE tl.admin_id = ?
 ";
 

@@ -31,9 +31,9 @@ echo "<p class='info'>This will enhance the system to preserve ALL marked data (
 $implementation_success = true;
 
 try {
-    // Step 1: Enhance call_history table structure
+    // Step 1: Enhance lv_call_history table structure
     echo "<div class='step'>";
-    echo "<h3>Step 1: Enhancing call_history table structure</h3>";
+    echo "<h3>Step 1: Enhancing lv_call_history table structure</h3>";
     
     $enhancements = [
         "ADD COLUMN IF NOT EXISTS data_source VARCHAR(20) DEFAULT 'upload' COMMENT 'Source: upload, manual, system'",
@@ -46,7 +46,7 @@ try {
     
     foreach ($enhancements as $enhancement) {
         try {
-            $conn->query("ALTER TABLE call_history $enhancement");
+            $conn->query("ALTER TABLE lv_call_history $enhancement");
             echo "<div class='success'>✓ Enhanced: " . explode('COMMENT', explode('ADD COLUMN IF NOT EXISTS ', $enhancement)[1])[0] . "</div>";
         } catch (Exception $e) {
             if (strpos($e->getMessage(), 'Duplicate column') === false) {
@@ -80,11 +80,11 @@ try {
         
         -- Get batch_id for the record
         SELECT batch_id INTO v_batch_id 
-        FROM final_call_logs 
+        FROM lv_final_call_logs 
         WHERE id = p_record_id;
         
         -- Insert complete backup of all marked data
-        INSERT INTO call_history (
+        INSERT INTO lv_call_history (
             original_record_id, finqy_id, attempt_number, batch_id,
             slot, disposition, connectivity, notes,
             attempt_date, data_source
@@ -106,9 +106,9 @@ try {
     }
     echo "</div>";
     
-    // Step 3: Update final_call_logs for better tracking
+    // Step 3: Update lv_final_call_logs for better tracking
     echo "<div class='step'>";
-    echo "<h3>Step 3: Enhancing final_call_logs tracking</h3>";
+    echo "<h3>Step 3: Enhancing lv_final_call_logs tracking</h3>";
     
     $tracking_enhancements = [
         "ADD COLUMN IF NOT EXISTS total_attempts INT DEFAULT 0 COMMENT 'Total number of attempts on this record'",
@@ -119,7 +119,7 @@ try {
     
     foreach ($tracking_enhancements as $enhancement) {
         try {
-            $conn->query("ALTER TABLE final_call_logs $enhancement");
+            $conn->query("ALTER TABLE lv_final_call_logs $enhancement");
             echo "<div class='success'>✓ Added: " . explode('COMMENT', explode('ADD COLUMN IF NOT EXISTS ', $enhancement)[1])[0] . "</div>";
         } catch (Exception $e) {
             if (strpos($e->getMessage(), 'Duplicate column') === false) {
@@ -148,7 +148,7 @@ function saveWithCompletePreservation($conn, $record_id, $finqy_id, $new_data) {
         $current_stmt = $conn->prepare("
             SELECT slot, disposition, connectivity, finqy_id, processed_at, 
                    total_attempts, first_attempt_date
-            FROM final_call_logs 
+            FROM lv_final_call_logs 
             WHERE id = ?
         ");
         $current_stmt->bind_param("s", $record_id);
@@ -166,13 +166,13 @@ function saveWithCompletePreservation($conn, $record_id, $finqy_id, $new_data) {
         // STEP 3: BACKUP CURRENT STATE (if it has data)
         if ($current_data["finqy_id"] && $current_data["processed_at"]) {
             $backup_stmt = $conn->prepare("
-                INSERT INTO call_history (
+                INSERT INTO lv_call_history (
                     original_record_id, finqy_id, attempt_number, batch_id,
                     slot, disposition, connectivity, attempt_date, 
                     is_original_attempt, data_source
                 )
                 SELECT ?, ?, ?, batch_id, ?, ?, ?, ?, TRUE, ?
-                FROM final_call_logs WHERE id = ?
+                FROM lv_final_call_logs WHERE id = ?
             ");
             $backup_stmt->bind_param("sissssssis", 
                 $record_id, 
@@ -191,7 +191,7 @@ function saveWithCompletePreservation($conn, $record_id, $finqy_id, $new_data) {
         
         // STEP 4: UPDATE with new data
         $update_stmt = $conn->prepare("
-            UPDATE final_call_logs 
+            UPDATE lv_final_call_logs 
             SET slot = ?, disposition = ?, connectivity = ?, 
                 finqy_id = ?, processed_at = NOW(),
                 total_attempts = ?, 
@@ -209,13 +209,13 @@ function saveWithCompletePreservation($conn, $record_id, $finqy_id, $new_data) {
         
         // STEP 5: CREATE history entry for NEW attempt
         $new_history_stmt = $conn->prepare("
-            INSERT INTO call_history (
+            INSERT INTO lv_call_history (
                 original_record_id, finqy_id, attempt_number, batch_id,
                 slot, disposition, connectivity, attempt_date,
                 is_original_attempt, data_source
             )
             SELECT ?, ?, ?, batch_id, ?, ?, ?, NOW(), FALSE, ?
-            FROM final_call_logs WHERE id = ?
+            FROM lv_final_call_logs WHERE id = ?
         ");
         $new_history_stmt->bind_param("sissssss",
             $record_id, $finqy_id, $attempt_number,
@@ -251,7 +251,7 @@ function saveWithCompletePreservation($conn, $record_id, $finqy_id, $new_data) {
                SUM(CASE WHEN disposition IS NOT NULL THEN 1 ELSE 0 END) as with_dispositions,
                SUM(CASE WHEN connectivity IS NOT NULL THEN 1 ELSE 0 END) as with_connectivity,
                SUM(CASE WHEN finqy_id IS NOT NULL THEN 1 ELSE 0 END) as with_callers
-        FROM final_call_logs 
+        FROM lv_final_call_logs 
         WHERE processed_at IS NOT NULL
     ")->fetch_assoc();
     
@@ -269,8 +269,8 @@ function saveWithCompletePreservation($conn, $record_id, $finqy_id, $new_data) {
             COUNT(DISTINCT fcl.id) as total_records,
             COUNT(DISTINCT ch.original_record_id) as preserved_records,
             (COUNT(DISTINCT fcl.id) - COUNT(DISTINCT ch.original_record_id)) as unpreserved_records
-        FROM final_call_logs fcl
-        LEFT JOIN call_history ch ON fcl.id = ch.original_record_id
+        FROM lv_final_call_logs fcl
+        LEFT JOIN lv_call_history ch ON fcl.id = ch.original_record_id
         WHERE fcl.processed_at IS NOT NULL
     ")->fetch_assoc();
     
@@ -283,7 +283,7 @@ function saveWithCompletePreservation($conn, $record_id, $finqy_id, $new_data) {
         // Create immediate backup of at-risk data
         echo "<h4>Creating Emergency Backup...</h4>";
         $emergency_backup = $conn->query("
-            INSERT IGNORE INTO call_history (
+            INSERT IGNORE INTO lv_call_history (
                 original_record_id, finqy_id, attempt_number, batch_id,
                 slot, disposition, connectivity, attempt_date,
                 is_original_attempt, data_source
@@ -292,8 +292,8 @@ function saveWithCompletePreservation($conn, $record_id, $finqy_id, $new_data) {
                 fcl.id, fcl.finqy_id, 1, fcl.batch_id,
                 fcl.slot, fcl.disposition, fcl.connectivity, fcl.processed_at,
                 TRUE, 'emergency_backup'
-            FROM final_call_logs fcl
-            LEFT JOIN call_history ch ON fcl.id = ch.original_record_id
+            FROM lv_final_call_logs fcl
+            LEFT JOIN lv_call_history ch ON fcl.id = ch.original_record_id
             WHERE fcl.processed_at IS NOT NULL 
             AND ch.original_record_id IS NULL
         ");
@@ -303,7 +303,7 @@ function saveWithCompletePreservation($conn, $record_id, $finqy_id, $new_data) {
         
         // Update backup confirmation
         $conn->query("
-            UPDATE final_call_logs 
+            UPDATE lv_final_call_logs 
             SET data_backup_confirmed = TRUE, last_backup_at = NOW(), total_attempts = 1
             WHERE processed_at IS NOT NULL AND data_backup_confirmed = FALSE
         ");
@@ -332,9 +332,9 @@ function saveWithCompletePreservation($conn, $record_id, $finqy_id, $new_data) {
     echo "<div class='info'>";
     echo "<h4>🔄 How It Works:</h4>";
     echo "<ol>";
-    echo "<li><strong>Before Update:</strong> System automatically backs up ALL current data to call_history</li>";
-    echo "<li><strong>During Update:</strong> New data is written to final_call_logs (current state)</li>";
-    echo "<li><strong>After Update:</strong> New attempt is also recorded in call_history</li>";
+    echo "<li><strong>Before Update:</strong> System automatically backs up ALL current data to lv_call_history</li>";
+    echo "<li><strong>During Update:</strong> New data is written to lv_final_call_logs (current state)</li>";
+    echo "<li><strong>After Update:</strong> New attempt is also recorded in lv_call_history</li>";
     echo "<li><strong>Result:</strong> Zero data loss, complete audit trail, performance comparison enabled</li>";
     echo "</ol>";
     echo "</div>";

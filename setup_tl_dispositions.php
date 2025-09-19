@@ -7,7 +7,7 @@ $conn = getDBConnection();
 
 // Check if table exists
 try {
-    $result = $conn->query("SELECT COUNT(*) as count FROM team_leader_dispositions");
+    $result = $conn->query("SELECT COUNT(*) as count FROM lv_team_leader_dispositions");
     $currentCount = $result->fetch_assoc()['count'];
     echo "<p>Current TL dispositions count: <strong>$currentCount</strong></p>";
 } catch (Exception $e) {
@@ -35,13 +35,13 @@ $skipped = 0;
 echo "<h3>Processing Dispositions:</h3>";
 foreach ($defaultDispositions as $disp) {
     // Check if disposition already exists
-    $stmt = $conn->prepare("SELECT id FROM team_leader_dispositions WHERE disposition_name = ?");
+    $stmt = $conn->prepare("SELECT id FROM lv_team_leader_dispositions WHERE disposition_name = ?");
     $stmt->bind_param("s", $disp['name']);
     $stmt->execute();
     
     if ($stmt->get_result()->num_rows == 0) {
         // Add new disposition
-        $stmt2 = $conn->prepare("INSERT INTO team_leader_dispositions (disposition_name, description, created_by) VALUES (?, ?, 'SYSTEM')");
+        $stmt2 = $conn->prepare("INSERT INTO lv_team_leader_dispositions (disposition_name, description, created_by) VALUES (?, ?, 'SYSTEM')");
         $stmt2->bind_param("ss", $disp['name'], $disp['desc']);
         if ($stmt2->execute()) {
             echo "<p style='color: green;'>✅ Added: " . htmlspecialchars($disp['name']) . "</p>";
@@ -63,7 +63,7 @@ echo "<p><strong>Skipped:</strong> $skipped existing dispositions</p>";
 
 // Show current dispositions
 echo "<h3>Current Team Leader Dispositions:</h3>";
-$result = $conn->query("SELECT * FROM team_leader_dispositions ORDER BY created_at DESC");
+$result = $conn->query("SELECT * FROM lv_team_leader_dispositions ORDER BY created_at DESC");
 if ($result && $result->num_rows > 0) {
     echo "<table border='1' style='border-collapse: collapse; width: 100%; margin: 10px 0;'>";
     echo "<tr style='background: #f0f0f0;'><th>ID</th><th>Disposition Name</th><th>Description</th><th>Active</th><th>Created</th></tr>";

@@ -9,7 +9,7 @@ $pending_requests_count = 0;
 $overdue_followups_count = 0;
 
 // Get pending vendor requests count
-$stmt = $conn->prepare("SELECT COUNT(*) as count FROM vendor_requests WHERE admin_id = ? AND status = 'pending'");
+$stmt = $conn->prepare("SELECT COUNT(*) as count FROM lv_vendor_requests WHERE admin_id = ? AND status = 'pending'");
 $stmt->bind_param("s", $_SESSION['admin_id']);
 $stmt->execute();
 $result = $stmt->get_result();
@@ -21,8 +21,8 @@ $stmt->close();
 // Get overdue follow-ups count for this admin's team leaders
 $overdueQuery = "
     SELECT COUNT(*) as count 
-    FROM follow_up_schedules fs 
-    JOIN team_leaders tl ON fs.leader_id = tl.leader_id 
+    FROM lv_follow_up_schedules fs 
+    JOIN lv_team_leaders tl ON fs.leader_id = tl.leader_id 
     WHERE tl.admin_id = ? AND fs.status = 'scheduled' AND fs.follow_up_datetime < NOW()
 ";
 

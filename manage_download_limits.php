@@ -24,10 +24,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // Fetch all admin users with their current limits and usage
 try {
     // First check if download_limit column exists
-    $check_column = $conn->query("SHOW COLUMNS FROM admin_users LIKE 'download_limit'");
+    $check_column = $conn->query("SHOW COLUMNS FROM lv_admin_users LIKE 'download_limit'");
     if ($check_column->num_rows == 0) {
         // Add the column if it doesn't exist
-        $conn->query("ALTER TABLE admin_users ADD COLUMN download_limit INT DEFAULT 5 COMMENT 'Maximum downloads allowed per disposition per batch'");
+        $conn->query("ALTER TABLE lv_admin_users ADD COLUMN download_limit INT DEFAULT 5 COMMENT 'Maximum downloads allowed per disposition per batch'");
     }
     
     $stmt = $conn->prepare("
@@ -36,9 +36,9 @@ try {
                adl.set_by_superadmin, adl.notes, adl.updated_at,
                COUNT(dt.id) as total_tracked_downloads,
                SUM(dt.download_count) as total_downloads
-        FROM admin_users au
-        LEFT JOIN admin_download_limits adl ON au.admin_id = adl.admin_id
-        LEFT JOIN download_tracking dt ON au.admin_id = dt.admin_id
+        FROM lv_admin_users au
+        LEFT JOIN lv_admin_download_limits adl ON au.admin_id = adl.admin_id
+        LEFT JOIN lv_download_tracking dt ON au.admin_id = dt.admin_id
         WHERE au.is_active = 1
         GROUP BY au.admin_id, au.name, au.username, au.download_limit, 
                  adl.set_by_superadmin, adl.notes, adl.updated_at
@@ -62,7 +62,7 @@ try {
     $stmt = $conn->prepare("
         SELECT admin_id, name, username, 
                COALESCE(download_limit, 5) as download_limit
-        FROM admin_users 
+        FROM lv_admin_users 
         WHERE is_active = 1 
         ORDER BY name
     ");

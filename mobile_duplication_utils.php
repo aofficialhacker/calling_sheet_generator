@@ -3,7 +3,7 @@ require_once 'db_config.php';
 
 /**
  * Check if a mobile number already exists anywhere in the system
- * Returns true if the number exists in final_call_logs table
+ * Returns true if the number exists in lv_final_call_logs table
  */
 function isMobileNumberDuplicate($mobile_no) {
     $conn = getDBConnection();
@@ -11,8 +11,8 @@ function isMobileNumberDuplicate($mobile_no) {
     // Clean mobile number (remove all non-digits)
     $clean_mobile = preg_replace('/\D/', '', $mobile_no);
     
-    // Check if number exists in final_call_logs table (system-wide)
-    $stmt = $conn->prepare("SELECT COUNT(*) as count FROM final_call_logs WHERE mobile_no = ?");
+    // Check if number exists in lv_final_call_logs table (system-wide)
+    $stmt = $conn->prepare("SELECT COUNT(*) as count FROM lv_final_call_logs WHERE mobile_no = ?");
     $stmt->bind_param("s", $clean_mobile);
     $stmt->execute();
     $result = $stmt->get_result()->fetch_assoc();
@@ -34,8 +34,8 @@ function getMobileDuplicateDetails($mobile_no) {
     
     // Get details of existing record
     $sql = "SELECT fcl.batch_id, fcl.name, fb.admin_id, fb.upload_time, fb.original_filename, fb.product_code
-            FROM final_call_logs fcl 
-            JOIN file_batches fb ON fcl.batch_id = fb.id 
+            FROM lv_final_call_logs fcl 
+            JOIN lv_file_batches fb ON fcl.batch_id = fb.id 
             WHERE fcl.mobile_no = ? 
             ORDER BY fb.upload_time ASC 
             LIMIT 1";
@@ -88,8 +88,8 @@ function filterDuplicateMobileNumbers($mobile_numbers) {
     
     // Query to find existing numbers
     $sql = "SELECT DISTINCT fcl.mobile_no, fcl.batch_id, fcl.name, fb.admin_id, fb.upload_time, fb.original_filename 
-            FROM final_call_logs fcl 
-            JOIN file_batches fb ON fcl.batch_id = fb.id 
+            FROM lv_final_call_logs fcl 
+            JOIN lv_file_batches fb ON fcl.batch_id = fb.id 
             WHERE fcl.mobile_no IN ({$placeholders})
             ORDER BY fb.upload_time ASC";
     
@@ -176,7 +176,7 @@ function getBulkDuplicateMobileNumbers($mobile_numbers) {
         $placeholders = str_repeat('?,', count($chunk) - 1) . '?';
         
         // Query to find existing numbers in this chunk
-        $sql = "SELECT DISTINCT mobile_no FROM final_call_logs WHERE mobile_no IN ({$placeholders})";
+        $sql = "SELECT DISTINCT mobile_no FROM lv_final_call_logs WHERE mobile_no IN ({$placeholders})";
         
         $stmt = $conn->prepare($sql);
         $types = str_repeat("s", count($chunk));
@@ -226,7 +226,7 @@ function countDuplicateMobileNumbers($mobile_numbers) {
     $placeholders = str_repeat('?,', count($unique_clean_numbers) - 1) . '?';
     
     // Query to count existing numbers
-    $sql = "SELECT COUNT(DISTINCT mobile_no) as count FROM final_call_logs WHERE mobile_no IN ({$placeholders})";
+    $sql = "SELECT COUNT(DISTINCT mobile_no) as count FROM lv_final_call_logs WHERE mobile_no IN ({$placeholders})";
     
     $stmt = $conn->prepare($sql);
     $types = str_repeat("s", count($unique_clean_numbers));
@@ -252,8 +252,8 @@ function getDuplicationStats($admin_id = null) {
                 COUNT(*) as total_numbers,
                 COUNT(DISTINCT mobile_no) as unique_numbers,
                 (COUNT(*) - COUNT(DISTINCT mobile_no)) as internal_duplicates
-            FROM final_call_logs fcl
-            JOIN file_batches fb ON fcl.batch_id = fb.id";
+            FROM lv_final_call_logs fcl
+            JOIN lv_file_batches fb ON fcl.batch_id = fb.id";
     
     $params = [];
     $types = "";
@@ -317,7 +317,7 @@ function getBulkBlockedMobileNumbers($admin_id, $mobile_numbers) {
         $placeholders = str_repeat('?,', count($chunk) - 1) . '?';
         
         // Query to find blocked numbers in this chunk
-        $sql = "SELECT DISTINCT mobile_no FROM blocklist_numbers WHERE admin_id = ? AND mobile_no IN ({$placeholders})";
+        $sql = "SELECT DISTINCT mobile_no FROM lv_blocklist_numbers WHERE admin_id = ? AND mobile_no IN ({$placeholders})";
         
         $stmt = $conn->prepare($sql);
         $types = "s" . str_repeat("s", count($chunk));

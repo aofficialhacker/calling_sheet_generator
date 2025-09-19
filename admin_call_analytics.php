@@ -18,8 +18,8 @@ $selected_product = $_GET['product_code'] ?? '';
 // Get admin's callers for filter
 $callers_sql = "
     SELECT c.finqy_id, c.caller_name 
-    FROM callers c 
-    JOIN admin_caller_mapping acm ON CAST(c.finqy_id AS CHAR) = CAST(acm.finqy_id AS CHAR) 
+    FROM lv_callers c 
+    JOIN lv_admin_caller_mapping acm ON CAST(c.finqy_id AS CHAR) = CAST(acm.finqy_id AS CHAR) 
     WHERE acm.admin_id = ? AND c.is_active = 1 
     ORDER BY c.caller_name
 ";
@@ -32,7 +32,7 @@ $callers_stmt->close();
 // Get admin's products for filter
 $products_sql = "
     SELECT DISTINCT fb.product_code 
-    FROM file_batches fb 
+    FROM lv_file_batches fb 
     WHERE fb.admin_id = ? 
     ORDER BY fb.product_code
 ";
@@ -78,15 +78,15 @@ $overall_stats_sql = "
         SUM(CASE WHEN ch.disposition IN ('Not Interested', 'DND', 'Wrong Number') THEN 1 ELSE 0 END) as negative_outcomes,
         SUM(CASE WHEN ch.disposition IN ('Follow Up', 'Busy', 'No Response') THEN 1 ELSE 0 END) as follow_up_required,
         SUM(CASE WHEN ch.attempt_number > 1 THEN 1 ELSE 0 END) as total_reattempts
-    FROM call_history ch
-    JOIN file_batches fb ON CAST(ch.batch_id AS CHAR) = CAST(fb.id AS CHAR)
+    FROM lv_call_history ch
+    JOIN lv_file_batches fb ON CAST(ch.batch_id AS CHAR) = CAST(fb.id AS CHAR)
     $where_clause AND ch.finqy_id != '0' AND ch.finqy_id IS NOT NULL AND ch.finqy_id != ''
 ";
 
 $overall_stmt = $conn->prepare($overall_stats_sql);
 if ($overall_stmt === false) {
     echo "<div class='error'>Database query error: " . htmlspecialchars($conn->error) . "</div>";
-    echo "<div class='info'>Make sure the call_history table exists. Run the database migration first.</div>";
+    echo "<div class='info'>Make sure the lv_call_history table exists. Run the database migration first.</div>";
     exit;
 }
 if ($param_types) $overall_stmt->bind_param($param_types, ...$params);
@@ -109,9 +109,9 @@ $caller_performance_sql = "
         SUM(CASE WHEN ch.disposition IN ('Interested', 'Callback', 'Hot Lead') THEN 1 ELSE 0 END) as positive_outcomes,
         ROUND((SUM(CASE WHEN ch.disposition IN ('Interested', 'Callback', 'Hot Lead') THEN 1 ELSE 0 END) / COUNT(ch.id)) * 100, 1) as success_rate,
         SUM(CASE WHEN ch.attempt_number > 1 THEN 1 ELSE 0 END) as reattempts_made
-    FROM call_history ch
-    JOIN file_batches fb ON CAST(ch.batch_id AS CHAR) = CAST(fb.id AS CHAR)
-    LEFT JOIN callers c ON CAST(ch.finqy_id AS CHAR) = CAST(c.finqy_id AS CHAR)
+    FROM lv_call_history ch
+    JOIN lv_file_batches fb ON CAST(ch.batch_id AS CHAR) = CAST(fb.id AS CHAR)
+    LEFT JOIN lv_callers c ON CAST(ch.finqy_id AS CHAR) = CAST(c.finqy_id AS CHAR)
     $where_clause AND ch.finqy_id != '0' AND ch.finqy_id IS NOT NULL AND ch.finqy_id != ''
     GROUP BY ch.finqy_id
     ORDER BY success_rate DESC, total_attempts DESC
@@ -140,11 +140,11 @@ $redistribution_sql = "
         COUNT(ch.id) as total_attempts,
         MAX(ch.attempt_date) as last_attempt,
         GROUP_CONCAT(DISTINCT ch.disposition ORDER BY ch.attempt_date) as disposition_history
-    FROM final_call_logs fcl
-    JOIN file_batches fb ON CAST(fcl.batch_id AS CHAR) = CAST(fb.id AS CHAR)
-    LEFT JOIN callers oc ON CAST(fcl.original_caller_id AS CHAR) = CAST(oc.finqy_id AS CHAR)
-    LEFT JOIN callers lc ON CAST(fcl.last_updated_by AS CHAR) = CAST(lc.finqy_id AS CHAR)
-    LEFT JOIN call_history ch ON CAST(fcl.id AS CHAR) = CAST(ch.original_record_id AS CHAR)
+    FROM lv_final_call_logs fcl
+    JOIN lv_file_batches fb ON CAST(fcl.batch_id AS CHAR) = CAST(fb.id AS CHAR)
+    LEFT JOIN lv_callers oc ON CAST(fcl.original_caller_id AS CHAR) = CAST(oc.finqy_id AS CHAR)
+    LEFT JOIN lv_callers lc ON CAST(fcl.last_updated_by AS CHAR) = CAST(lc.finqy_id AS CHAR)
+    LEFT JOIN lv_call_history ch ON CAST(fcl.id AS CHAR) = CAST(ch.original_record_id AS CHAR)
     WHERE fb.admin_id = ? AND fcl.redistribution_count > 0
     GROUP BY fcl.id, fcl.mobile_no, fcl.name, fcl.redistribution_count
     ORDER BY fcl.redistribution_count DESC, last_attempt DESC
@@ -169,8 +169,8 @@ $reattempt_analysis_sql = "
         COUNT(*) as attempts,
         SUM(CASE WHEN ch.disposition IN ('Interested', 'Callback', 'Hot Lead') THEN 1 ELSE 0 END) as successful,
         ROUND((SUM(CASE WHEN ch.disposition IN ('Interested', 'Callback', 'Hot Lead') THEN 1 ELSE 0 END) / COUNT(*)) * 100, 1) as success_rate
-    FROM call_history ch
-    JOIN file_batches fb ON CAST(ch.batch_id AS CHAR) = CAST(fb.id AS CHAR)
+    FROM lv_call_history ch
+    JOIN lv_file_batches fb ON CAST(ch.batch_id AS CHAR) = CAST(fb.id AS CHAR)
     $where_clause AND ch.finqy_id != '0' AND ch.finqy_id IS NOT NULL AND ch.finqy_id != ''
     GROUP BY ch.attempt_number
     ORDER BY ch.attempt_number

@@ -14,7 +14,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
             $productName = trim($_POST['product_name'] ?? '');
             
             if ($productCode && $productName) {
-                $stmt = $conn->prepare("INSERT INTO products (product_code, product_name, created_by) VALUES (?, ?, ?)");
+                $stmt = $conn->prepare("INSERT INTO lv_products (product_code, product_name, created_by) VALUES (?, ?, ?)");
                 $stmt->bind_param("ssi", $productCode, $productName, $_SESSION['superadmin_id']);
                 
                 if ($stmt->execute()) {
@@ -33,7 +33,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
             $currentStatus = $_POST['current_status'] ?? 0;
             $newStatus = $currentStatus ? 0 : 1;
             
-            $stmt = $conn->prepare("UPDATE products SET is_active = ? WHERE id = ?");
+            $stmt = $conn->prepare("UPDATE lv_products SET is_active = ? WHERE id = ?");
             $stmt->bind_param("ii", $newStatus, $productId);
             
             if ($stmt->execute()) {
@@ -47,7 +47,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
             $productName = trim($_POST['product_name'] ?? '');
             
             if ($productId && $productName) {
-                $stmt = $conn->prepare("UPDATE products SET product_name = ? WHERE id = ?");
+                $stmt = $conn->prepare("UPDATE lv_products SET product_name = ? WHERE id = ?");
                 $stmt->bind_param("si", $productName, $productId);
                 
                 if ($stmt->execute()) {
@@ -59,12 +59,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
     }
 }
 
-// Fetch all products
-$products = $conn->query("
+// Fetch all lv_products
+$lv_products = $conn->query("
     SELECT p.*, 
            COUNT(DISTINCT fb.id) as batch_count
-    FROM products p
-    LEFT JOIN file_batches fb ON p.product_code = fb.product_code
+    FROM lv_products p
+    LEFT JOIN lv_file_batches fb ON p.product_code = fb.product_code
     GROUP BY p.id
     ORDER BY p.created_at DESC
 ");
@@ -145,8 +145,8 @@ $conn->close();
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <?php if ($products && $products->num_rows > 0): ?>
-                                        <?php while($product = $products->fetch_assoc()): ?>
+                                    <?php if ($lv_products && $lv_products->num_rows > 0): ?>
+                                        <?php while($product = $lv_products->fetch_assoc()): ?>
                                             <tr>
                                                 <td><code><?= htmlspecialchars($product['product_code']) ?></code></td>
                                                 <td><?= htmlspecialchars($product['product_name']) ?></td>
@@ -175,7 +175,7 @@ $conn->close();
                                         <?php endwhile; ?>
                                     <?php else: ?>
                                         <tr>
-                                            <td colspan="6" class="text-center text-muted">No products found</td>
+                                            <td colspan="6" class="text-center text-muted">No lv_products found</td>
                                         </tr>
                                     <?php endif; ?>
                                 </tbody>

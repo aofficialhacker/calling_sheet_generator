@@ -16,7 +16,7 @@ if ($_POST) {
         $password = password_hash(trim($_POST['password']), PASSWORD_DEFAULT);
         
         // Generate unique leader ID
-        $stmt = $conn->prepare("SELECT leader_id FROM team_leaders ORDER BY id DESC LIMIT 1");
+        $stmt = $conn->prepare("SELECT leader_id FROM lv_team_leaders ORDER BY id DESC LIMIT 1");
         $stmt->execute();
         $result = $stmt->get_result();
         if ($result->num_rows > 0) {
@@ -29,8 +29,8 @@ if ($_POST) {
         $stmt->close();
         
         // Check if finqy_id is valid and mapped to this admin
-        $stmt = $conn->prepare("SELECT c.caller_name FROM callers c 
-                               JOIN admin_caller_mapping acm ON c.finqy_id = acm.finqy_id 
+        $stmt = $conn->prepare("SELECT c.caller_name FROM lv_callers c 
+                               JOIN lv_admin_caller_mapping acm ON c.finqy_id = acm.finqy_id 
                                WHERE c.finqy_id = ? AND acm.admin_id = ? AND c.is_active = 1");
         $stmt->bind_param("ss", $finqyId, $adminId);
         $stmt->execute();
@@ -40,7 +40,7 @@ if ($_POST) {
             $callerData = $callerResult->fetch_assoc();
             
             // Check if caller is already a team leader
-            $stmt = $conn->prepare("SELECT id FROM team_leaders WHERE finqy_id = ? AND is_active = 1");
+            $stmt = $conn->prepare("SELECT id FROM lv_team_leaders WHERE finqy_id = ? AND is_active = 1");
             $stmt->bind_param("s", $finqyId);
             $stmt->execute();
             if ($stmt->get_result()->num_rows > 0) {
@@ -48,7 +48,7 @@ if ($_POST) {
                 $messageType = "danger";
             } else {
                 // Create team leader
-                $stmt = $conn->prepare("INSERT INTO team_leaders (leader_id, leader_name, finqy_id, admin_id, username, password) VALUES (?, ?, ?, ?, ?, ?)");
+                $stmt = $conn->prepare("INSERT INTO lv_team_leaders (leader_id, leader_name, finqy_id, admin_id, username, password) VALUES (?, ?, ?, ?, ?, ?)");
                 $stmt->bind_param("ssssss", $leaderId, $leaderName, $finqyId, $adminId, $username, $password);
                 
                 if ($stmt->execute()) {
@@ -68,7 +68,7 @@ if ($_POST) {
     
     if (isset($_POST['deactivate_leader'])) {
         $leaderId = $_POST['leader_id'];
-        $stmt = $conn->prepare("UPDATE team_leaders SET is_active = 0 WHERE leader_id = ? AND admin_id = ?");
+        $stmt = $conn->prepare("UPDATE lv_team_leaders SET is_active = 0 WHERE leader_id = ? AND admin_id = ?");
         $stmt->bind_param("ss", $leaderId, $adminId);
         
         if ($stmt->execute()) {
@@ -83,7 +83,7 @@ if ($_POST) {
     
     if (isset($_POST['reactivate_leader'])) {
         $leaderId = $_POST['leader_id'];
-        $stmt = $conn->prepare("UPDATE team_leaders SET is_active = 1 WHERE leader_id = ? AND admin_id = ?");
+        $stmt = $conn->prepare("UPDATE lv_team_leaders SET is_active = 1 WHERE leader_id = ? AND admin_id = ?");
         $stmt->bind_param("ss", $leaderId, $adminId);
         
         if ($stmt->execute()) {
@@ -101,9 +101,9 @@ if ($_POST) {
 $availableCallers = [];
 $stmt = $conn->prepare("
     SELECT c.finqy_id, c.caller_name 
-    FROM callers c 
-    JOIN admin_caller_mapping acm ON c.finqy_id = acm.finqy_id 
-    LEFT JOIN team_leaders tl ON c.finqy_id = tl.finqy_id AND tl.is_active = 1
+    FROM lv_callers c 
+    JOIN lv_admin_caller_mapping acm ON c.finqy_id = acm.finqy_id 
+    LEFT JOIN lv_team_leaders tl ON c.finqy_id = tl.finqy_id AND tl.is_active = 1
     WHERE acm.admin_id = ? AND c.is_active = 1 AND tl.id IS NULL
     ORDER BY c.caller_name
 ");
@@ -119,9 +119,9 @@ $stmt->close();
 $teamLeaders = [];
 $stmt = $conn->prepare("
     SELECT tl.*, c.caller_name, c.mobile_no,
-           (SELECT COUNT(*) FROM team_leader_actions WHERE leader_id = tl.leader_id) as total_actions
-    FROM team_leaders tl
-    JOIN callers c ON tl.finqy_id = c.finqy_id
+           (SELECT COUNT(*) FROM lv_team_leader_actions WHERE leader_id = tl.leader_id) as total_actions
+    FROM lv_team_leaders tl
+    JOIN lv_callers c ON tl.finqy_id = c.finqy_id
     WHERE tl.admin_id = ?
     ORDER BY tl.created_at DESC
 ");

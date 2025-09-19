@@ -60,10 +60,10 @@ if ($filterType === 'actions' || !$filterType) {
             COALESCE(tla.session_id, '') as session_id,
             fcl.name as lead_name,
             tla.new_disposition as disposition
-        FROM team_leaders tl
-        JOIN callers c ON tl.finqy_id = c.finqy_id
-        JOIN team_leader_actions tla ON tl.leader_id = tla.leader_id
-        JOIN final_call_logs fcl ON tla.lead_id = fcl.id
+        FROM lv_team_leaders tl
+        JOIN lv_callers c ON tl.finqy_id = c.finqy_id
+        JOIN lv_team_leader_actions tla ON tl.leader_id = tla.leader_id
+        JOIN lv_final_call_logs fcl ON tla.lead_id = fcl.id
         WHERE $whereClause
         ORDER BY tla.action_date DESC
     ";
@@ -97,9 +97,9 @@ if ($filterType !== 'actions') {
             COALESCE(tll.session_id, '') as session_id,
             NULL as lead_name,
             NULL as disposition
-        FROM team_leaders tl
-        JOIN callers c ON tl.finqy_id = c.finqy_id
-        JOIN team_leader_logins tll ON tl.leader_id = tll.leader_id
+        FROM lv_team_leaders tl
+        JOIN lv_callers c ON tl.finqy_id = c.finqy_id
+        JOIN lv_team_leader_logins tll ON tl.leader_id = tll.leader_id
         WHERE $whereClause
     ";
     
@@ -134,15 +134,15 @@ if (!$filterType) {
     if ($filterType === 'actions') {
         $countQuery = "
             SELECT COUNT(*) as total
-            FROM team_leaders tl
-            JOIN team_leader_actions tla ON tl.leader_id = tla.leader_id
+            FROM lv_team_leaders tl
+            JOIN lv_team_leader_actions tla ON tl.leader_id = tla.leader_id
             WHERE $whereClause
         ";
     } else {
         $countQuery = "
             SELECT COUNT(*) as total
-            FROM team_leaders tl
-            JOIN team_leader_logins tll ON tl.leader_id = tll.leader_id
+            FROM lv_team_leaders tl
+            JOIN lv_team_leader_logins tll ON tl.leader_id = tll.leader_id
             WHERE $whereClause
         ";
     }
@@ -160,7 +160,7 @@ $totalPages = ceil($totalCount / $limit);
 $teamLeaders = [];
 $stmt = $conn->prepare("
     SELECT tl.leader_id, tl.leader_name 
-    FROM team_leaders tl 
+    FROM lv_team_leaders tl 
     WHERE tl.admin_id = ? AND tl.is_active = 1 
     ORDER BY tl.leader_name
 ");
@@ -179,11 +179,11 @@ $stmt = $conn->prepare("
         COUNT(DISTINCT tll.leader_id) as active_leaders_today,
         COUNT(CASE WHEN tll.login_status = 'success' AND DATE(tll.login_time) = CURDATE() THEN 1 END) as successful_logins_today,
         COUNT(CASE WHEN tll.login_status = 'failed' AND DATE(tll.login_time) = CURDATE() THEN 1 END) as failed_logins_today,
-        (SELECT COUNT(*) FROM team_leader_actions tla 
-         JOIN team_leaders tl ON tla.leader_id = tl.leader_id 
+        (SELECT COUNT(*) FROM lv_team_leader_actions tla 
+         JOIN lv_team_leaders tl ON tla.leader_id = tl.leader_id 
          WHERE tl.admin_id = ? AND DATE(tla.action_date) = CURDATE()) as actions_today
-    FROM team_leader_logins tll
-    JOIN team_leaders tl ON tll.leader_id = tl.leader_id
+    FROM lv_team_leader_logins tll
+    JOIN lv_team_leaders tl ON tll.leader_id = tl.leader_id
     WHERE tl.admin_id = ? AND DATE(tll.login_time) = CURDATE()
 ");
 $stmt->bind_param("ss", $adminId, $adminId);

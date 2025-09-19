@@ -22,13 +22,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || php_sapi_name() === 'cli') {
     
     foreach ($defaultDispositions as $disp) {
         // Check if disposition already exists
-        $stmt = $conn->prepare("SELECT id FROM team_leader_dispositions WHERE disposition_name = ?");
+        $stmt = $conn->prepare("SELECT id FROM lv_team_leader_dispositions WHERE disposition_name = ?");
         $stmt->bind_param("s", $disp['name']);
         $stmt->execute();
         
         if ($stmt->get_result()->num_rows == 0) {
             // Add new disposition
-            $stmt = $conn->prepare("INSERT INTO team_leader_dispositions (disposition_name, description, created_by) VALUES (?, ?, 'SYSTEM')");
+            $stmt = $conn->prepare("INSERT INTO lv_team_leader_dispositions (disposition_name, description, created_by) VALUES (?, ?, 'SYSTEM')");
             $stmt->bind_param("ss", $disp['name'], $disp['desc']);
             if ($stmt->execute()) {
                 $added++;

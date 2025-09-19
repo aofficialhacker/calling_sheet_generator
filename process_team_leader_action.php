@@ -21,8 +21,8 @@ if ($_POST) {
     // Validate that the lead exists and belongs to this admin's team
     $stmt = $conn->prepare("
         SELECT fcl.*, fcl.disposition as original_disposition
-        FROM final_call_logs fcl
-        JOIN admin_caller_mapping acm ON fcl.finqy_id = acm.finqy_id
+        FROM lv_final_call_logs fcl
+        JOIN lv_admin_caller_mapping acm ON fcl.finqy_id = acm.finqy_id
         WHERE fcl.id = ? AND acm.admin_id = ? AND fcl.disposition = 'Interested'
     ");
     $stmt->bind_param("ss", $leadId, $_SESSION['admin_id']);
@@ -33,7 +33,7 @@ if ($_POST) {
         $leadData = $result->fetch_assoc();
         
         // Check if action already exists
-        $stmt = $conn->prepare("SELECT id FROM team_leader_actions WHERE lead_id = ? AND leader_id = ?");
+        $stmt = $conn->prepare("SELECT id FROM lv_team_leader_actions WHERE lead_id = ? AND leader_id = ?");
         $stmt->bind_param("ss", $leadId, $leaderId);
         $stmt->execute();
         
@@ -44,8 +44,8 @@ if ($_POST) {
             // Check if disposition requires calendar scheduling
             $stmt = $conn->prepare("
                 SELECT tld.*, db.has_calendar_enabled, db.id as bucket_id
-                FROM team_leader_dispositions tld
-                LEFT JOIN disposition_buckets db ON tld.bucket_id = db.id
+                FROM lv_team_leader_dispositions tld
+                LEFT JOIN lv_disposition_buckets db ON tld.bucket_id = db.id
                 WHERE tld.disposition_name = ? AND tld.is_active = 1
             ");
             $stmt->bind_param("s", $newDisposition);
@@ -84,7 +84,7 @@ if ($_POST) {
                 
                 // Insert team leader action
                 $stmt = $conn->prepare("
-                    INSERT INTO team_leader_actions 
+                    INSERT INTO lv_team_leader_actions 
                     (action_id, leader_id, lead_id, original_disposition, new_disposition, remarks, ip_address, user_agent, session_id) 
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ");
@@ -97,7 +97,7 @@ if ($_POST) {
                     $followUpDatetime = $followUpDate . ' ' . $followUpTime . ':00';
                     
                     $stmt = $conn->prepare("
-                        INSERT INTO follow_up_schedules 
+                        INSERT INTO lv_follow_up_schedules 
                         (schedule_id, lead_id, leader_id, disposition_name, bucket_id, follow_up_datetime, remarks) 
                         VALUES (?, ?, ?, ?, ?, ?, ?)
                     ");

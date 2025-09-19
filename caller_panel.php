@@ -54,7 +54,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['finqy_id'])) {
         $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
         if ($conn->connect_error) { die("DB Connection Failed."); }
         
-        $stmt = $conn->prepare("SELECT finqy_id, caller_name, caller_type FROM callers WHERE finqy_id = ? AND is_active = 1");
+        $stmt = $conn->prepare("SELECT finqy_id, caller_name, caller_type FROM lv_callers WHERE finqy_id = ? AND is_active = 1");
         $stmt->bind_param("s", $_POST['finqy_id']);
         $stmt->execute();
         $result = $stmt->get_result();
@@ -84,7 +84,7 @@ if (isset($_GET['action']) && $_GET['action'] == 'logout') {
 
 // Fetch disposition maps from the database for dynamic legends
 $conn_maps = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
-$dispositions = $conn_maps->query("SELECT code, description FROM disposition_codes WHERE is_active = 1 ORDER BY code");
+$dispositions = $conn_maps->query("SELECT code, description FROM lv_disposition_codes WHERE is_active = 1 ORDER BY code");
 $disposition_map = [];
 while($row = $dispositions->fetch_assoc()) {
     $disposition_map[$row['code']] = $row['description'];

@@ -79,7 +79,7 @@ if ($error_count > 0) {
 
 // Show current index status
 echo "<h3>Current Mobile Number Indexes</h3>";
-$result = $conn->query("SHOW INDEX FROM final_call_logs WHERE Key_name LIKE '%mobile%'");
+$result = $conn->query("SHOW INDEX FROM lv_final_call_logs WHERE Key_name LIKE '%mobile%'");
 if ($result && $result->num_rows > 0) {
     echo "<table border='1' cellpadding='5' cellspacing='0'>";
     echo "<tr><th>Key Name</th><th>Column Name</th><th>Unique</th><th>Index Type</th></tr>";
@@ -99,9 +99,9 @@ if ($result && $result->num_rows > 0) {
 // Show system statistics
 echo "<h3>Current System Statistics</h3>";
 $stats_query = "SELECT 
-    (SELECT COUNT(*) FROM final_call_logs) as total_records,
-    (SELECT COUNT(DISTINCT mobile_no) FROM final_call_logs) as unique_mobile_numbers,
-    (SELECT COUNT(*) - COUNT(DISTINCT mobile_no) FROM final_call_logs) as current_duplicates";
+    (SELECT COUNT(*) FROM lv_final_call_logs) as total_records,
+    (SELECT COUNT(DISTINCT mobile_no) FROM lv_final_call_logs) as unique_mobile_numbers,
+    (SELECT COUNT(*) - COUNT(DISTINCT mobile_no) FROM lv_final_call_logs) as current_duplicates";
 
 $stats_result = $conn->query($stats_query);
 if ($stats_result) {

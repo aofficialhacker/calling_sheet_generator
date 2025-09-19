@@ -30,10 +30,10 @@ try {
     echo "<div class='status-card'>";
     echo "<h2>🎯 System Overview</h2>";
     
-    $final_logs_count = $conn->query("SELECT COUNT(*) FROM final_call_logs")->fetch_row()[0];
-    $history_count = $conn->query("SELECT COUNT(*) FROM call_history")->fetch_row()[0];
-    $processed_count = $conn->query("SELECT COUNT(*) FROM final_call_logs WHERE processed_at IS NOT NULL")->fetch_row()[0];
-    $backed_up_count = $conn->query("SELECT COUNT(*) FROM final_call_logs WHERE data_backup_confirmed = TRUE")->fetch_row()[0];
+    $final_logs_count = $conn->query("SELECT COUNT(*) FROM lv_final_call_logs")->fetch_row()[0];
+    $history_count = $conn->query("SELECT COUNT(*) FROM lv_call_history")->fetch_row()[0];
+    $processed_count = $conn->query("SELECT COUNT(*) FROM lv_final_call_logs WHERE processed_at IS NOT NULL")->fetch_row()[0];
+    $backed_up_count = $conn->query("SELECT COUNT(*) FROM lv_final_call_logs WHERE data_backup_confirmed = TRUE")->fetch_row()[0];
     
     echo "<div class='metric'><strong>Total Records:</strong> " . number_format($final_logs_count) . "</div>";
     echo "<div class='metric'><strong>Processed Records:</strong> " . number_format($processed_count) . "</div>";
@@ -46,7 +46,7 @@ try {
     echo "<h2>✅ Core Features Status</h2>";
     
     $features_status = [
-        'Database Structure' => $conn->query("SHOW TABLES LIKE 'call_history'")->num_rows > 0,
+        'Database Structure' => $conn->query("SHOW TABLES LIKE 'lv_call_history'")->num_rows > 0,
         'Enhanced Upload Processing' => file_exists('save_final_log.php') && strpos(file_get_contents('save_final_log.php'), 'preserveAllCurrentData') !== false,
         'Redistribution Mode' => file_exists('manage_batches.php'),
         'Caller Performance Dashboard' => file_exists('caller_performance.php'),

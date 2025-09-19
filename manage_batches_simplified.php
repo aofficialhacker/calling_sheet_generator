@@ -13,7 +13,7 @@ if (empty($adminId)) {
 // Get admin's multi-status setting
 $multiStatusEnabled = 0;
 try {
-    $multiStatusStmt = $conn->prepare("SELECT multi_status_selection FROM admin_users WHERE admin_id = ?");
+    $multiStatusStmt = $conn->prepare("SELECT multi_status_selection FROM lv_admin_users WHERE admin_id = ?");
     $multiStatusStmt->bind_param("s", $adminId);
     $multiStatusStmt->execute();
     $multiStatusResult = $multiStatusStmt->get_result()->fetch_assoc();
@@ -26,14 +26,14 @@ try {
 // Get batches data
 $batches_data = [];
 try {
-    $stmt = $conn->prepare("SELECT id, original_filename, upload_time, product_code FROM file_batches WHERE admin_id = ? ORDER BY upload_time DESC");
+    $stmt = $conn->prepare("SELECT id, original_filename, upload_time, product_code FROM lv_file_batches WHERE admin_id = ? ORDER BY upload_time DESC");
     $stmt->bind_param("s", $adminId);
     $stmt->execute();
     $result = $stmt->get_result();
     
     while ($row = $result->fetch_assoc()) {
         // Get record count
-        $count_stmt = $conn->prepare("SELECT COUNT(*) as count FROM final_call_logs WHERE batch_id = ?");
+        $count_stmt = $conn->prepare("SELECT COUNT(*) as count FROM lv_final_call_logs WHERE batch_id = ?");
         $count_stmt->bind_param("s", $row['id']);
         $count_stmt->execute();
         $count_result = $count_stmt->get_result();
@@ -43,7 +43,7 @@ try {
         // Get product name (with fallback)
         $row['product_name'] = $row['product_code']; // Default fallback
         try {
-            $prod_stmt = $conn->prepare("SELECT product_name FROM products WHERE product_code = ?");
+            $prod_stmt = $conn->prepare("SELECT product_name FROM lv_products WHERE product_code = ?");
             if ($prod_stmt) {
                 $prod_stmt->bind_param("s", $row['product_code']);
                 $prod_stmt->execute();
@@ -68,7 +68,7 @@ try {
 // Get dispositions (exclude Interested)
 $dispositions = [];
 try {
-    $disp_result = $conn->query("SELECT DISTINCT code, description FROM disposition_codes WHERE is_active = 1 AND description NOT LIKE '%Interested%' ORDER BY code");
+    $disp_result = $conn->query("SELECT DISTINCT code, description FROM lv_disposition_codes WHERE is_active = 1 AND description NOT LIKE '%Interested%' ORDER BY code");
     if ($disp_result) {
         while ($disp = $disp_result->fetch_assoc()) {
             $dispositions[] = $disp;

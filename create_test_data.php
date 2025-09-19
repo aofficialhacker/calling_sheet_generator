@@ -30,21 +30,21 @@ if ($_POST['create_data'] ?? false) {
             $vendorId = "V" . str_pad(mt_rand(1, 99), 2, '0', STR_PAD_LEFT);
             $vendorName = "Test Vendor " . mt_rand(1, 999);
             
-            $vendor_check = $conn->prepare("SELECT COUNT(*) as count FROM vendors WHERE admin_id = ?");
+            $vendor_check = $conn->prepare("SELECT COUNT(*) as count FROM lv_vendors WHERE admin_id = ?");
             $vendor_check->bind_param("s", $adminId);
             $vendor_check->execute();
             $vendor_count = $vendor_check->get_result()->fetch_assoc()['count'];
             $vendor_check->close();
             
             if ($vendor_count == 0) {
-                $vendor_stmt = $conn->prepare("INSERT INTO vendors (vendor_id, vendor_name, admin_id, is_approved) VALUES (?, ?, ?, 1)");
+                $vendor_stmt = $conn->prepare("INSERT INTO lv_vendors (vendor_id, vendor_name, admin_id, is_approved) VALUES (?, ?, ?, 1)");
                 $vendor_stmt->bind_param("sss", $vendorId, $vendorName, $adminId);
                 $vendor_stmt->execute();
                 $vendor_stmt->close();
                 echo "<p style='color:green;'>✓ Created test vendor: {$vendorId} - {$vendorName}</p>";
             } else {
                 // Use existing vendor
-                $existing_vendor = $conn->prepare("SELECT vendor_id, vendor_name FROM vendors WHERE admin_id = ? LIMIT 1");
+                $existing_vendor = $conn->prepare("SELECT vendor_id, vendor_name FROM lv_vendors WHERE admin_id = ? LIMIT 1");
                 $existing_vendor->bind_param("s", $adminId);
                 $existing_vendor->execute();
                 $vendor_data = $existing_vendor->get_result()->fetch_assoc();
@@ -65,14 +65,14 @@ if ($_POST['create_data'] ?? false) {
                     $filename = "test_batch_" . date('Y_m', strtotime($upload_date)) . "_{$batch}.xlsx";
                     
                     // Check if batch already exists
-                    $batch_check = $conn->prepare("SELECT COUNT(*) as count FROM file_batches WHERE id = ?");
+                    $batch_check = $conn->prepare("SELECT COUNT(*) as count FROM lv_file_batches WHERE id = ?");
                     $batch_check->bind_param("s", $batchId);
                     $batch_check->execute();
                     $exists = $batch_check->get_result()->fetch_assoc()['count'] > 0;
                     $batch_check->close();
                     
                     if (!$exists) {
-                        $batch_stmt = $conn->prepare("INSERT INTO file_batches (id, admin_id, vendor_id, product_code, original_filename, upload_time) VALUES (?, ?, ?, ?, ?, ?)");
+                        $batch_stmt = $conn->prepare("INSERT INTO lv_file_batches (id, admin_id, vendor_id, product_code, original_filename, upload_time) VALUES (?, ?, ?, ?, ?, ?)");
                         $batch_stmt->bind_param("ssssss", $batchId, $adminId, $vendorId, $productCode, $filename, $upload_date);
                         $batch_stmt->execute();
                         $batch_stmt->close();
@@ -85,7 +85,7 @@ if ($_POST['create_data'] ?? false) {
                             $name = "Test Customer " . $record;
                             $status = mt_rand(1, 10) <= 3 ? 'Called' : 'fresh'; // 30% processed
                             
-                            $log_stmt = $conn->prepare("INSERT INTO final_call_logs (finqy_id, batch_id, mobile_no, name, status) VALUES (?, ?, ?, ?, ?)");
+                            $log_stmt = $conn->prepare("INSERT INTO lv_final_call_logs (finqy_id, batch_id, mobile_no, name, status) VALUES (?, ?, ?, ?, ?)");
                             $log_stmt->bind_param("sssss", $finqyId, $batchId, $mobile, $name, $status);
                             $log_stmt->execute();
                             $log_stmt->close();
@@ -111,7 +111,7 @@ if ($_POST['create_data'] ?? false) {
     // Show form
     echo "<h2>Select Admin for Test Data Creation</h2>";
     
-    $admins_query = "SELECT admin_id, username FROM admin_users WHERE is_active = 1 ORDER BY admin_id";
+    $admins_query = "SELECT admin_id, username FROM lv_admin_users WHERE is_active = 1 ORDER BY admin_id";
     $admins_result = $conn->query($admins_query);
     
     if ($admins_result && $admins_result->num_rows > 0) {

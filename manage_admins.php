@@ -99,7 +99,7 @@ function mapHierarchicalCallers($corpUserId, $designation, $adminId, $conn) {
             
             // Insert partner as caller
             $callerStmt = $conn->prepare("
-                INSERT INTO callers (finqy_id, caller_name, mobile_no, caller_type, is_active) 
+                INSERT INTO lv_callers (finqy_id, caller_name, mobile_no, caller_type, is_active) 
                 VALUES (?, ?, ?, 'partner', 1)
                 ON DUPLICATE KEY UPDATE caller_name = VALUES(caller_name), mobile_no = VALUES(mobile_no)
             ");
@@ -112,7 +112,7 @@ function mapHierarchicalCallers($corpUserId, $designation, $adminId, $conn) {
             
             // Map to admin
             $mapStmt = $conn->prepare("
-                INSERT INTO admin_caller_mapping (admin_id, finqy_id) 
+                INSERT INTO lv_admin_caller_mapping (admin_id, finqy_id) 
                 VALUES (?, ?)
                 ON DUPLICATE KEY UPDATE admin_id = VALUES(admin_id)
             ");
@@ -137,7 +137,7 @@ function mapHierarchicalCallers($corpUserId, $designation, $adminId, $conn) {
                 
                 // Insert connector as caller
                 $callerStmt = $conn->prepare("
-                    INSERT INTO callers (finqy_id, caller_name, mobile_no, caller_type, is_active) 
+                    INSERT INTO lv_callers (finqy_id, caller_name, mobile_no, caller_type, is_active) 
                     VALUES (?, ?, ?, 'connector', 1)
                     ON DUPLICATE KEY UPDATE caller_name = VALUES(caller_name), mobile_no = VALUES(mobile_no)
                 ");
@@ -150,7 +150,7 @@ function mapHierarchicalCallers($corpUserId, $designation, $adminId, $conn) {
                 
                 // Map to admin
                 $mapStmt = $conn->prepare("
-                    INSERT INTO admin_caller_mapping (admin_id, finqy_id) 
+                    INSERT INTO lv_admin_caller_mapping (admin_id, finqy_id) 
                     VALUES (?, ?)
                     ON DUPLICATE KEY UPDATE admin_id = VALUES(admin_id)
                 ");
@@ -175,7 +175,7 @@ function mapHierarchicalCallers($corpUserId, $designation, $adminId, $conn) {
                     
                     // Insert team member as caller
                     $callerStmt = $conn->prepare("
-                        INSERT INTO callers (finqy_id, caller_name, mobile_no, caller_type, is_active) 
+                        INSERT INTO lv_callers (finqy_id, caller_name, mobile_no, caller_type, is_active) 
                         VALUES (?, ?, ?, 'team', 1)
                         ON DUPLICATE KEY UPDATE caller_name = VALUES(caller_name), mobile_no = VALUES(mobile_no)
                     ");
@@ -188,7 +188,7 @@ function mapHierarchicalCallers($corpUserId, $designation, $adminId, $conn) {
                     
                     // Map to admin
                     $mapStmt = $conn->prepare("
-                        INSERT INTO admin_caller_mapping (admin_id, finqy_id) 
+                        INSERT INTO lv_admin_caller_mapping (admin_id, finqy_id) 
                         VALUES (?, ?)
                         ON DUPLICATE KEY UPDATE admin_id = VALUES(admin_id)
                     ");
@@ -228,7 +228,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
             $corpUserId = $corpUser['id'];
             
             // Check if admin already exists
-            $checkStmt = $conn->prepare("SELECT id FROM admin_users WHERE username = ?");
+            $checkStmt = $conn->prepare("SELECT id FROM lv_admin_users WHERE username = ?");
             $checkStmt->bind_param("s", $username);
             $checkStmt->execute();
             if ($checkStmt->get_result()->num_rows > 0) {
@@ -241,7 +241,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
                     
                     // Insert new admin
                     $insertStmt = $conn->prepare("
-                        INSERT INTO admin_users (admin_id, username, password, name, designation, multi_status_selection) 
+                        INSERT INTO lv_admin_users (admin_id, username, password, name, designation, multi_status_selection)
                         VALUES (?, ?, ?, ?, ?, ?)
                     ");
                     $multiStatus = isset($_POST['multi_status']) ? 1 : 0;
@@ -255,7 +255,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
                         $vendorId = generateVendorId($conn, false);
                         $vendorName = "Default Unit $i";
                         
-                        $vendorStmt = $conn->prepare("INSERT INTO vendors (vendor_id, vendor_name, admin_id, is_approved) VALUES (?, ?, ?, 1)");
+                        $vendorStmt = $conn->prepare("INSERT INTO lv_vendors (vendor_id, vendor_name, admin_id, is_approved) VALUES (?, ?, ?, 1)");
                         $vendorStmt->bind_param("sss", $vendorId, $vendorName, $adminId);
                         $vendorStmt->execute();
                         $vendorStmt->close();
@@ -281,7 +281,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
         $currentStatus = $_POST['current_status'] ?? 0;
         $newStatus = $currentStatus ? 0 : 1;
         
-        $stmt = $conn->prepare("UPDATE admin_users SET is_active = ? WHERE admin_id = ? AND admin_id != 'SUPER'");
+        $stmt = $conn->prepare("UPDATE lv_admin_users SET is_active = ? WHERE admin_id = ? AND admin_id != 'SUPER'");
         $stmt->bind_param("is", $newStatus, $adminId);
         if ($stmt->execute()) {
             $message = "Admin status updated successfully.";
@@ -292,7 +292,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
         $currentStatus = $_POST['current_multi_status'] ?? 0;
         $newStatus = $currentStatus ? 0 : 1;
         
-        $stmt = $conn->prepare("UPDATE admin_users SET multi_status_selection = ? WHERE admin_id = ? AND admin_id != 'SUPER'");
+        $stmt = $conn->prepare("UPDATE lv_admin_users SET multi_status_selection = ? WHERE admin_id = ? AND admin_id != 'SUPER'");
         $stmt->bind_param("is", $newStatus, $adminId);
         if ($stmt->execute()) {
             $message = "Multi-status selection updated successfully.";
@@ -306,21 +306,21 @@ $corpUsers = $conn->query("
     SELECT username, name, designation 
     FROM corporate_user_permission 
     WHERE designation IN ('agency_development_manager', 'branch_manager', 'zonal_manager')
-    AND username NOT IN (SELECT username FROM admin_users)
+    AND username NOT IN (SELECT username FROM lv_admin_users)
     ORDER BY name
 ");
 
 // Fetch all admins with enhanced stats
 $admins = $conn->query("
     SELECT au.*, 
-           (SELECT COUNT(*) FROM vendors WHERE admin_id = au.admin_id) as vendor_count,
+           (SELECT COUNT(*) FROM lv_vendors WHERE admin_id = au.admin_id) as vendor_count,
            (SELECT COUNT(DISTINCT fcl.finqy_id) 
-            FROM final_call_logs fcl 
-            JOIN admin_caller_mapping acm ON fcl.finqy_id = acm.finqy_id
+            FROM lv_final_call_logs fcl 
+            JOIN lv_admin_caller_mapping acm ON fcl.finqy_id = acm.finqy_id
             WHERE acm.admin_id = au.admin_id) as active_caller_count,
-           (SELECT COUNT(*) FROM admin_caller_mapping WHERE admin_id = au.admin_id) as total_caller_count,
-           (SELECT COUNT(*) FROM file_batches WHERE admin_id = au.admin_id) as batch_count
-    FROM admin_users au 
+           (SELECT COUNT(*) FROM lv_admin_caller_mapping WHERE admin_id = au.admin_id) as total_caller_count,
+           (SELECT COUNT(*) FROM lv_file_batches WHERE admin_id = au.admin_id) as batch_count
+    FROM lv_admin_users au 
     WHERE admin_id != 'SUPER' 
     ORDER BY created_at DESC
 ");

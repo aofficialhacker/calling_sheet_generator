@@ -13,7 +13,7 @@ if (empty($adminId)) {
 // Get admin's multi-status setting
 $multiStatusEnabled = 0;
 try {
-    $multiStatusStmt = $conn->prepare("SELECT multi_status_selection FROM admin_users WHERE admin_id = ?");
+    $multiStatusStmt = $conn->prepare("SELECT multi_status_selection FROM lv_admin_users WHERE admin_id = ?");
     $multiStatusStmt->bind_param("s", $adminId);
     $multiStatusStmt->execute();
     $multiStatusResult = $multiStatusStmt->get_result()->fetch_assoc();
@@ -26,14 +26,14 @@ try {
 // Get batches data
 $batches_data = [];
 try {
-    $stmt = $conn->prepare("SELECT id, original_filename, upload_time, product_code FROM file_batches WHERE admin_id = ? ORDER BY upload_time DESC");
+    $stmt = $conn->prepare("SELECT id, original_filename, upload_time, product_code FROM lv_file_batches WHERE admin_id = ? ORDER BY upload_time DESC");
     $stmt->bind_param("s", $adminId);
     $stmt->execute();
     $result = $stmt->get_result();
     
     while ($row = $result->fetch_assoc()) {
         // Get record count
-        $count_stmt = $conn->prepare("SELECT COUNT(*) as count FROM final_call_logs WHERE batch_id = ?");
+        $count_stmt = $conn->prepare("SELECT COUNT(*) as count FROM lv_final_call_logs WHERE batch_id = ?");
         $count_stmt->bind_param("s", $row['id']);
         $count_stmt->execute();
         $count_result = $count_stmt->get_result();
@@ -43,7 +43,7 @@ try {
         // Get product name (with fallback)
         $row['product_name'] = $row['product_code']; // Default fallback
         try {
-            $prod_stmt = $conn->prepare("SELECT product_name FROM products WHERE product_code = ?");
+            $prod_stmt = $conn->prepare("SELECT product_name FROM lv_products WHERE product_code = ?");
             if ($prod_stmt) {
                 $prod_stmt->bind_param("s", $row['product_code']);
                 $prod_stmt->execute();
@@ -68,7 +68,7 @@ try {
 // Get dispositions (exclude only 'Interested' case-insensitively, allow 'Not Interested')
 $dispositions = [];
 try {
-    $disp_result = $conn->query("SELECT DISTINCT code, description FROM disposition_codes WHERE is_active = 1 AND LOWER(description) != 'interested' ORDER BY code");
+    $disp_result = $conn->query("SELECT DISTINCT code, description FROM lv_disposition_codes WHERE is_active = 1 AND LOWER(description) != 'interested' ORDER BY code");
     if ($disp_result) {
         while ($disp = $disp_result->fetch_assoc()) {
             $dispositions[] = $disp;
@@ -78,20 +78,20 @@ try {
     error_log("Error fetching dispositions: " . $e->getMessage());
 }
 
-// Get callers (through admin_caller_mapping)
+// Get callers (through lv_admin_caller_mapping)
 $callers = [];
 try {
     // Check if both tables exist
     $callers_table_check = $conn->query("SHOW TABLES LIKE 'callers'");
-    $mapping_table_check = $conn->query("SHOW TABLES LIKE 'admin_caller_mapping'");
+    $mapping_table_check = $conn->query("SHOW TABLES LIKE 'lv_admin_caller_mapping'");
     
     if ($callers_table_check && $callers_table_check->num_rows > 0 && 
         $mapping_table_check && $mapping_table_check->num_rows > 0) {
         
         $callers_stmt = $conn->prepare("
             SELECT c.finqy_id as caller_id, c.caller_name as name 
-            FROM callers c 
-            JOIN admin_caller_mapping acm ON c.finqy_id = acm.finqy_id 
+            FROM lv_callers c 
+            JOIN lv_admin_caller_mapping acm ON c.finqy_id = acm.finqy_id 
             WHERE acm.admin_id = ? AND c.is_active = 1 
             ORDER BY c.caller_name
         ");
@@ -115,7 +115,7 @@ try {
 $followup_count = 0;
 try {
     // Check if this is a superadmin
-    $adminCheck = $conn->prepare("SELECT designation FROM admin_users WHERE admin_id = ?");
+    $adminCheck = $conn->prepare("SELECT designation FROM lv_admin_users WHERE admin_id = ?");
     $isSuperadmin = false;
     if ($adminCheck) {
         $adminCheck->bind_param("s", $adminId);
@@ -131,8 +131,8 @@ try {
         // For superadmin: count all follow-ups
         $followupQuery = "
             SELECT COUNT(*) as count 
-            FROM final_call_logs fcl
-            JOIN file_batches fb ON fcl.batch_id = fb.id
+            FROM lv_final_call_logs fcl
+            JOIN lv_file_batches fb ON fcl.batch_id = fb.id
             WHERE fcl.disposition = 'Follow Up'
             AND fcl.follow_day IS NOT NULL
             AND fcl.follow_day > 0
@@ -151,9 +151,9 @@ try {
         // For regular admin: use caller mapping
         $followupQuery = "
             SELECT COUNT(*) as count 
-            FROM final_call_logs fcl
-            JOIN file_batches fb ON fcl.batch_id = fb.id
-            JOIN admin_caller_mapping acm ON fcl.finqy_id = acm.finqy_id
+            FROM lv_final_call_logs fcl
+            JOIN lv_file_batches fb ON fcl.batch_id = fb.id
+            JOIN lv_admin_caller_mapping acm ON fcl.finqy_id = acm.finqy_id
             WHERE acm.admin_id = ? 
             AND fcl.disposition = 'Follow Up'
             AND fcl.follow_day IS NOT NULL

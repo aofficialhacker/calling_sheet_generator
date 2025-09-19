@@ -43,11 +43,11 @@ try {
         SELECT fn.*, fs.*, fcl.name as customer_name, fcl.mobile_no,
                tl.name as leader_name, tl.email as leader_email,
                db.bucket_name
-        FROM follow_up_notifications fn
-        JOIN follow_up_schedules fs ON fn.schedule_id = fs.id
-        JOIN final_call_logs fcl ON fs.lead_id = fcl.id
-        JOIN team_leaders tl ON fs.leader_id = tl.id
-        JOIN disposition_buckets db ON fs.bucket_id = db.id
+        FROM lv_follow_up_notifications fn
+        JOIN lv_follow_up_schedules fs ON fn.schedule_id = fs.id
+        JOIN lv_final_call_logs fcl ON fs.lead_id = fcl.id
+        JOIN lv_team_leaders tl ON fs.leader_id = tl.id
+        JOIN lv_disposition_buckets db ON fs.bucket_id = db.id
         WHERE fn.status = 'pending'
         AND fn.scheduled_time <= NOW()
         AND fs.status = 'scheduled'
@@ -114,7 +114,7 @@ Calling Sheet System
             }
             
             $stmt = $conn->prepare("
-                UPDATE follow_up_notifications 
+                UPDATE lv_follow_up_notifications 
                 SET status = ?, sent_at = ?, next_attempt = ?, attempt_count = attempt_count + 1
                 WHERE id = ?
             ");
@@ -137,7 +137,7 @@ Calling Sheet System
             // Update notification as failed
             try {
                 $stmt = $conn->prepare("
-                    UPDATE follow_up_notifications 
+                    UPDATE lv_follow_up_notifications 
                     SET status = 'failed', attempt_count = attempt_count + 1
                     WHERE id = ?
                 ");
@@ -152,7 +152,7 @@ Calling Sheet System
     
     // Update overdue follow-ups
     $stmt = $conn->prepare("
-        UPDATE follow_up_schedules 
+        UPDATE lv_follow_up_schedules 
         SET status = 'overdue' 
         WHERE status = 'scheduled' 
         AND follow_up_datetime < NOW() - INTERVAL 1 HOUR
@@ -167,7 +167,7 @@ Calling Sheet System
     
     // Clean up old completed notifications (older than 30 days)
     $stmt = $conn->prepare("
-        DELETE FROM follow_up_notifications 
+        DELETE FROM lv_follow_up_notifications 
         WHERE status IN ('sent', 'failed') 
         AND (sent_at < NOW() - INTERVAL 30 DAY OR created_at < NOW() - INTERVAL 30 DAY)
     ");

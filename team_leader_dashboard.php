@@ -17,14 +17,14 @@ $stmt = $conn->prepare("
            c.caller_name as original_caller_name,
            tld.bucket_id as action_bucket_id,
            db.bucket_name as action_bucket_name
-    FROM final_call_logs fcl
-    JOIN file_batches b ON fcl.batch_id = b.id
-    JOIN products p ON b.product_code = p.product_code
-    JOIN admin_caller_mapping acm ON fcl.finqy_id = acm.finqy_id
-    JOIN callers c ON fcl.finqy_id = c.finqy_id
-    LEFT JOIN team_leader_actions tla ON fcl.id = tla.lead_id AND tla.leader_id = ?
-    LEFT JOIN team_leader_dispositions tld ON tla.new_disposition = tld.disposition_name
-    LEFT JOIN disposition_buckets db ON tld.bucket_id = db.id
+    FROM lv_final_call_logs fcl
+    JOIN lv_file_batches b ON fcl.batch_id = b.id
+    JOIN lv_products p ON b.product_code = p.product_code
+    JOIN lv_admin_caller_mapping acm ON fcl.finqy_id = acm.finqy_id
+    JOIN lv_callers c ON fcl.finqy_id = c.finqy_id
+    LEFT JOIN lv_team_leader_actions tla ON fcl.id = tla.lead_id AND tla.leader_id = ?
+    LEFT JOIN lv_team_leader_dispositions tld ON tla.new_disposition = tld.disposition_name
+    LEFT JOIN lv_disposition_buckets db ON tld.bucket_id = db.id
     WHERE acm.admin_id = ? AND fcl.disposition = 'Interested'
     ORDER BY 
         CASE WHEN tla.id IS NULL THEN 0 ELSE 1 END,
@@ -42,8 +42,8 @@ $stmt->close();
 $dispositions = [];
 $stmt = $conn->prepare("
     SELECT tld.*, db.bucket_name, db.has_calendar_enabled 
-    FROM team_leader_dispositions tld 
-    LEFT JOIN disposition_buckets db ON tld.bucket_id = db.id 
+    FROM lv_team_leader_dispositions tld 
+    LEFT JOIN lv_disposition_buckets db ON tld.bucket_id = db.id 
     WHERE tld.is_active = 1 
     ORDER BY db.bucket_name, tld.disposition_name
 ");
@@ -62,9 +62,9 @@ $stmt = $conn->prepare("
         COUNT(DISTINCT tla.id) as processed_leads,
         COUNT(DISTINCT CASE WHEN tla.new_disposition = 'Interested - Proceed to Payment' THEN tla.id END) as payment_ready,
         COUNT(DISTINCT CASE WHEN DATE(tla.action_date) = CURDATE() THEN tla.id END) as today_processed
-    FROM final_call_logs fcl
-    JOIN admin_caller_mapping acm ON fcl.finqy_id = acm.finqy_id
-    LEFT JOIN team_leader_actions tla ON fcl.id = tla.lead_id AND tla.leader_id = ?
+    FROM lv_final_call_logs fcl
+    JOIN lv_admin_caller_mapping acm ON fcl.finqy_id = acm.finqy_id
+    LEFT JOIN lv_team_leader_actions tla ON fcl.id = tla.lead_id AND tla.leader_id = ?
     WHERE acm.admin_id = ? AND fcl.disposition = 'Interested'
 ");
 $stmt->bind_param("ss", $leaderId, $adminId);

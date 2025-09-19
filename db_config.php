@@ -76,7 +76,7 @@ function requireTeamLeader() {
 
     // Multi-device login check
     $conn = getDBConnection();
-    $stmt = $conn->prepare("SELECT active_session_id FROM team_leaders WHERE leader_id = ?");
+    $stmt = $conn->prepare("SELECT active_session_id FROM lv_team_leaders WHERE leader_id = ?");
     $stmt->bind_param("s", $_SESSION['leader_id']);
     $stmt->execute();
     $result = $stmt->get_result();
@@ -124,7 +124,7 @@ function generateAdminId($name, $conn) {
         $initials = substr($initials, 0, 2);
     }
     
-    $stmt = $conn->prepare("SELECT admin_id FROM admin_users WHERE admin_id LIKE ? ORDER BY admin_id DESC LIMIT 1");
+    $stmt = $conn->prepare("SELECT admin_id FROM lv_admin_users WHERE admin_id LIKE ? ORDER BY admin_id DESC LIMIT 1");
     $pattern = $initials . '%';
     $stmt->bind_param("s", $pattern);
     $stmt->execute();
@@ -144,13 +144,13 @@ function generateAdminId($name, $conn) {
 /**
  * Generates the next globally unique vendor ID.
  * For additional vendor requests (is_additional = 1), starts from V61
- * For default vendors, uses V01-V60 range
+ * For default lv_vendors, uses V01-V60 range
  */
 function generateVendorId($conn, $isAdditional = false) {
     if ($isAdditional) {
         // For additional vendor requests, start from V61
         $stmt = $conn->prepare("
-            SELECT vendor_id FROM vendors 
+            SELECT vendor_id FROM lv_vendors 
             WHERE CAST(SUBSTRING(vendor_id, 2) AS UNSIGNED) >= 61 
             ORDER BY CAST(SUBSTRING(vendor_id, 2) AS UNSIGNED) DESC 
             LIMIT 1
@@ -162,15 +162,15 @@ function generateVendorId($conn, $isAdditional = false) {
             $lastId = $result->fetch_assoc()['vendor_id'];
             $number = intval(substr($lastId, 1)) + 1;
         } else {
-            $number = 61; // Start from V61 for additional vendors
+            $number = 61; // Start from V61 for additional lv_vendors
         }
         
         $stmt->close();
         return 'V' . str_pad($number, 2, '0', STR_PAD_LEFT);
     } else {
-        // Original logic for default vendors (V01-V60)
+        // Original logic for default lv_vendors (V01-V60)
         $stmt = $conn->prepare("
-            SELECT vendor_id FROM vendors 
+            SELECT vendor_id FROM lv_vendors 
             WHERE CAST(SUBSTRING(vendor_id, 2) AS UNSIGNED) < 61 
             ORDER BY CAST(SUBSTRING(vendor_id, 2) AS UNSIGNED) DESC 
             LIMIT 1
@@ -202,7 +202,7 @@ function generateVendorId($conn, $isAdditional = false) {
 function generateBatchId($productCode, $vendorId, $adminId, $conn) {
     $baseId = strtoupper($productCode) . $vendorId . 'B';
     
-    $stmt = $conn->prepare("SELECT id FROM file_batches WHERE id LIKE ? ORDER BY id DESC LIMIT 1");
+    $stmt = $conn->prepare("SELECT id FROM lv_file_batches WHERE id LIKE ? ORDER BY id DESC LIMIT 1");
     $pattern = $baseId . '%';
     $stmt->bind_param("s", $pattern);
     $stmt->execute();
@@ -263,7 +263,7 @@ function refreshTeamLeaderCode($leaderId, $conn, $forceRefresh = false) {
     $dbTime = $dbTimeResult->fetch_assoc();
     $dbTimeStmt->close();
     
-    $stmt = $conn->prepare("SELECT access_code, code_generated_at, UNIX_TIMESTAMP(code_generated_at) as generated_timestamp FROM team_leaders WHERE leader_id = ?");
+    $stmt = $conn->prepare("SELECT access_code, code_generated_at, UNIX_TIMESTAMP(code_generated_at) as generated_timestamp FROM lv_team_leaders WHERE leader_id = ?");
     if ($stmt === false) {
         error_log("Team leader query failed: " . $conn->error);
         return refreshTeamLeaderCodeFallback($leaderId, $conn, $forceRefresh);
@@ -284,9 +284,9 @@ function refreshTeamLeaderCode($leaderId, $conn, $forceRefresh = false) {
             
             // If this is a forced refresh, clear the active session to force logout
             if ($forceRefresh) {
-                $stmt = $conn->prepare("UPDATE team_leaders SET access_code = ?, code_generated_at = NOW(), active_session_id = NULL WHERE leader_id = ?");
+                $stmt = $conn->prepare("UPDATE lv_team_leaders SET access_code = ?, code_generated_at = NOW(), active_session_id = NULL WHERE leader_id = ?");
             } else {
-                $stmt = $conn->prepare("UPDATE team_leaders SET access_code = ?, code_generated_at = NOW() WHERE leader_id = ?");
+                $stmt = $conn->prepare("UPDATE lv_team_leaders SET access_code = ?, code_generated_at = NOW() WHERE leader_id = ?");
             }
             $stmt->bind_param("ss", $newCode, $leaderId);
             $stmt->execute();
@@ -304,7 +304,7 @@ function refreshTeamLeaderCode($leaderId, $conn, $forceRefresh = false) {
             ];
         } else {
             // For existing codes, calculate expiry using database time
-            $expiryStmt = $conn->prepare("SELECT DATE_ADD(code_generated_at, INTERVAL 4 HOUR) as expires_at FROM team_leaders WHERE leader_id = ?");
+            $expiryStmt = $conn->prepare("SELECT DATE_ADD(code_generated_at, INTERVAL 4 HOUR) as expires_at FROM lv_team_leaders WHERE leader_id = ?");
             $expiryStmt->bind_param("s", $leaderId);
             $expiryStmt->execute();
             $expiryResult = $expiryStmt->get_result();
@@ -330,7 +330,7 @@ function refreshTeamLeaderCode($leaderId, $conn, $forceRefresh = false) {
  * @return boolean True if code is valid and not expired
  */
 function validateTeamLeaderAccessCode($leaderId, $inputCode, $conn) {
-    $stmt = $conn->prepare("SELECT access_code, code_generated_at FROM team_leaders WHERE leader_id = ? AND is_active = 1");
+    $stmt = $conn->prepare("SELECT access_code, code_generated_at FROM lv_team_leaders WHERE leader_id = ? AND is_active = 1");
     $stmt->bind_param("s", $leaderId);
     $stmt->execute();
     $result = $stmt->get_result();
@@ -355,7 +355,7 @@ function validateTeamLeaderAccessCode($leaderId, $inputCode, $conn) {
  * Used when database timestamp queries fail
  */
 function refreshTeamLeaderCodeFallback($leaderId, $conn, $forceRefresh = false) {
-    $stmt = $conn->prepare("SELECT access_code, code_generated_at FROM team_leaders WHERE leader_id = ?");
+    $stmt = $conn->prepare("SELECT access_code, code_generated_at FROM lv_team_leaders WHERE leader_id = ?");
     $stmt->bind_param("s", $leaderId);
     $stmt->execute();
     $result = $stmt->get_result();
@@ -370,9 +370,9 @@ function refreshTeamLeaderCodeFallback($leaderId, $conn, $forceRefresh = false) 
             
             // If this is a forced refresh, clear the active session to force logout
             if ($forceRefresh) {
-                $stmt = $conn->prepare("UPDATE team_leaders SET access_code = ?, code_generated_at = NOW(), active_session_id = NULL WHERE leader_id = ?");
+                $stmt = $conn->prepare("UPDATE lv_team_leaders SET access_code = ?, code_generated_at = NOW(), active_session_id = NULL WHERE leader_id = ?");
             } else {
-                $stmt = $conn->prepare("UPDATE team_leaders SET access_code = ?, code_generated_at = NOW() WHERE leader_id = ?");
+                $stmt = $conn->prepare("UPDATE lv_team_leaders SET access_code = ?, code_generated_at = NOW() WHERE leader_id = ?");
             }
             $stmt->bind_param("ss", $newCode, $leaderId);
             $stmt->execute();

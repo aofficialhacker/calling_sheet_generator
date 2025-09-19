@@ -16,7 +16,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
         // Check total requests by this admin (including approved ones)
         $countStmt = $conn->prepare("
             SELECT COUNT(*) as total_requests 
-            FROM vendor_requests 
+            FROM lv_vendor_requests 
             WHERE admin_id = ?
         ");
         $countStmt->bind_param("s", $adminId);
@@ -29,7 +29,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
         } else {
             // Insert new request with is_additional flag (no need to check for duplicate auto-generated names)
             $insertStmt = $conn->prepare("
-                INSERT INTO vendor_requests (admin_id, vendor_name, is_additional) 
+                INSERT INTO lv_vendor_requests (admin_id, vendor_name, is_additional) 
                 VALUES (?, ?, 1)
             ");
             $insertStmt->bind_param("ss", $adminId, $vendorName);
@@ -44,22 +44,22 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action'])) {
     }
 }
 
-// Fetch existing vendors for this admin
-$vendorsStmt = $conn->prepare("
+// Fetch existing lv_vendors for this admin
+$lv_vendorsStmt = $conn->prepare("
     SELECT vendor_id, vendor_name, is_approved 
-    FROM vendors 
+    FROM lv_vendors 
     WHERE admin_id = ? 
     ORDER BY vendor_id
 ");
-$vendorsStmt->bind_param("s", $adminId);
-$vendorsStmt->execute();
-$vendors = $vendorsStmt->get_result();
-$vendorsStmt->close();
+$lv_vendorsStmt->bind_param("s", $adminId);
+$lv_vendorsStmt->execute();
+$lv_vendors = $lv_vendorsStmt->get_result();
+$lv_vendorsStmt->close();
 
 // Fetch pending requests count
 $pendingStmt = $conn->prepare("
     SELECT COUNT(*) as pending_count 
-    FROM vendor_requests 
+    FROM lv_vendor_requests 
     WHERE admin_id = ? AND status = 'pending'
 ");
 $pendingStmt->bind_param("s", $adminId);
@@ -70,7 +70,7 @@ $pendingStmt->close();
 // Fetch total requests made
 $totalRequestsStmt = $conn->prepare("
     SELECT COUNT(*) as total 
-    FROM vendor_requests 
+    FROM lv_vendor_requests 
     WHERE admin_id = ?
 ");
 $totalRequestsStmt->bind_param("s", $adminId);
@@ -141,8 +141,8 @@ $conn->close();
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <?php if ($vendors && $vendors->num_rows > 0): ?>
-                                        <?php while($vendor = $vendors->fetch_assoc()): ?>
+                                    <?php if ($lv_vendors && $lv_vendors->num_rows > 0): ?>
+                                        <?php while($vendor = $lv_vendors->fetch_assoc()): ?>
                                             <tr>
                                                 <td><span class="badge bg-primary"><?= htmlspecialchars($vendor['vendor_id']) ?></span></td>
                                                 <td><?= htmlspecialchars($vendor['vendor_name']) ?></td>

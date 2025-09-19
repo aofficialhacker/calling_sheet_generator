@@ -13,8 +13,8 @@ if ($conn->connect_error) { die("Connection Failed: " . $conn->connect_error); }
 
 // Query now shows the unique row ID and batch ID
 $sql = "SELECT f.id as row_id, f.*, b.id as batch_display_id 
-        FROM final_call_logs f
-        LEFT JOIN file_batches b ON f.batch_id = b.id
+        FROM lv_final_call_logs f
+        LEFT JOIN lv_file_batches b ON f.batch_id = b.id
         WHERE f.processed_at IS NOT NULL
         ORDER BY f.processed_at DESC
         LIMIT 500";

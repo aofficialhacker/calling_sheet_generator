@@ -23,7 +23,7 @@ $stats_sql = "
         SUM(CASE WHEN connectivity = 'Yes' THEN 1 ELSE 0 END) as total_connected,
         SUM(CASE WHEN disposition = 'Interested' THEN 1 ELSE 0 END) as total_interested,
         MAX(processed_at) as last_activity
-    FROM final_call_logs
+    FROM lv_final_call_logs
     WHERE finqy_id = ?
 ";
 $stmt = $conn->prepare($stats_sql);
@@ -37,7 +37,7 @@ $connectivity_rate = ($stats['total_calls'] > 0) ? ($stats['total_connected'] / 
 $interest_rate = ($stats['total_connected'] > 0) ? ($stats['total_interested'] / $stats['total_connected']) * 100 : 0;
 
 // Get the breakdown of call dispositions for the doughnut chart.
-$dispo_stmt = $conn->prepare("SELECT disposition, COUNT(*) as count FROM final_call_logs WHERE finqy_id = ? AND disposition IS NOT NULL GROUP BY disposition ORDER BY count DESC");
+$dispo_stmt = $conn->prepare("SELECT disposition, COUNT(*) as count FROM lv_final_call_logs WHERE finqy_id = ? AND disposition IS NOT NULL GROUP BY disposition ORDER BY count DESC");
 $dispo_stmt->bind_param("s", $finqy_id);
 $dispo_stmt->execute();
 $dispositions_result = $dispo_stmt->get_result();
@@ -52,7 +52,7 @@ $daily_activity_sql = "
     SELECT 
         DATE(processed_at) AS call_date, 
         COUNT(id) AS call_count
-    FROM final_call_logs
+    FROM lv_final_call_logs
     WHERE finqy_id = ? AND processed_at >= CURDATE() - INTERVAL 6 DAY
     GROUP BY call_date
 ";
@@ -77,7 +77,7 @@ for ($i = 6; $i >= 0; $i--) {
 
 // Get the last 5 logged calls for the recent activity table.
 $recent_logs_sql = "SELECT name, mobile_no, connectivity, disposition, processed_at 
-                    FROM final_call_logs 
+                    FROM lv_final_call_logs 
                     WHERE finqy_id = ? 
                     ORDER BY processed_at DESC 
                     LIMIT 5";

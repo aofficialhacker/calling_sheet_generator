@@ -20,10 +20,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     if ($username && $password) {
         $conn = getDBConnection();
         
-        // Check in admin_users table
+        // Check in lv_admin_users table
         $stmt = $conn->prepare("
-            SELECT admin_id, username, password, name, multi_status_selection 
-            FROM admin_users 
+            SELECT admin_id, username, password, name, multi_status_selection
+            FROM lv_admin_users
             WHERE username = ? AND is_active = 1 AND admin_id != 'SUPER'
         ");
         $stmt->bind_param("s", $username);
@@ -46,7 +46,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 
                 // Auto-upgrade to hashed password for security
                 $hashed_password = password_hash($password, PASSWORD_DEFAULT);
-                $update_stmt = $conn->prepare("UPDATE admin_users SET password = ? WHERE admin_id = ?");
+                $update_stmt = $conn->prepare("UPDATE lv_admin_users SET password = ? WHERE admin_id = ?");
                 $update_stmt->bind_param("ss", $hashed_password, $admin['admin_id']);
                 $update_stmt->execute();
                 $update_stmt->close();

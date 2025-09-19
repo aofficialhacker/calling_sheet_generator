@@ -24,8 +24,8 @@ try {
                 fcl.processed_at,
                 DATE_ADD(fcl.processed_at, INTERVAL fcl.follow_day DAY) as original_follow_date,
                 fb.batch_name
-            FROM final_call_logs fcl
-            JOIN file_batches fb ON fcl.batch_id = fb.id
+            FROM lv_final_call_logs fcl
+            JOIN lv_file_batches fb ON fcl.batch_id = fb.id
             WHERE fb.admin_id = ?
             AND fcl.follow_day IS NOT NULL 
             AND fcl.follow_day > 0
@@ -50,9 +50,9 @@ try {
         // Get available telecallers for this admin
         $stmt = $conn->prepare("
             SELECT c.finqy_id, c.caller_name, COUNT(fcl.id) as current_workload
-            FROM callers c
-            JOIN admin_caller_mapping acm ON c.finqy_id = acm.finqy_id
-            LEFT JOIN final_call_logs fcl ON c.finqy_id = fcl.finqy_id 
+            FROM lv_callers c
+            JOIN lv_admin_caller_mapping acm ON c.finqy_id = acm.finqy_id
+            LEFT JOIN lv_final_call_logs fcl ON c.finqy_id = fcl.finqy_id 
                 AND fcl.processed_at >= CURDATE() - INTERVAL 7 DAY
             WHERE acm.admin_id = ? AND c.is_active = 1
             GROUP BY c.finqy_id, c.caller_name
@@ -87,10 +87,10 @@ try {
                 $newLogId = 'RFL' . date('YmdHis') . substr(uniqid(), -4);
                 
                 $stmt = $conn->prepare("
-                    INSERT INTO final_call_logs (
+                    INSERT INTO lv_final_call_logs (
                         id, name, mobile_no, slot, batch_id, finqy_id, 
                         disposition, follow_day, follow_slot, remarks, processed_at
-                    ) VALUES (?, ?, ?, 1, (SELECT batch_id FROM final_call_logs WHERE id = ?), ?, 
+                    ) VALUES (?, ?, ?, 1, (SELECT batch_id FROM lv_final_call_logs WHERE id = ?), ?, 
                              'Follow-up Redistribution', 1, 1, 
                              CONCAT('Redistributed overdue follow-up from ', ?, '. Original due: ', ?), 
                              NOW())
@@ -109,7 +109,7 @@ try {
                 if ($stmt->execute()) {
                     // Mark original follow-up as redistributed
                     $updateStmt = $conn->prepare("
-                        UPDATE final_call_logs 
+                        UPDATE lv_final_call_logs 
                         SET remarks = CONCAT(IFNULL(remarks, ''), '\n[', NOW(), '] REDISTRIBUTED to ', ?, ' (', ?, ')')
                         WHERE id = ?
                     ");

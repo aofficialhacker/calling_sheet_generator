@@ -5,20 +5,20 @@ $conn = getDBConnection();
 
 echo "<h2>Checking Admin Users Table</h2>";
 
-// Check if SUPER exists in admin_users
-$result = $conn->query("SELECT admin_id, name FROM admin_users WHERE admin_id = 'SUPER'");
+// Check if SUPER exists in lv_admin_users
+$result = $conn->query("SELECT admin_id, name FROM lv_admin_users WHERE admin_id = 'SUPER'");
 if ($result && $result->num_rows > 0) {
-    echo "<p style='color: green;'>✅ SUPER admin exists in admin_users table</p>";
+    echo "<p style='color: green;'>✅ SUPER admin exists in lv_admin_users table</p>";
     while ($row = $result->fetch_assoc()) {
         echo "<p>Admin ID: " . $row['admin_id'] . ", Name: " . $row['name'] . "</p>";
     }
 } else {
-    echo "<p style='color: red;'>❌ SUPER admin does NOT exist in admin_users table</p>";
+    echo "<p style='color: red;'>❌ SUPER admin does NOT exist in lv_admin_users table</p>";
 }
 
 // Show all admin_ids for reference
-echo "<h3>All Admin IDs in admin_users:</h3>";
-$result = $conn->query("SELECT admin_id, name FROM admin_users ORDER BY admin_id");
+echo "<h3>All Admin IDs in lv_admin_users:</h3>";
+$result = $conn->query("SELECT admin_id, name FROM lv_admin_users ORDER BY admin_id");
 if ($result && $result->num_rows > 0) {
     echo "<ul>";
     while ($row = $result->fetch_assoc()) {
@@ -38,7 +38,7 @@ $result = $conn->query("
         REFERENCED_TABLE_NAME,
         REFERENCED_COLUMN_NAME
     FROM information_schema.KEY_COLUMN_USAGE 
-    WHERE TABLE_NAME = 'team_leader_dispositions' 
+    WHERE TABLE_NAME = 'lv_team_leader_dispositions' 
     AND TABLE_SCHEMA = 'caller_sheet3'
     AND REFERENCED_TABLE_NAME IS NOT NULL
 ");

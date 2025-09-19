@@ -13,7 +13,7 @@ $tables = [
     'corporate_connector' => ['id', 'refercode', 'rname', 'mobile_no', 'master_refercode'],
     'corp_leader' => ['id', 'refercode', 'username', 'mobile', 'leader_of'],
     'callers' => ['finqy_id', 'caller_name', 'caller_type', 'mobile_no', 'is_active'],
-    'admin_caller_mapping' => ['admin_id', 'finqy_id']
+    'lv_admin_caller_mapping' => ['admin_id', 'finqy_id']
 ];
 
 foreach ($tables as $table => $columns) {

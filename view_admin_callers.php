@@ -11,7 +11,7 @@ if (empty($adminId)) {
 $conn = getDBConnection();
 
 // Get admin details
-$adminStmt = $conn->prepare("SELECT admin_id, name FROM admin_users WHERE admin_id = ?");
+$adminStmt = $conn->prepare("SELECT admin_id, name FROM lv_admin_users WHERE admin_id = ?");
 $adminStmt->bind_param("s", $adminId);
 $adminStmt->execute();
 $adminData = $adminStmt->get_result()->fetch_assoc();
@@ -27,9 +27,9 @@ $callersSql = "
     SELECT c.finqy_id, c.caller_name, c.caller_type, c.mobile_no, c.is_active,
            COUNT(DISTINCT fcl.id) as total_calls,
            MAX(fcl.processed_at) as last_activity
-    FROM callers c
-    JOIN admin_caller_mapping acm ON c.finqy_id = acm.finqy_id
-    LEFT JOIN final_call_logs fcl ON c.finqy_id = fcl.finqy_id
+    FROM lv_callers c
+    JOIN lv_admin_caller_mapping acm ON c.finqy_id = acm.finqy_id
+    LEFT JOIN lv_final_call_logs fcl ON c.finqy_id = fcl.finqy_id
     WHERE acm.admin_id = ?
     GROUP BY c.finqy_id, c.caller_name, c.caller_type, c.mobile_no, c.is_active
     ORDER BY 
@@ -52,8 +52,8 @@ $statsSql = "
         SUM(CASE WHEN c.caller_type = 'connector' THEN 1 ELSE 0 END) as connector_count,
         SUM(CASE WHEN c.caller_type = 'team' THEN 1 ELSE 0 END) as team_count,
         COUNT(*) as total_count
-    FROM callers c
-    JOIN admin_caller_mapping acm ON c.finqy_id = acm.finqy_id
+    FROM lv_callers c
+    JOIN lv_admin_caller_mapping acm ON c.finqy_id = acm.finqy_id
     WHERE acm.admin_id = ?
 ";
 $statsStmt = $conn->prepare($statsSql);

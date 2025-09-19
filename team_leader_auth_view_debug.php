@@ -71,7 +71,7 @@ try {
     // Check if lead exists and belongs to this admin
     $stmt = $conn->prepare("
         SELECT fcl.id, fcl.name, fcl.mobile_no 
-        FROM final_call_logs fcl
+        FROM lv_final_call_logs fcl
         JOIN admin_caller_mapping acm ON fcl.finqy_id = acm.finqy_id
         WHERE fcl.id = ? AND acm.admin_id = ? AND fcl.disposition = 'Interested'
     ");

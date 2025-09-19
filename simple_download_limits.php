@@ -16,10 +16,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         
         try {
             // Ensure download_limit column exists
-            $conn->query("ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS download_limit INT DEFAULT 5");
+            $conn->query("ALTER TABLE lv_admin_users ADD COLUMN IF NOT EXISTS download_limit INT DEFAULT 5");
             
             // Update the limit
-            $stmt = $conn->prepare("UPDATE admin_users SET download_limit = ? WHERE admin_id = ?");
+            $stmt = $conn->prepare("UPDATE lv_admin_users SET download_limit = ? WHERE admin_id = ?");
             $stmt->bind_param("is", $newLimit, $adminId);
             
             if ($stmt->execute()) {
@@ -39,13 +39,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // Get all admins with basic info
 try {
     // Ensure the download_limit column exists
-    $conn->query("ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS download_limit INT DEFAULT 5");
+    $conn->query("ALTER TABLE lv_admin_users ADD COLUMN IF NOT EXISTS download_limit INT DEFAULT 5");
     
     $stmt = $conn->prepare("
         SELECT admin_id, name, username, 
                COALESCE(download_limit, 5) as download_limit,
                is_active
-        FROM admin_users 
+        FROM lv_admin_users 
         WHERE is_active = 1 
         ORDER BY name
     ");

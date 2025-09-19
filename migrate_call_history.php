@@ -28,12 +28,12 @@ $migration_success = true;
 try {
     echo "<div class='info'>Starting database migration...</div><br>";
     
-    // Step 1: Create call_history table
-    echo "<strong>Step 1: Creating call_history table...</strong><br>";
+    // Step 1: Create lv_call_history table
+    echo "<strong>Step 1: Creating lv_call_history table...</strong><br>";
     $sql_create_table = "
-    CREATE TABLE IF NOT EXISTS call_history (
+    CREATE TABLE IF NOT EXISTS lv_call_history (
         id INT AUTO_INCREMENT PRIMARY KEY,
-        original_record_id VARCHAR(50) NOT NULL COMMENT 'References final_call_logs.id',
+        original_record_id VARCHAR(50) NOT NULL COMMENT 'References lv_final_call_logs.id',
         finqy_id VARCHAR(50) NOT NULL COMMENT 'Caller who made this attempt',
         attempt_number INT NOT NULL DEFAULT 1 COMMENT 'Sequential attempt counter for this record',
         batch_id VARCHAR(50) NOT NULL COMMENT 'Which batch this attempt belongs to',
@@ -53,18 +53,18 @@ try {
         INDEX idx_attempt_date (attempt_date),
         INDEX idx_disposition (disposition),
         
-        FOREIGN KEY (batch_id) REFERENCES file_batches(id) ON DELETE CASCADE
+        FOREIGN KEY (batch_id) REFERENCES lv_file_batches(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci 
     COMMENT='Tracks all call attempts for performance comparison and audit trail'";
     
     if ($conn->query($sql_create_table) === TRUE) {
-        echo "<div class='success'>✓ call_history table created successfully</div><br>";
+        echo "<div class='success'>✓ lv_call_history table created successfully</div><br>";
     } else {
-        throw new Exception("Error creating call_history table: " . $conn->error);
+        throw new Exception("Error creating lv_call_history table: " . $conn->error);
     }
     
-    // Step 2: Add tracking fields to final_call_logs
-    echo "<strong>Step 2: Adding tracking fields to final_call_logs table...</strong><br>";
+    // Step 2: Add tracking fields to lv_final_call_logs
+    echo "<strong>Step 2: Adding tracking fields to lv_final_call_logs table...</strong><br>";
     
     $tracking_fields = [
         "ADD COLUMN original_caller_id VARCHAR(50) NULL COMMENT 'First caller who worked on this record' AFTER finqy_id",
@@ -77,7 +77,7 @@ try {
     
     foreach ($tracking_fields as $field_sql) {
         try {
-            $conn->query("ALTER TABLE final_call_logs $field_sql");
+            $conn->query("ALTER TABLE lv_final_call_logs $field_sql");
             echo "<div class='success'>✓ Added field: " . explode(' ', trim($field_sql))[2] . "</div>";
         } catch (Exception $e) {
             // Field might already exist, which is fine
@@ -103,7 +103,7 @@ try {
     
     foreach ($indexes as $index_sql) {
         try {
-            $conn->query("ALTER TABLE final_call_logs $index_sql");
+            $conn->query("ALTER TABLE lv_final_call_logs $index_sql");
             $index_name = explode(' ', trim($index_sql))[2];
             echo "<div class='success'>✓ Added index: $index_name</div>";
         } catch (Exception $e) {
@@ -142,10 +142,10 @@ try {
             WHEN ch.disposition IN ('Follow Up', 'Busy', 'No Response') THEN 'Follow Required'
             ELSE 'Other'
         END as disposition_category
-    FROM call_history ch
-    JOIN final_call_logs fcl ON ch.original_record_id = fcl.id
-    JOIN file_batches fb ON ch.batch_id = fb.id
-    LEFT JOIN callers c ON ch.finqy_id = c.finqy_id
+    FROM lv_call_history ch
+    JOIN lv_final_call_logs fcl ON ch.original_record_id = fcl.id
+    JOIN lv_file_batches fb ON ch.batch_id = fb.id
+    LEFT JOIN lv_callers c ON ch.finqy_id = c.finqy_id
     ORDER BY ch.original_record_id, ch.attempt_number";
     
     if ($conn->query($view1_sql) === TRUE) {
@@ -172,12 +172,12 @@ try {
         COUNT(ch.id) as total_attempts,
         GROUP_CONCAT(DISTINCT ch.disposition ORDER BY ch.attempt_date) as all_dispositions,
         GROUP_CONCAT(DISTINCT c.caller_name ORDER BY ch.attempt_date) as all_callers
-    FROM final_call_logs fcl
-    JOIN file_batches fb ON fcl.batch_id = fb.id
-    LEFT JOIN callers oc ON fcl.original_caller_id = oc.finqy_id
-    LEFT JOIN callers lc ON fcl.last_updated_by = lc.finqy_id
-    LEFT JOIN call_history ch ON fcl.id = ch.original_record_id
-    LEFT JOIN callers c ON ch.finqy_id = c.finqy_id
+    FROM lv_final_call_logs fcl
+    JOIN lv_file_batches fb ON fcl.batch_id = fb.id
+    LEFT JOIN lv_callers oc ON fcl.original_caller_id = oc.finqy_id
+    LEFT JOIN lv_callers lc ON fcl.last_updated_by = lc.finqy_id
+    LEFT JOIN lv_call_history ch ON fcl.id = ch.original_record_id
+    LEFT JOIN lv_callers c ON ch.finqy_id = c.finqy_id
     WHERE fcl.is_redistributed = TRUE
     GROUP BY fcl.id
     ORDER BY fcl.redistribution_count DESC, fcl.last_attempt_date DESC";
@@ -210,14 +210,14 @@ try {
         START TRANSACTION;
         
         -- Update redistribution tracking
-        UPDATE final_call_logs 
+        UPDATE lv_final_call_logs 
         SET redistribution_count = redistribution_count + 1,
             is_redistributed = TRUE,
             redistribution_reason = p_reason
         WHERE id = p_record_id;
         
         -- Log the redistribution action
-        INSERT INTO call_history (
+        INSERT INTO lv_call_history (
             original_record_id,
             finqy_id,
             attempt_number,
@@ -228,11 +228,11 @@ try {
         SELECT 
             id,
             p_admin_id,
-            (SELECT COALESCE(MAX(attempt_number), 0) + 1 FROM call_history WHERE original_record_id = p_record_id),
+            (SELECT COALESCE(MAX(attempt_number), 0) + 1 FROM lv_call_history WHERE original_record_id = p_record_id),
             batch_id,
             CONCAT('Record redistributed by admin. Reason: ', p_reason),
             NOW()
-        FROM final_call_logs 
+        FROM lv_final_call_logs 
         WHERE id = p_record_id;
         
         COMMIT;
@@ -253,10 +253,10 @@ try {
     }
     
     // Step 6: Migrate existing data
-    echo "<strong>Step 6: Migrating existing data to call_history...</strong><br>";
+    echo "<strong>Step 6: Migrating existing data to lv_call_history...</strong><br>";
     
     $migrate_sql = "
-    INSERT IGNORE INTO call_history (
+    INSERT IGNORE INTO lv_call_history (
         original_record_id, 
         finqy_id, 
         attempt_number, 
@@ -277,12 +277,12 @@ try {
         connectivity,
         COALESCE(processed_at, NOW()) as attempt_date,
         TRUE as is_original_attempt
-    FROM final_call_logs 
+    FROM lv_final_call_logs 
     WHERE finqy_id IS NOT NULL OR disposition IS NOT NULL";
     
     if ($conn->query($migrate_sql) === TRUE) {
         $migrated_count = $conn->affected_rows;
-        echo "<div class='success'>✓ Migrated $migrated_count existing records to call_history</div>";
+        echo "<div class='success'>✓ Migrated $migrated_count existing records to lv_call_history</div>";
     } else {
         throw new Exception("Error migrating existing data: " . $conn->error);
     }
@@ -291,7 +291,7 @@ try {
     echo "<strong>Step 7: Updating original caller tracking...</strong><br>";
     
     $update_sql = "
-    UPDATE final_call_logs fcl
+    UPDATE lv_final_call_logs fcl
     SET original_caller_id = fcl.finqy_id,
         last_updated_by = fcl.finqy_id,
         last_attempt_date = fcl.processed_at

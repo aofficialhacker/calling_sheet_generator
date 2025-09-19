@@ -18,7 +18,7 @@ $conn = getDBConnection();
 $finqy_id = $_SESSION['finqy_id'];
 
 // Get caller details
-$caller_stmt = $conn->prepare("SELECT caller_name FROM callers WHERE finqy_id = ?");
+$caller_stmt = $conn->prepare("SELECT caller_name FROM lv_callers WHERE finqy_id = ?");
 if ($caller_stmt === false) {
     $caller_name = 'Unknown Caller';
 } else {
@@ -40,7 +40,7 @@ $stats_sql = "
         SUM(CASE WHEN ch.disposition IN ('Interested', 'Callback', 'Hot Lead') THEN 1 ELSE 0 END) as positive_outcomes,
         SUM(CASE WHEN ch.disposition IN ('Not Interested', 'DND', 'Wrong Number') THEN 1 ELSE 0 END) as negative_outcomes,
         SUM(CASE WHEN ch.disposition IN ('Follow Up', 'Busy', 'No Response') THEN 1 ELSE 0 END) as follow_up_required
-    FROM call_history ch
+    FROM lv_call_history ch
     WHERE ch.finqy_id = ?
 ";
 
@@ -75,8 +75,8 @@ $recent_activity_sql = "
             WHEN ch.disposition IN ('Follow Up', 'Busy', 'No Response') THEN 'warning'
             ELSE 'secondary'
         END as outcome_class
-    FROM call_history ch
-    JOIN file_batches fb ON ch.batch_id COLLATE utf8mb4_unicode_ci = fb.id COLLATE utf8mb4_unicode_ci
+    FROM lv_call_history ch
+    JOIN lv_file_batches fb ON ch.batch_id COLLATE utf8mb4_unicode_ci = fb.id COLLATE utf8mb4_unicode_ci
     WHERE ch.finqy_id = ?
     AND ch.attempt_date >= DATE_SUB(NOW(), INTERVAL 30 DAY)
     ORDER BY ch.attempt_date DESC
@@ -101,7 +101,7 @@ $reattempt_performance_sql = "
         COUNT(*) as attempts,
         SUM(CASE WHEN ch.disposition IN ('Interested', 'Callback', 'Hot Lead') THEN 1 ELSE 0 END) as successful,
         ROUND((SUM(CASE WHEN ch.disposition IN ('Interested', 'Callback', 'Hot Lead') THEN 1 ELSE 0 END) / COUNT(*)) * 100, 1) as success_rate
-    FROM call_history ch
+    FROM lv_call_history ch
     WHERE ch.finqy_id = ?
     GROUP BY ch.attempt_number
     ORDER BY ch.attempt_number
@@ -123,8 +123,8 @@ $disposition_breakdown_sql = "
     SELECT 
         ch.disposition,
         COUNT(*) as count,
-        ROUND((COUNT(*) / (SELECT COUNT(*) FROM call_history WHERE finqy_id = ?)) * 100, 1) as percentage
-    FROM call_history ch
+        ROUND((COUNT(*) / (SELECT COUNT(*) FROM lv_call_history WHERE finqy_id = ?)) * 100, 1) as percentage
+    FROM lv_call_history ch
     WHERE ch.finqy_id = ?
     GROUP BY ch.disposition
     ORDER BY count DESC

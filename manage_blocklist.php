@@ -19,7 +19,7 @@ $stats = getBlocklistStats($adminId);
 
 // Get unique batches for batch deletion modal only
 $conn = getDBConnection();
-$batchStmt = $conn->prepare("SELECT DISTINCT batch_id FROM blocklist_numbers WHERE admin_id = ? AND batch_id IS NOT NULL ORDER BY batch_id DESC");
+$batchStmt = $conn->prepare("SELECT DISTINCT batch_id FROM lv_blocklist_numbers WHERE admin_id = ? AND batch_id IS NOT NULL ORDER BY batch_id DESC");
 $batchStmt->bind_param("s", $adminId);
 $batchStmt->execute();
 $batches = $batchStmt->get_result()->fetch_all(MYSQLI_ASSOC);

@@ -18,11 +18,11 @@ $date_range = $_GET['date_range'] ?? '90';
 $selected_unit = $_GET['unit_id'] ?? '';
 $selected_product = $_GET['product_code'] ?? '';
 
-// Get admin's units (vendors) for filter
+// Get admin's units (lv_vendors) for filter
 $units_sql = "
     SELECT DISTINCT v.vendor_id, v.vendor_name 
-    FROM vendors v 
-    JOIN file_batches fb ON v.vendor_id = fb.vendor_id 
+    FROM lv_vendors v 
+    JOIN lv_file_batches fb ON v.vendor_id = fb.vendor_id 
     WHERE fb.admin_id = ? AND v.is_approved = 1
     ORDER BY v.vendor_name
 ";
@@ -35,7 +35,7 @@ $units_stmt->close();
 // Get admin's products for filter
 $products_sql = "
     SELECT DISTINCT fb.product_code 
-    FROM file_batches fb 
+    FROM lv_file_batches fb 
     WHERE fb.admin_id = ? 
     ORDER BY fb.product_code
 ";
@@ -97,9 +97,9 @@ $unit_performance_sql = "
         COALESCE(AVG(DATEDIFF(NOW(), fb.upload_time)), 1) as avg_batch_age_days,
         MIN(fb.upload_time) as first_batch_date,
         MAX(fb.upload_time) as last_batch_date
-    FROM vendors v
-    JOIN file_batches fb ON v.vendor_id = fb.vendor_id AND v.admin_id = fb.admin_id
-    LEFT JOIN final_call_logs fcl ON fb.id = fcl.batch_id
+    FROM lv_vendors v
+    JOIN lv_file_batches fb ON v.vendor_id = fb.vendor_id AND v.admin_id = fb.admin_id
+    LEFT JOIN lv_final_call_logs fcl ON fb.id = fcl.batch_id
     WHERE v.admin_id = ? AND v.is_approved = 1
     GROUP BY v.vendor_id, v.vendor_name
     HAVING total_records > 0
@@ -125,18 +125,18 @@ if ($unit_perf_stmt === false) {
     }, $raw_results)));
     
     // Apply explicit deduplication by vendor_id to prevent any possible duplicates
-    $unique_vendors = [];
+    $unique_lv_vendors = [];
     foreach ($raw_results as $vendor) {
         $vendor_id = $vendor['vendor_id'];
-        if (!isset($unique_vendors[$vendor_id])) {
-            $unique_vendors[$vendor_id] = $vendor;
+        if (!isset($unique_lv_vendors[$vendor_id])) {
+            $unique_lv_vendors[$vendor_id] = $vendor;
         } else {
             // Log if we find duplicates (this should not happen with proper GROUP BY)
             error_log("DUPLICATE VENDOR DETECTED AND REMOVED: " . $vendor_id . " - " . $vendor['vendor_name']);
         }
     }
     
-    $unit_performance = array_values($unique_vendors);
+    $unit_performance = array_values($unique_lv_vendors);
     error_log("AFTER DEDUPLICATION COUNT: " . count($unit_performance));
     
     $unit_perf_stmt->close();
@@ -207,7 +207,7 @@ error_log("AFTER QUALITY PROCESSING: " . json_encode(array_map(function($u) {
     return ['id' => $u['vendor_id'], 'name' => $u['vendor_name']];
 }, $unit_performance)));
 
-// Monthly Performance Trends - Fixed to start with file_batches and LEFT JOIN vendors
+// Monthly Performance Trends - Fixed to start with lv_file_batches and LEFT JOIN lv_vendors
 $monthly_trends_sql = "
     SELECT 
         COALESCE(v.vendor_id, fb.vendor_id) as vendor_id,
@@ -217,9 +217,9 @@ $monthly_trends_sql = "
         COALESCE(COUNT(fcl.id), 0) as records_received,
         COALESCE(SUM(CASE WHEN fcl.status != 'fresh' THEN 1 ELSE 0 END), 0) as records_processed,
         COALESCE(ROUND((SUM(CASE WHEN fcl.status != 'fresh' OR fcl.processed_at IS NOT NULL OR (fcl.last_updated_by IS NOT NULL AND fcl.last_updated_by != '') THEN 1 ELSE 0 END) / NULLIF(COUNT(fcl.id), 0)) * 100, 1), 0) as monthly_processing_rate
-    FROM file_batches fb
-    LEFT JOIN vendors v ON fb.vendor_id = v.vendor_id AND v.admin_id = fb.admin_id
-    LEFT JOIN final_call_logs fcl ON fb.id = fcl.batch_id
+    FROM lv_file_batches fb
+    LEFT JOIN lv_vendors v ON fb.vendor_id = v.vendor_id AND v.admin_id = fb.admin_id
+    LEFT JOIN lv_final_call_logs fcl ON fb.id = fcl.batch_id
     WHERE fb.admin_id = ? AND (v.is_approved = 1 OR v.is_approved IS NULL)
     GROUP BY COALESCE(v.vendor_id, fb.vendor_id), COALESCE(v.vendor_name, fb.vendor_id), DATE_FORMAT(fb.upload_time, '%Y-%m')
     ORDER BY month_year DESC, batches_uploaded DESC
@@ -235,7 +235,7 @@ if ($monthly_stmt === false) {
     error_log("Monthly trends query preparation failed: " . $conn->error);
     $monthly_trends = [];
 } else {
-    // Bind single admin_id parameter for file_batches
+    // Bind single admin_id parameter for lv_file_batches
     $monthly_stmt->bind_param("s", $adminId);
     $monthly_stmt->execute();
     $monthly_trends = $monthly_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
@@ -258,8 +258,8 @@ if ($monthly_stmt === false) {
                 COALESCE(COUNT(fcl.id), 0) as records_received,
                 COALESCE(SUM(CASE WHEN fcl.status != 'fresh' OR fcl.processed_at IS NOT NULL OR (fcl.last_updated_by IS NOT NULL AND fcl.last_updated_by != '') THEN 1 ELSE 0 END), 0) as records_processed,
                 COALESCE(ROUND((SUM(CASE WHEN fcl.status != 'fresh' OR fcl.processed_at IS NOT NULL OR (fcl.last_updated_by IS NOT NULL AND fcl.last_updated_by != '') THEN 1 ELSE 0 END) / NULLIF(COUNT(fcl.id), 0)) * 100, 1), 0) as monthly_processing_rate
-            FROM file_batches fb
-            LEFT JOIN final_call_logs fcl ON fb.id = fcl.batch_id
+            FROM lv_file_batches fb
+            LEFT JOIN lv_final_call_logs fcl ON fb.id = fcl.batch_id
             WHERE fb.admin_id = ?
             GROUP BY DATE_FORMAT(fb.upload_time, '%Y-%m')
             ORDER BY month_year DESC
@@ -292,9 +292,9 @@ $batch_quality_sql = "
         ROUND((SUM(CASE WHEN fcl.mobile_no IS NOT NULL AND fcl.mobile_no != '' THEN 1 ELSE 0 END) / COUNT(fcl.id)) * 100, 1) as mobile_completeness,
         ROUND((SUM(CASE WHEN fcl.name IS NOT NULL AND fcl.name != '' THEN 1 ELSE 0 END) / COUNT(fcl.id)) * 100, 1) as name_completeness,
         ROUND((SUM(CASE WHEN fcl.status != 'fresh' OR fcl.processed_at IS NOT NULL OR (fcl.last_updated_by IS NOT NULL AND fcl.last_updated_by != '') THEN 1 ELSE 0 END) / COUNT(fcl.id)) * 100, 1) as processing_completeness
-    FROM file_batches fb
-    JOIN vendors v ON fb.vendor_id = v.vendor_id
-    LEFT JOIN final_call_logs fcl ON fb.id = fcl.batch_id
+    FROM lv_file_batches fb
+    JOIN lv_vendors v ON fb.vendor_id = v.vendor_id
+    LEFT JOIN lv_final_call_logs fcl ON fb.id = fcl.batch_id
     $where_clause
     GROUP BY fb.id, fb.original_filename, fb.upload_time, fb.product_code, v.vendor_name
     ORDER BY fb.upload_time DESC
@@ -322,7 +322,7 @@ foreach ($batch_quality as &$batch) {
                 'Language Barrier', 'Drop', 'Interested For CC', 'Interested for HL', 'Interested For PL'
             ) THEN 1 END) as connected_count,
             COUNT(CASE WHEN disposition LIKE '%nterested%' AND disposition NOT LIKE '%Not Interested%' THEN 1 END) as interested_count
-        FROM final_call_logs 
+        FROM lv_final_call_logs 
         WHERE batch_id = ?
     ";
     
@@ -386,9 +386,9 @@ $product_performance_sql = "
         SUM(CASE WHEN fcl.status != 'fresh' OR fcl.processed_at IS NOT NULL OR (fcl.last_updated_by IS NOT NULL AND fcl.last_updated_by != '') THEN 1 ELSE 0 END) as processed_records,
         ROUND((SUM(CASE WHEN fcl.status != 'fresh' OR fcl.processed_at IS NOT NULL OR (fcl.last_updated_by IS NOT NULL AND fcl.last_updated_by != '') THEN 1 ELSE 0 END) / COUNT(fcl.id)) * 100, 1) as processing_rate,
         AVG(DATEDIFF(NOW(), fb.upload_time)) as avg_age_days
-    FROM vendors v
-    JOIN file_batches fb ON v.vendor_id = fb.vendor_id
-    LEFT JOIN final_call_logs fcl ON fb.id = fcl.batch_id
+    FROM lv_vendors v
+    JOIN lv_file_batches fb ON v.vendor_id = fb.vendor_id
+    LEFT JOIN lv_final_call_logs fcl ON fb.id = fcl.batch_id
     $where_clause
     GROUP BY v.vendor_name, fb.product_code
     ORDER BY v.vendor_name, processing_rate DESC
@@ -648,7 +648,7 @@ $conn->close();
                                         <small>This could be due to:</small>
                                         <ul class="mb-2 mt-1" style="font-size: 0.85rem;">
                                             <li>No file batches uploaded for the selected period</li>
-                                            <li>No approved vendors for your account</li>
+                                            <li>No approved lv_vendors for your account</li>
                                             <li>All data filtered out by current filter settings</li>
                                         </ul>
                                         <small>Try:</small>

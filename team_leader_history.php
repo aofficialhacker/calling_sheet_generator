@@ -13,13 +13,13 @@ $stmt = $conn->prepare("
     SELECT tla.*, fcl.name, fcl.mobile_no,
            p.product_name, c.caller_name as original_caller,
            tld.bucket_id, db.bucket_name
-    FROM team_leader_actions tla
-    JOIN final_call_logs fcl ON tla.lead_id = fcl.id
-    JOIN file_batches b ON fcl.batch_id = b.id
-    JOIN products p ON b.product_code = p.product_code
-    JOIN callers c ON fcl.finqy_id = c.finqy_id
-    LEFT JOIN team_leader_dispositions tld ON tla.new_disposition = tld.disposition_name
-    LEFT JOIN disposition_buckets db ON tld.bucket_id = db.id
+    FROM lv_team_leader_actions tla
+    JOIN lv_final_call_logs fcl ON tla.lead_id = fcl.id
+    JOIN lv_file_batches b ON fcl.batch_id = b.id
+    JOIN lv_products p ON b.product_code = p.product_code
+    JOIN lv_callers c ON fcl.finqy_id = c.finqy_id
+    LEFT JOIN lv_team_leader_dispositions tld ON tla.new_disposition = tld.disposition_name
+    LEFT JOIN lv_disposition_buckets db ON tld.bucket_id = db.id
     WHERE tla.leader_id = ?
     ORDER BY tla.action_date DESC
 ");
@@ -39,9 +39,9 @@ $stmt = $conn->prepare("
         COUNT(DISTINCT DATE(tla.action_date)) as active_days,
         COUNT(CASE WHEN db.bucket_name = 'Interested' THEN 1 END) as payment_ready,
         COUNT(CASE WHEN DATE(tla.action_date) = CURDATE() THEN 1 END) as today_actions
-    FROM team_leader_actions tla
-    LEFT JOIN team_leader_dispositions tld ON tla.new_disposition = tld.disposition_name
-    LEFT JOIN disposition_buckets db ON tld.bucket_id = db.id
+    FROM lv_team_leader_actions tla
+    LEFT JOIN lv_team_leader_dispositions tld ON tla.new_disposition = tld.disposition_name
+    LEFT JOIN lv_disposition_buckets db ON tld.bucket_id = db.id
     WHERE tla.leader_id = ?
 ");
 $stmt->bind_param("s", $leaderId);
